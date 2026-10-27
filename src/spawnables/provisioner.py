@@ -9,7 +9,8 @@ only declare a url (keeps the registry crowdsourceable).
 
 
 from .events import Emitter
-from .coherence import coherence_report
+from .coherence import coherence_report, exit_story
+from .machinefp import guest_steps as machinefp_steps, host_directives as machinefp_directives
 from .netpriv import normalize as net_normalize, guest_steps, host_directives
 
 STAGES = ("boot", "locale", "network", "tools", "apps", "rice", "snapshot")
@@ -110,6 +111,7 @@ class Provisioner:
         self._coherence()
         self._locale(os_name)
         self._network(os_name)
+        self._machinefp(os_name)
         self._tools(family)
         self._apps(os_name, family)
         self._rice()
@@ -141,6 +143,19 @@ class Provisioner:
                     "to the exit story in the network step")
                 return
         self._exec_checked("locale", cmd.format(tz=self.order.timezone, locale=self.order.locale), os_name)
+
+    def _machinefp(self, os_name):
+        """the machine layer of the anti-fingerprint story: identity,
+        clock, fonts. always applied on linux - it is the floor, not a
+        toggle. host-side oem strings ride the runner directives."""
+        em = self.emitter
+        steps = machinefp_steps(os_name, exit_story(net_normalize(self.order.network or {})))
+        if not steps:
+            em.emit("provision.machinefp", "skip",
+                    f"{self.adapter.guest} has no machine-layer steps")
+            return
+        for label, cmd in steps:
+            self._exec_checked("machinefp", cmd, label)
 
     def _coherence(self):
         """the machine tells one story or provisioning stops. checked

@@ -5,6 +5,8 @@ method names map to the celesto python facade verified in the repo
 celesto is imported lazily so catalogs and tests run without it; only a
 real provision needs `pip install celesto` on the host.
 """
+import os
+
 from . import BaseAdapter, Capabilities, ExecResult, AdapterError
 
 CAPS = {
@@ -76,7 +78,10 @@ class CelestoAdapter(BaseAdapter):
                 f"(guest {self.guest}, image {image.get('id')})"
             ) from e
         self.computer = Celesto(**kwargs)
-        self.computer.start()  # celesto boots on start(), not on construction
+        # celesto boots on start(), not on construction. tcg hosts (no
+        # /dev/kvm) need a much longer ssh-wait budget than the 30s default.
+        timeout = float(os.environ.get("SPAWNABLES_BOOT_TIMEOUT", "30"))
+        self.computer.start(boot_timeout=timeout)
 
     def exec(self, cmd, timeout=300):
         result = self.computer.run(cmd, timeout=timeout)

@@ -8,7 +8,7 @@ import sys
 from .catalog import Catalog
 from .models import MachineOrder
 from .validate import validate_order
-from .provisioner import Provisioner
+from .provisioner import Provisioner, ProvisionError
 from .lifecycle import Machine, LifecycleError, VerbNotSupported
 from .adapters import ImageRequired, AdapterError
 from . import adapter_for

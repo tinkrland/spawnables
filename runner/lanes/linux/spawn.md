@@ -14,4 +14,6 @@ run it from the repo root of a machine with the tenki key:
 cd runner && npm install && node tenki-spawn.mjs linux
 ```
 
-status: first live run in flight. mint/ubuntu-desktop entries still need custom images (celesto publishes headless ubuntu and linux-desktop presets; mint means building our own rootfs later).
+kvm truth (verified 2026-10-28): tenki sandboxes have no nested virtualization at all - no /dev/kvm, no vmx/svm flags - and celesto hard-requires `accel=kvm` on linux hosts. so the lane ships a **tcg patch**: when /dev/kvm is absent, boot.sh sed-patches the installed celesto to `accel=tcg` + cpu `max` and raises the ssh-wait budget to 900s. software emulation is 10-50x slower but it is a real guest, and the smoke order exercises the whole pipeline: locale, apt git, verify, fresh-point snapshot. a proper production host (bare metal, or any cloud vm with nested virt) skips the patch and gets kvm speed.
+
+status: first live run: celesto installed, qemu launched a real guest, died on the missing kvm (expected, now patched). second run in flight. mint/ubuntu-desktop entries still need custom images (celesto publishes headless ubuntu and linux-desktop presets; mint means building our own rootfs later).

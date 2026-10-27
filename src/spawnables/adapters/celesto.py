@@ -28,8 +28,34 @@ class CelestoAdapter(BaseAdapter):
         self.caps = CAPS[os_name]
         self.computer = None
 
+    def boot_kwargs(self, order, image):
+        """pure: what celesto gets for this order. testable without celesto."""
+        if image.get("image"):
+            kwargs = {"image": image["image"]}
+        else:
+            # auto-config lane: celesto's published preset (ubuntu 24.04),
+            # sized from the order. disk_size/miB.
+            kwargs = {
+                "os": "ubuntu",
+                "memory": min(order.size.ram_mb, 2048),
+                "disk_size": min(order.size.disk_gb * 1024, 16384),
+            }
+        if self.os_name == "windows":
+            bridge = order.agent_bridge or {}
+            if not (bridge.get("ssh_user") and bridge.get("ssh_password")):
+                raise AdapterError(
+                    "windows computers need ssh_user and ssh_password in agent_bridge"
+                )
+            kwargs.update(
+                os="windows",
+                ssh_user=bridge["ssh_user"],
+                ssh_password=bridge["ssh_password"],
+                ssh_host_key_alias=image.get("ssh_host_key_alias"),
+            )
+        return kwargs
+
     def boot(self, order, image):
-        kwargs = {"image": image.get("image")}
+        kwargs = self.boot_kwargs(order, image)
         if self.os_name == "windows":
             bridge = order.agent_bridge or {}
             if not (bridge.get("ssh_user") and bridge.get("ssh_password")):
@@ -50,6 +76,7 @@ class CelestoAdapter(BaseAdapter):
                 f"(guest {self.guest}, image {image.get('id')})"
             ) from e
         self.computer = Celesto(**kwargs)
+        self.computer.start()  # celesto boots on start(), not on construction
 
     def exec(self, cmd, timeout=300):
         result = self.computer.run(cmd, timeout=timeout)

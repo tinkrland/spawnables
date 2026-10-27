@@ -1,0 +1,16 @@
+{
+  "id": "ubuntu-24-04-headless",
+  "os": "linux",
+  "distro": "ubuntu",
+  "distro_family": "debian",
+  "desktop_env": null,
+  "version": "24.04",
+  "arch": [
+    "x86_64",
+    "arm64"
+  ],
+  "package_manager": "apt",
+  "backend": "celesto",
+  "headless": true,
+  "notes": "celesto's published ubuntu preset, auto-config lane; no desktop"
+}

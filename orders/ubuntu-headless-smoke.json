@@ -1,0 +1,15 @@
+{
+  "id": "mo_smoke",
+  "name": "smoke",
+  "base_image": "ubuntu-24-04-headless",
+  "arch": "x86_64",
+  "size": {
+    "vcpus": 2,
+    "ram_mb": 2048,
+    "disk_gb": 12
+  },
+  "timezone": "asia/kolkata",
+  "path_tools": [
+    "git"
+  ]
+}

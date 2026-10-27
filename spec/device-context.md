@@ -63,14 +63,28 @@ activity in the machine's local hours) and the byoa gui driver
 executes it. the profile is data, published on the card, so a driver
 that ignores it is visible rather than silently robotic.
 
-## dedicated machine + companion microvms
+## dedicated machine, three ownership patterns
 
-each agent gets one whole machine it keeps - persistent files, apps,
-state. companions are spawned for a while and frozen when their need
-is finished (a windows agent briefly spawning an android microvm for
-one app, then freezing it). android and ios guests are
-companion-grade: the app exists and works; nobody is gaming on them.
-every companion inherits a persona of its own.
+spawnables gives an agent one whole device it keeps - the happycapy /
+cue.im / skydive lane, not an ephemeral browser session. three
+ownership patterns, all first-class:
+
+1. **standalone main driver on any os.** the agent's one device can be
+   linux, windows, macos, android or ios. an agent whose work lives in
+   phone apps can have an android phone as its only machine, driven
+   through the touch lane of the behaviour presets.
+2. **main plus optional companions.** companions are spawned for a
+   while and frozen when their need is finished - a windows machine may
+   briefly spawn an android companion for one app, then freeze it.
+3. **manual override: multiple dedicated devices.** one agent can be
+   bound to two (or more) dedicated devices - an android and a linux,
+   say - none of them ephemeral. the agent chooses which to drive when.
+
+android and ios devices are utility-grade, not gaming-grade: the apps
+exist and work, the persona is a pixel or an iphone, and that is the
+honest ceiling - which is a capability note, not a role restriction.
+every device inherits a persona of its own and keeps it whether it is
+the main driver or a companion.
 
 ## honest edges
 

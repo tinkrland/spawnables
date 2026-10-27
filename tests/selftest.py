@@ -601,7 +601,25 @@ class TestDeviceContext(unittest.TestCase):
         self.assertEqual(b["name"], DEFAULT_BEHAVIOUR)
         self.assertIn("bursts", b["moves"]["typing"])  # typing cadence defined
         self.assertIn("mouse", b["moves"])
+        self.assertEqual(b["surface"], "desktop")
         self.assertEqual(len(BEHAVIOUR_PRESETS), 2)
+
+    def test_touch_lane_for_phone_personas(self):
+        # an android or ios main driver is driven by finger, not mouse
+        from spawnables.devctx import behaviour_profile
+        android = behaviour_profile("quiet human", "android")
+        ios = behaviour_profile("fast human", "ios")
+        self.assertEqual(android["surface"], "touch")
+        self.assertIn("tap", android["moves"])  # tap cadence, not mouse paths
+        self.assertNotIn("mouse", android["moves"])
+        self.assertEqual(ios["surface"], "touch")
+        self.assertIn("swipe", ios["moves"])
+
+    def test_every_persona_can_be_a_standalone_main_driver(self):
+        from spawnables.devctx import MAIN_DRIVER_OSES, DEVICE_PERSONAS, persona
+        self.assertEqual(set(MAIN_DRIVER_OSES), set(DEVICE_PERSONAS))
+        for os_name in MAIN_DRIVER_OSES:
+            self.assertTrue(persona(os_name)["smbios"]["product_name"])
 
     def test_device_context_section_validates(self):
         from spawnables.devctx import normalize, validate

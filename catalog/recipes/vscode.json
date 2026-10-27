@@ -1,0 +1,42 @@
+{
+  "recipe_id": "vscode",
+  "category": "dev",
+  "orders": {
+    "native": {
+      "debian": {
+        "manager": "apt",
+        "steps": [
+          "curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/ms-vscode.gpg && echo 'deb [signed-by=/usr/share/keyrings/ms-vscode.gpg] https://packages.microsoft.com/repos/code stable main' > /etc/apt/sources.list.d/vscode.list && apt update && apt install -y code"
+        ],
+        "verify": "code --version"
+      },
+      "windows": {
+        "manager": "winget",
+        "steps": [
+          "winget install -e --id Microsoft.VisualStudioCode"
+        ],
+        "verify": "code --version"
+      },
+      "macos": {
+        "manager": "brew-cask",
+        "steps": [
+          "brew install --cask visual-studio-code"
+        ],
+        "verify": "ls /applications/visual studio code.app"
+      }
+    }
+  },
+  "availability": {
+    "linux": [
+      "native"
+    ],
+    "windows": [
+      "native"
+    ],
+    "macos": [
+      "native"
+    ]
+  },
+  "disk_mb_est": 400,
+  "notes": "the editor an agent reaches for first; pairs with the path tools lane"
+}

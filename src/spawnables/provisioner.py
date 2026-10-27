@@ -10,7 +10,8 @@ only declare a url (keeps the registry crowdsourceable).
 
 from .events import Emitter
 from .coherence import coherence_report, exit_story
-from .machinefp import guest_steps as machinefp_steps, host_directives as machinefp_directives
+from .machinefp import guest_steps as machinefp_steps
+from .devctx import normalize as devctx_normalize, validate as devctx_validate, summary as devctx_summary
 from .netpriv import normalize as net_normalize, guest_steps, host_directives
 
 STAGES = ("boot", "locale", "network", "tools", "apps", "rice", "snapshot")
@@ -112,6 +113,7 @@ class Provisioner:
         self._locale(os_name)
         self._network(os_name)
         self._machinefp(os_name)
+        self._devctx(os_name)
         self._tools(family)
         self._apps(os_name, family)
         self._rice()
@@ -156,6 +158,18 @@ class Provisioner:
             return
         for label, cmd in steps:
             self._exec_checked("machinefp", cmd, label)
+
+    def _devctx(self, os_name):
+        """device context tuning: the card records the resolved
+        three-layer context (machine, device, behaviour) the agent
+        gets. the floor is on by default."""
+        section = devctx_normalize(self.order.device_context or {})
+        for err in devctx_validate(section):
+            self.emitter.emit("provision.devctx", "warn", err)
+        s = devctx_summary(self.order, os_name)
+        self.emitter.emit(
+            "provision.devctx", "ok" if section["enabled"] else "skip",
+            f"{s['machine']}; {s['device']}; behaviour: {s['behaviour']}")
 
     def _coherence(self):
         """the machine tells one story or provisioning stops. checked

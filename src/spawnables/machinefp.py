@@ -36,16 +36,13 @@ OUI_POOL = (
 )
 FORBIDDEN_OUIS = ("52:54:00", "08:00:27", "00:0c:29", "00:50:56")
 
-# the uniform oem story: every spawn claims to be the same unremarkable
-# mid-range laptop. the qemu defaults ("qemu virtual cpu", dmi vendor
-# "qemu") are vm flags; the runner applies these via -smbios / -drive.
-OEM_PROFILE = {
-    "sys_vendor": "Dell Inc.",
-    "product_name": "Latitude 5540",
-    "board_name": "0KM9VD",
-    "bios_vendor": "Dell Inc.",
-    "disk_model": "Samsung SSD 870",
-}
+# the uniform oem story now lives per guest os in devctx.DEVICE_PERSONAS
+# (a macbook on macos, a pixel on android, a latitude on linux/windows).
+# machinefp keeps the linux default importable for the runner.
+def oem_profile(os_name="linux"):
+    """the persona's smbios/disk identity for the host runner."""
+    from .devctx import persona
+    return persona(os_name)["smbios"]
 
 # boring hostnames people actually use, per language. a fresh vm called
 # "ubuntu" or "localhost" is a signal; "desk-pc" is furniture.
@@ -58,13 +55,17 @@ HOSTNAME_POOLS = {
 }
 
 
-def mac_address(rng=None):
-    """a plausible per-spawn mac: real-vendor OUI + random NIC bits."""
+def mac_address(rng=None, os_name="linux"):
+    """a plausible per-spawn mac: real-vendor OUI + random NIC bits.
+    os-aware via devctx when the persona supplies its own OUI pool."""
     rng = rng or random
-    oui = rng.choice(OUI_POOL)
-    assert oui not in FORBIDDEN_OUIS
-    nic = ":".join(f"{rng.randrange(256):02x}" for _ in range(3))
-    return f"{oui}:{nic}"
+    try:
+        from .devctx import mac_address_for
+        return mac_address_for(os_name, rng)
+    except Exception:
+        oui = rng.choice(OUI_POOL)
+        nic = ":".join(f"{rng.randrange(256):02x}" for _ in range(3))
+        return f"{oui}:{nic}"
 
 
 def machine_id(rng=None):
@@ -87,14 +88,15 @@ def hostname(story=None, rng=None):
     return f"{rng.choice(pool)}-{rng.randrange(10, 99)}"
 
 
-def host_directives():
-    """what the host runner applies at the fabric level: the uniform
+def host_directives(os_name="linux"):
+    """what the host runner applies at the fabric level: the persona's
     oem story via qemu -smbios / -drive strings, plus a fresh plausible
     nic mac (overriding qemu's default OUI)."""
+    smbios = oem_profile(os_name)
     return {
-        "mac": mac_address(),
-        "smbios": OEM_PROFILE,
-        "disk": {"model": OEM_PROFILE["disk_model"],
+        "mac": mac_address(os_name=os_name),
+        "smbios": smbios,
+        "disk": {"model": smbios["disk_model"],
                  "serial": "S6PZNF0R" + f"{random.randrange(10**6):06d}"},
         # honest gaps the runner reports on the card, not fixes:
         "known_gaps": (

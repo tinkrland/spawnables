@@ -114,7 +114,15 @@ class CelestoAdapter(BaseAdapter):
 
     def snapshot_restore(self, snapshot_id):
         from celesto import Celesto
-        self.computer = Celesto.from_snapshot(snapshot_id)
+        # thaw: the running copy is discarded in favor of the frozen point.
+        # celesto's restore reserves the original's ssh host port, so the
+        # running computer goes first (no shred here: the full snapshot is
+        # the truth being restored to, and it outlives the computer delete).
+        try:
+            self.computer.delete()
+        except Exception:
+            pass  # already gone; restore still needs to happen
+        self.computer = Celesto.from_snapshot(snapshot_id, resume_vm=True)
 
     def data_paths(self):
         return ["~"] if self.caps.exec else []

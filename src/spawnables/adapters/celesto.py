@@ -46,6 +46,10 @@ class CelestoAdapter(BaseAdapter):
             # celesto's machine "auto" picks microvm, which is kvm-only and
             # hardcodes -cpu host; q35 is the branch that boots under tcg.
             kwargs["qemu_machine"] = "q35"
+        if not os.access("/dev/vhost-vsock", os.R_OK | os.W_OK):
+            # vsock needs a device the host may not grant (tenki sandboxes
+            # do not); ssh rides the guest network instead.
+            kwargs["comm_channel"] = "ssh"
         if self.os_name == "windows":
             bridge = order.agent_bridge or {}
             if not (bridge.get("ssh_user") and bridge.get("ssh_password")):

@@ -377,6 +377,8 @@ class TestBootKwargs(unittest.TestCase):
             self.assertEqual(kw["qemu_machine"], "q35")
         else:
             self.assertNotIn("qemu_machine", kw)
+        if not _os.access("/dev/vhost-vsock", _os.R_OK | _os.W_OK):
+            self.assertEqual(kw["comm_channel"], "ssh")
 
     def test_image_path_wins_when_present(self):
         a = CelestoAdapter("linux")

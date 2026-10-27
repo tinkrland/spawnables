@@ -472,6 +472,65 @@ class TestMachineStory(unittest.TestCase):
         self.assertIn("exit story", locales[0].detail)
 
 
+class TestMachineFP(unittest.TestCase):
+    """the machine-layer inverse of device fingerprinting: entropy is
+    the enemy, so the fleet presents one boring plausible identity."""
+
+    def test_mac_uses_real_vendor_oui_never_virtualization(self):
+        from spawnables.machinefp import mac_address, FORBIDDEN_OUIS, OUI_POOL
+        import random
+        rng = random.Random(7)
+        for _ in range(50):
+            m = mac_address(rng)
+            self.assertTrue(any(m.startswith(o) for o in OUI_POOL))
+            self.assertFalse(any(m.startswith(o) for o in FORBIDDEN_OUIS))
+            self.assertRegex(m, r"^([0-9a-f]{2}:){5}[0-9a-f]{2}$")
+
+    def test_machine_id_is_fresh_and_plausible(self):
+        from spawnables.machinefp import machine_id
+        import random
+        mid = machine_id(random.Random(3))
+        self.assertRegex(mid, r"^[0-9a-f]{32}$")
+
+    def test_hostname_pool_follows_the_story_language(self):
+        from spawnables.machinefp import hostname
+        import random
+        en = hostname({"locale": "en_US.UTF-8"}, random.Random(1))
+        de = hostname({"locale": "de_CH.UTF-8"}, random.Random(1))
+        self.assertTrue(en.startswith(("desk", "home", "office", "studio", "media", "work")))
+        self.assertTrue(de.startswith(("buero", "heim", "schreib", "arbeits")))
+
+    def test_smbios_story_has_no_qemu_strings(self):
+        from spawnables.machinefp import host_directives
+        d = host_directives()
+        # the identity itself carries no virtualization strings; the
+        # known_gaps notes may mention kvm, they are the honesty ledger
+        blob = str(d["smbios"]).lower() + str(d["disk"]).lower()
+        self.assertNotIn("qemu", blob)
+        self.assertNotIn("kvm", blob)
+        self.assertEqual(d["disk"]["model"], "Samsung SSD 870")
+        self.assertTrue(d["known_gaps"])  # honest gaps are stated, not hidden
+
+    def test_guest_steps_always_apply_on_linux(self):
+        from spawnables.machinefp import guest_steps
+        steps = dict(guest_steps("linux", {"locale": "en_GB.UTF-8"}))
+        self.assertIn("systemd-machine-id-setup", steps["machinefp.machine-id"])
+        self.assertIn("hostnamectl", steps["machinefp.hostname"])
+        self.assertIn("chrony", steps["machinefp.clock"])
+        self.assertIn("fonts-liberation", steps["machinefp.fonts"])
+        self.assertEqual(guest_steps("windows"), [])
+
+    def test_provisioner_emits_machinefp_stage(self):
+        rec = Recorder()
+        Provisioner(order(), CATALOG, FakeAdapter(), Emitter(rec)).run()
+        stages = [e for e in rec.events if e.stage.startswith("provision.machinefp")]
+        self.assertTrue(stages)
+        statuses = {e.status for e in stages}
+        self.assertIn("start", statuses)
+        self.assertIn("ok", statuses)
+        self.assertNotIn("fail", statuses)
+
+
 class TestCoherence(unittest.TestCase):
     def test_matching_exit_and_timezone_pass(self):
         from spawnables.coherence import coherence_report, blocks_provisioning

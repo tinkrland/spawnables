@@ -372,6 +372,11 @@ class TestBootKwargs(unittest.TestCase):
         self.assertEqual(kw["memory"], 2048)
         self.assertIn("disk_size", kw)
         self.assertNotIn("image", kw)
+        import os as _os
+        if not _os.path.exists("/dev/kvm"):
+            self.assertEqual(kw["qemu_machine"], "q35")
+        else:
+            self.assertNotIn("qemu_machine", kw)
 
     def test_image_path_wins_when_present(self):
         a = CelestoAdapter("linux")

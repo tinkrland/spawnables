@@ -27,8 +27,10 @@ verified against celestoai/celesto on 2026-10-28. windows and macos guests exist
 | linux | linux x86_64 (qemu/kvm), firecracker | yes | yes (`full` snapshot) | yes (ssh, exec, mcp) | yes | the first-class path |
 | windows | linux x86_64 only | stop/start only | no (no snapshots) | ssh only | disk image only | build your own image from iso; no shared folders, no outbound-domain controls |
 | macos | apple silicon macs only | no | no | desktop only (no shell/exec/ssh) | no (images cannot leave the host) | fixed 4 vcpu / 8 gb / 80 gb, max 2 running, apple sla ties images to the host |
+| android | any linux host (spawnables adapter, not celesto) | yes on the vm route | unverified (vm route: plausible, container route: no) | adb only | yes (disk image) | three routes: android-x86 (qemu vm), redroid (container), cuttlefish; gui streams via scrcpy |
+| ios | apple silicon macs (vphone-cli), linux via qemu vresearch101 (vphone-linux, research-grade) | no | no | desktop only | no | experimental, bring-your-own-image tier; image sourcing is legally gated |
 
-design consequence: card verbs gray out per guest os, the same pattern as the app availability matrix. linux cards get the full verb row; windows cards get pause and burn; macos cards get desktop view and burn.
+android and ios are not celesto surfaces: they need spawnables backend adapters (see [order form](spec/order-form.md)). design consequence: card verbs gray out per guest os, the same pattern as the app availability matrix. linux cards get the full verb row; windows cards get pause and burn; macos cards get desktop view and burn; android cards get pause and burn with freeze pending verification; ios cards are desktop view and burn, experimental.
 
 ## status
 

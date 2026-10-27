@@ -377,6 +377,46 @@ class TestIosAdapter(unittest.TestCase):
             a.exec("ls")
 
 
+class TestCoherence(unittest.TestCase):
+    def test_matching_exit_and_timezone_pass(self):
+        from spawnables.coherence import coherence_report, blocks_provisioning
+        o = order(timezone="Europe/Zurich", locale="de_CH.UTF-8")
+        net = {"vpn": {"enabled": True}, "exit_geo": {"country": "CH"}}
+        self.assertEqual(coherence_report(o, net), [])
+        self.assertFalse(blocks_provisioning(o, net))
+
+    def test_disagreement_blocks_provisioning(self):
+        from spawnables.coherence import coherence_report, blocks_provisioning
+        o = order(timezone="Asia/Kolkata", locale="en_IN.UTF-8")
+        net = {"vpn": {"enabled": True}, "exit_geo": {"country": "CH"}}
+        issues = coherence_report(o, net)
+        self.assertTrue(blocks_provisioning(o, net))
+        self.assertIn("timezone", [i[0] for i in issues])
+
+    def test_vpn_without_exit_geo_warns_not_fails(self):
+        from spawnables.coherence import coherence_report, blocks_provisioning
+        o = order(timezone="Europe/Zurich")
+        net = {"vpn": {"enabled": True}}
+        issues = coherence_report(o, net)
+        self.assertFalse(blocks_provisioning(o, net))
+        self.assertEqual([i[3] for i in issues], ["warn"])
+
+    def test_provisioner_emits_coherence_and_blocks_on_mismatch(self):
+        o = order(timezone="Asia/Kolkata")
+        o.network = {"vpn": {"enabled": True}, "exit_geo": {"country": "CH"}}
+        rec = Recorder()
+        p = Provisioner(o, CATALOG, FakeAdapter(), Emitter(rec))
+        with self.assertRaises(ProvisionError):
+            p.run()
+        self.assertIn("provision.coherence",
+                      [e.stage for e in rec.events])
+
+    def test_expected_accept_language_follows_exit_country(self):
+        from spawnables.coherence import expected_accept_language
+        net = {"exit_geo": {"country": "DE"}}
+        self.assertTrue(expected_accept_language(net, order()).startswith("de-DE"))
+
+
 class TestBootKwargs(unittest.TestCase):
     def test_auto_config_lane_when_no_image_path(self):
         a = CelestoAdapter("linux")

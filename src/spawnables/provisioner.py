@@ -9,6 +9,7 @@ only declare a url (keeps the registry crowdsourceable).
 
 
 from .events import Emitter
+from .coherence import coherence_report
 from .netpriv import normalize as net_normalize, guest_steps, host_directives
 
 STAGES = ("boot", "locale", "network", "tools", "apps", "rice", "snapshot")
@@ -106,6 +107,7 @@ class Provisioner:
             self._snapshot_fresh()
             return self.emitter.history
 
+        self._coherence()
         self._locale(os_name)
         self._network(os_name)
         self._tools(family)
@@ -130,6 +132,22 @@ class Provisioner:
             self.emitter.emit("provision.locale", "skip", f"no locale cmd for {os_name}")
             return
         self._exec_checked("locale", cmd.format(tz=self.order.timezone, locale=self.order.locale), os_name)
+
+    def _coherence(self):
+        """the machine tells one story or provisioning stops. checked
+        right after boot: a knowingly-incoherent fingerprint is a bug."""
+        em = self.emitter
+        net = net_normalize(self.order.network or {})
+        issues = coherence_report(self.order, net)
+        for signal, expected, actual, severity, note in issues:
+            em.emit("provision.coherence", severity,
+                    f"{signal}: expected {expected}, got {actual} - {note}")
+        if any(i[3] == "fail" for i in issues):
+            raise ProvisionError(
+                "fingerprint coherence failed: "
+                + "; ".join(i[0] for i in issues if i[3] == "fail"))
+        em.emit("provision.coherence", "ok",
+                "timezone, language and exit geo agree")
 
     def _network(self, os_name):
         net = net_normalize(self.order.network)

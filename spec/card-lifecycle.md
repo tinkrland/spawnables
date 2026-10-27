@@ -50,3 +50,21 @@ burn is the only irreversible verb, so it takes a typed confirmation: the machin
 ## agent bridge
 
 a live machine can expose any of `mcp`, `ssh`, `vnc` to agents (see `agent_bridge` in the [order form](order-form.md)). the mcp surface is what makes the whole thing turnkey: claude code, cursor, any mcp client drives machines the web ui provisions.
+
+## celesto verb mapping
+
+how the card verbs land on celesto primitives (local, open-source celesto; verified against the repo 2026-10-28):
+
+| card verb | celesto primitive | notes |
+|---|---|---|
+| pause | `computer stop` | disk kept, processes end |
+| resume | `computer start` | |
+| freeze | `snapshot create --snapshot-type full` | full = disk + running state, a true session freeze |
+| thaw | `snapshot restore` | |
+| export (full machine) | the snapshot folder itself | keep the saved ssh identity inside it |
+| export (data-only) | home dir tarball over exec | |
+| burn | `computer delete` + shred | delete alone dereferences; burn must overwrite |
+
+celesto also ships `disk` snapshots (self-contained disk, no ram; restore boots rather than resumes) and `diff` snapshots (incremental, base image must stay). worth exposing later as a "cheap freeze" for machines you don't need mid-session.
+
+per-guest-os limits (see the [readme matrix](../README.md)): no snapshots on windows, so freeze/export-full gray out there; macos has neither snapshots nor stop/start, so macos cards offer desktop view and burn only.

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spawnables/rice.schema.json",
+  "title": "rice",
+  "type": "object",
+  "required": ["rice_id", "version", "compatible_desktops", "assets", "apply"],
+  "properties": {
+    "rice_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "version": { "type": "string" },
+    "compatible_desktops": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "gates the order form picker; a hyprland rice won't skin cinnamon"
+    },
+    "theme_engine": { "type": "string", "examples": ["gtk", "qt", "wayland", "hyprland"] },
+    "assets": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "description": "relative path inside the bundle" }
+    },
+    "apply": {
+      "type": "object",
+      "required": ["steps"],
+      "properties": {
+        "steps": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "verify": { "type": "string", "description": "optional; e.g. gsettings read-back" }
+      }
+    },
+    "source": { "type": "string", "description": "tarball or git url the bundle came from" }
+  }
+}

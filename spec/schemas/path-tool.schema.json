@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spawnables/path-tool.schema.json",
+  "title": "path tool",
+  "type": "object",
+  "required": ["id", "installs"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "installs": {
+      "type": "object",
+      "description": "keyed by distro family",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["steps", "verify"],
+        "properties": {
+          "steps": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+          "verify": { "type": "string", "description": "command that must exit 0" }
+        }
+      }
+    },
+    "disk_mb_est": { "type": "integer" }
+  }
+}

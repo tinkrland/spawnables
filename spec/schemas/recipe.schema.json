@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spawnables/recipe.schema.json",
+  "title": "app recipe",
+  "type": "object",
+  "required": ["recipe_id", "orders", "availability"],
+  "properties": {
+    "recipe_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "category": { "type": "string" },
+    "orders": {
+      "type": "object",
+      "description": "order types this recipe supports",
+      "properties": {
+        "native": {
+          "type": "object",
+          "description": "install steps keyed by distro family",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["manager", "steps", "verify"],
+            "properties": {
+              "manager": { "type": "string", "examples": ["apt", "dnf", "pacman", "flatpak", "winget", "choco", "brew-cask", "msi"] },
+              "steps": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+              "verify": { "type": "string", "description": "acceptance test; must exit 0" }
+            }
+          }
+        },
+        "pwa": {
+          "type": "object",
+          "required": ["url"],
+          "properties": {
+            "url": { "type": "string", "format": "uri" },
+            "browser_hint": { "type": "string", "description": "optional; falls back to base image default_browser" }
+          }
+        }
+      }
+    },
+    "availability": {
+      "type": "object",
+      "description": "graying-out matrix: os -> allowed order types",
+      "additionalProperties": { "type": "array", "items": { "enum": ["native", "pwa"] } }
+    },
+    "pin": {
+      "type": "object",
+      "description": "how to surface the app per desktop env",
+      "additionalProperties": { "type": "string", "examples": ["menu", "dash", "startmenu", "dock"] }
+    },
+    "egress_required": { "type": "boolean", "default": true },
+    "disk_mb_est": { "type": "integer" },
+    "license": { "type": "string" }
+  }
+}

@@ -19,6 +19,8 @@ from spawnables.adapters.celesto import CelestoAdapter
 from spawnables.adapters.android import AndroidAdapter
 from spawnables.adapters.ios_vphone import IosAdapter, ImageRequired
 from spawnables.events import Emitter, Recorder
+from spawnables.netpriv import (normalize, validate_network, guest_steps,
+                                host_directives, DEFAULTS)
 
 CATALOG = Catalog(Path(__file__).resolve().parents[1] / "catalog")
 
@@ -54,6 +56,96 @@ class FakeAdapter(CelestoAdapter):
     def snapshot_full(self, sid): self.snapshots.append(("full", sid))
     def snapshot_restore(self, sid): self.snapshots.append(("restore", sid))
     def delete(self, shred=True): self.deleted = True
+
+
+class TestNetworkPrivacy(unittest.TestCase):
+    NET_ON = {"vpn": True, "vpn_provider": "wireguard", "vpn_config_ref": "wg-main",
+              "kill_switch": True, "match_specs_to_vpn": True}
+
+    def test_defaults_match_design_reference_independents(self):
+        net = normalize({})
+        self.assertTrue(net["mac_spoof"])
+        self.assertTrue(net["browser_hardening"])
+        self.assertFalse(net["vpn"])
+        self.assertEqual(net, DEFAULTS)
+
+    def test_kill_switch_needs_a_tunnel(self):
+        errors = validate_network(normalize({"kill_switch": True}), order())
+        self.assertTrue(any("kill switch" in e for e in errors))
+
+    def test_match_specs_needs_vpn(self):
+        errors = validate_network(normalize({"match_specs_to_vpn": True}), order())
+        self.assertTrue(any("match specs" in e for e in errors))
+
+    def test_vpn_needs_provider_and_vault_ref(self):
+        errors = validate_network(normalize({"vpn": True}), order())
+        self.assertTrue(any("provider" in e for e in errors))
+        self.assertTrue(any("vault config reference" in e for e in errors))
+
+    def test_private_dns_needs_profile(self):
+        errors = validate_network(normalize({"private_dns": True}), order())
+        self.assertTrue(any("nextdns profile" in e for e in errors))
+
+    def test_full_section_valid(self):
+        net = normalize(self.NET_ON)
+        self.assertEqual(validate_network(net, order()), [])
+
+    def test_guest_steps_linux_vs_windows(self):
+        net = normalize(self.NET_ON)
+        linux = guest_steps(net, "linux", "brave")
+        self.assertTrue(any(label.startswith("vpn.") for label, _ in linux))
+        self.assertTrue(any(label == "specs.sync" for label, _ in linux))
+        self.assertTrue(any(label == "killswitch.nft" for label, _ in linux))
+        self.assertIn("wg0", dict(linux)["killswitch.nft"])
+        self.assertEqual(guest_steps(net, "windows", "edge"), [])
+
+    def test_tailscale_uses_auth_key_from_vault(self):
+        net = normalize({"vpn": True, "vpn_provider": "tailscale",
+                         "vpn_config_ref": "ts-key"})
+        steps = dict(guest_steps(net, "linux", "brave"))
+        self.assertIn("@@vault:ts-key@@", steps["vpn.tailscale"])
+
+    def test_browser_hardening_per_browser(self):
+        net = normalize({"browser_hardening": True})
+        brave = dict(guest_steps(net, "linux", "brave"))
+        self.assertIn("BraveRewardsDisabled", brave["browser.hardening.brave"])
+        fox = dict(guest_steps(net, "linux", "firefox"))
+        self.assertIn("resistFingerprinting", fox["browser.hardening.firefox"])
+
+    def test_host_directives(self):
+        d = host_directives(normalize({"vpn": True, "vpn_provider": "proton",
+                                       "vpn_config_ref": "vault:pg", "proxy": True,
+                                       "proxy_pool": "residential"}))
+        self.assertTrue(d["mac_spoof"])  # on by default
+        self.assertEqual(d["vpn_exit"], "proton")
+        self.assertEqual(d["proxy_pool"], "residential")
+        self.assertTrue(d["kill_switch"] is False)
+
+    def test_provisioner_emits_network_stage(self):
+        o = order(network=self.NET_ON)
+        a = FakeAdapter()
+        rec = Recorder()
+        p = Provisioner(o, CATALOG, a, Emitter(rec))
+        p.run()
+        stages = [e.stage for e in rec.events]
+        self.assertTrue(any(s.startswith("provision.network.") for s in stages))
+        self.assertTrue(any("directive" == e.status for e in rec.events if e.stage == "provision.network"))
+        self.assertTrue(any("@@vault:wg-main@@" in c for c in a.execs))
+        self.assertTrue(any("ipinfo.io/timezone" in c for c in a.execs))
+
+    def test_windows_network_skips_guest_steps_honestly(self):
+        o = order(base_image="win11-24h2",
+                  network={"private_dns": True, "private_dns_profile": "abc123"})
+        a = FakeAdapter("windows")
+        rec = Recorder()
+        p = Provisioner(o, CATALOG, a, Emitter(rec))
+        p.run()
+        self.assertTrue(any("linux-first" in e.detail for e in rec.events if e.stage == "provision.network"))
+
+    def test_validate_order_catches_bad_network(self):
+        o = order(network={"kill_switch": True})
+        errors, _ = validate_order(o, CATALOG)
+        self.assertTrue(any("kill switch" in e for e in errors))
 
 
 class TestCatalog(unittest.TestCase):

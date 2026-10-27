@@ -37,6 +37,7 @@ class MachineOrder:
     apps: list = field(default_factory=list)  # list[AppOrder]
     rice: dict | None = None
     agent_bridge: dict = field(default_factory=dict)
+    network: dict = field(default_factory=dict)  # section 03: network & privacy
     rebuild_on_thaw: bool = False
     image: str | None = None  # bring-your-own image path (ios requires it)
 
@@ -54,6 +55,7 @@ class MachineOrder:
             apps=[AppOrder(**a) for a in d.get("apps", [])],
             rice=d.get("rice"),
             agent_bridge=d.get("agent_bridge", {}),
+            network=d.get("network", {}),
             rebuild_on_thaw=d.get("rebuild_on_thaw", False),
             image=d.get("image"),
         )

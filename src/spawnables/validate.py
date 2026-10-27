@@ -5,6 +5,9 @@ everything so the api cannot be talked into a bad provision.
 """
 
 
+from .netpriv import normalize as _net_normalize, validate_network as _net_validate
+
+
 def validate_order(order, catalog):
     errors = []
     warnings = []
@@ -65,6 +68,8 @@ def validate_order(order, catalog):
             f"{img['id']} requires a bring-your-own image: pass order.image "
             "(image sourcing is legally gated; see the readme matrix)"
         )
+
+    errors += _net_validate(_net_normalize(order.network), order)
 
     est = sum(
         (catalog.recipes.get(a.recipe_id) or {}).get("disk_mb_est", 0) for a in order.apps

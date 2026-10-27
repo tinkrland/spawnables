@@ -201,3 +201,26 @@ not celesto-backed. each needs a spawnables backend adapter, and the card verbs 
 ## windows versions and microsoft apps
 
 windows version is a base image concern: celesto builds the image from whatever iso you feed it (`celesto windows build-image`), so `win11-24h2` and `win10-22h2` are simply two base-image entries in the catalog, version pinned like everything else. microsoft apps are ordinary winget recipes: clipchamp ships inbox on windows 11 (winget id `clipchamp.clipchamp` covers the rest of the suite cases), and the availability matrix gates them the same as any app.
+
+## section 03 - provisioning setup / network & privacy
+
+advanced settings on the order form, straight from the design reference. seven toggle cards; each splits into guest-side steps (run in the vm during provisioning) and host-side directives (applied by the host runner at the fabric level):
+
+| toggle | default | guest-side | host-side |
+|---|---|---|---|
+| private dns (via nextdns) | off | nextdns cli bound to your profile id: encrypted lookups, your blocklists, your logs policy, never the datacenter resolver | - |
+| proxy ip | off | - | route egress through a proxy exit; pick the pool: residential reads as a home connection, commercial as business infrastructure |
+| geolocation spoofing vpn (byo) | byo config | tailscale / proton / wireguard config lands in the vm and the machine comes up behind that exit | vpn exit binding |
+| mac address spoofing | on | fallback `ip link` rewrite | qemu nic mac randomized at boot, so no two spawns share a hardware identifier |
+| don't track me + anti-fingerprinting | on | managed browser policies: dnt headers, canvas/webgl/fonts/audio/user-agent signals normalised or randomised (brave ships shields; firefox gets resistfingerprinting) | - |
+| kill switch (ip & mac spoofing) | with a tunnel | nftables: only lo, the tunnel iface, and established flows leave | fabric-level hard disconnect the instant the tunnel fails |
+| match vm specs to vpn location | off | the vm reads its own egress story through the tunnel and syncs its clock, timezone, and locale to the exit | - |
+
+rules the validator enforces:
+
+- the kill switch guards a tunnel: it needs the vpn or proxy on first. the form pre-checks it the moment a tunnel goes on.
+- match specs to vpn needs the vpn.
+- a byo vpn needs a provider (tailscale, proton, wireguard) and a **vault config reference**. secrets never ride in the order: configs and auth keys live in the vault, the order stores `@@vault:ref@@` markers, and the host runner resolves them at provision time. proton hands out wireguard profiles, so it rides the same lane.
+- guest-side steps are linux-first. on other guests the host directives still apply and the card notes the skip honestly.
+
+reference points, honestly cited: kernel.sh (kernel/kernel-images, open source) does browser anti-fingerprint infrastructure for web agents; our hardening covers the same surface for the browsers the catalog provisions. kernel.sh is browser-only infra; spawnables wraps the whole machine.

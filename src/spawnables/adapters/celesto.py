@@ -42,6 +42,12 @@ class CelestoAdapter(BaseAdapter):
                 "memory": min(order.size.ram_mb, 2048),
                 "disk_size": min(order.size.disk_gb * 1024, 16384),
             }
+        if self.caps.freeze and "disk_size" in kwargs:
+            # verified live: a bigger disk means grow_filesystem, which makes
+            # a raw qemu disk, and snapshots refuse raw disks. the snapshot
+            # lane keeps the base-size rootfs; big disks come from custom
+            # images (which snapshot fine) instead.
+            del kwargs["disk_size"]
         if not os.path.exists("/dev/kvm"):
             # celesto's machine "auto" picks microvm, which is kvm-only and
             # hardcodes -cpu host; q35 is the branch that boots under tcg.

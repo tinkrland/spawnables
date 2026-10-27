@@ -383,7 +383,9 @@ class TestBootKwargs(unittest.TestCase):
         kw = a.boot_kwargs(order(), CATALOG.base_images["mint-22-cinnamon"])
         self.assertEqual(kw["os"], "ubuntu")
         self.assertEqual(kw["memory"], 2048)
-        self.assertIn("disk_size", kw)
+        # linux is a freeze-capable guest: the snapshot lane keeps the
+        # base-size rootfs (grow = raw disk = no snapshots, verified live)
+        self.assertNotIn("disk_size", kw)
         self.assertNotIn("image", kw)
         import os as _os
         if not _os.path.exists("/dev/kvm"):

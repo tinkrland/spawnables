@@ -20,10 +20,32 @@ DEFAULTS = {
     # tunnel goes on, and validation rejects it without one
     "kill_switch": False,
     "match_specs_to_vpn": False,  # off
+    # exit_geo declares the country/city of the active tunnel exit; the
+    # coherence layer reads it to keep timezone + language believable
+    "exit_geo": {},
 }
 
-VPN_PROVIDERS = ("tailscale", "proton", "wireguard")
+# providers, with the integration lane each one actually gets. all
+# auth goes through vault references (@@vault:ref@@), never the order.
+# - tailscale: byo tailnet; the runner applies the auth key at the fabric
+#   level (host-side directive). api-driven, open source client.
+# - proton: wireguard configs. two lanes: vault-stored config files
+#   (the account's own generated configs) or the open-source client api
+#   path (protonvpn-cli's server-fetch flow) with credentials in the
+#   vault. byo exits.
+# - windscribe: official rest api (api.windscribe.com) + config
+#   generator endpoints; open-source clients. api key + account ref
+#   in the vault; the runner fetches a wireguard/openvpn config for the
+#   declared exit.
+# - wireguard: any byo wireguard config, vault-referenced.
+VPN_PROVIDERS = ("tailscale", "proton", "windscribe", "wireguard")
 PROXY_POOLS = ("residential", "commercial")
+
+# nextdns integration lane: api.nextdns.io exposes profile management
+# (create/update/delete profiles) with an api key. the runner provisions
+# ONE nextdns profile per machine card, vault-referenced api key; the
+# order stores only the profile id it gets back.
+NEXTDNS_API = "https://api.nextdns.io"
 
 # reference: kernel/kernel-images (open source) does browser anti-fingerprint
 # infrastructure for agents; our hardening steps cover the same surface for

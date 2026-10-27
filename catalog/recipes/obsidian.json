@@ -1,0 +1,52 @@
+{
+  "recipe_id": "obsidian",
+  "category": "productivity",
+  "orders": {
+    "native": {
+      "debian": {
+        "manager": "flatpak",
+        "steps": [
+          "flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo && flatpak install -y flathub md.obsidian.Obsidian"
+        ],
+        "verify": "flatpak list | grep obsidian"
+      },
+      "windows": {
+        "manager": "winget",
+        "steps": [
+          "winget install -e --id ObsidianMD.Obsidian"
+        ],
+        "verify": "test -d \"$env:LOCALAPPDATA\\Programs\\obsidian\""
+      },
+      "macos": {
+        "manager": "brew-cask",
+        "steps": [
+          "brew install --cask obsidian"
+        ],
+        "verify": "ls /applications/obsidian.app"
+      },
+      "android": {
+        "manager": "apk",
+        "steps": [
+          "pm install @@file:obsidian.apk@@"
+        ],
+        "verify": "pm list packages | grep obsidian"
+      }
+    }
+  },
+  "availability": {
+    "linux": [
+      "native"
+    ],
+    "windows": [
+      "native"
+    ],
+    "macos": [
+      "native"
+    ],
+    "android": [
+      "native"
+    ]
+  },
+  "disk_mb_est": 300,
+  "notes": "local-first notes; a machine's vault lives in its files, which survive pause and export"
+}

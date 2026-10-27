@@ -1,0 +1,43 @@
+{
+  "recipe_id": "notion",
+  "category": "productivity",
+  "orders": {
+    "native": {
+      "windows": {
+        "manager": "winget",
+        "steps": [
+          "winget install -e --id Notion.Notion"
+        ],
+        "verify": "test -d \"$env:LOCALAPPDATA\\Programs\\notion\""
+      },
+      "macos": {
+        "manager": "brew-cask",
+        "steps": [
+          "brew install --cask notion"
+        ],
+        "verify": "ls /applications/notion.app"
+      }
+    },
+    "pwa": {
+      "url": "https://notion.so"
+    }
+  },
+  "availability": {
+    "linux": [
+      "pwa"
+    ],
+    "windows": [
+      "native",
+      "pwa"
+    ],
+    "macos": [
+      "native",
+      "pwa"
+    ],
+    "android": [
+      "pwa"
+    ]
+  },
+  "disk_mb_est": 350,
+  "notes": "no official linux build; the pwa lane is the honest install there"
+}

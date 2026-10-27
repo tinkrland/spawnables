@@ -531,6 +531,49 @@ class TestMachineFP(unittest.TestCase):
         self.assertNotIn("fail", statuses)
 
 
+class TestCatalogRoster(unittest.TestCase):
+    """the browser roster and app shelf: honest availability per
+    platform, verify steps on every native lane."""
+
+    def test_browser_roster_is_complete(self):
+        browsers = ("chrome", "brave", "vivaldi", "zen", "arc", "shift",
+                     "tor", "duckduckgo")
+        for b in browsers:
+            self.assertIn(b, CATALOG.recipes, f"{b} missing from the roster")
+            self.assertEqual(CATALOG.recipes[b]["category"], "browser")
+
+    def test_browser_availability_is_honest(self):
+        arc = CATALOG.recipes["arc"]
+        self.assertEqual(list(arc["availability"]), ["macos"])  # winding down, macos only
+        self.assertIn("winding down", arc["notes"])
+        self.assertIn("discontinued", arc["notes"])
+        tor = CATALOG.recipes["tor"]
+        for os_name in ("linux", "windows", "macos"):
+            self.assertIn("native", tor["availability"][os_name])
+        ddg = CATALOG.recipes["duckduckgo"]
+        self.assertEqual(sorted(ddg["availability"]), ["macos", "windows"])  # no linux build
+        zen = CATALOG.recipes["zen"]
+        self.assertIn("not chromium", zen["notes"].lower())
+
+    def test_every_browser_native_lane_carries_a_verify(self):
+        for rid, r in CATALOG.recipes.items():
+            if r["category"] != "browser":
+                continue
+            for platform, native in r["orders"]["native"].items():
+                self.assertIn("verify", native, f"{rid}/{platform} has no verify step")
+                self.assertTrue(native["steps"], f"{rid}/{platform} has no steps")
+
+    def test_apps_obsidian_and_notion(self):
+        obsidian = CATALOG.recipes["obsidian"]
+        for os_name in ("linux", "windows", "macos", "android"):
+            self.assertIn("native", obsidian["availability"][os_name])
+        notion = CATALOG.recipes["notion"]
+        self.assertEqual(notion["availability"]["linux"], ["pwa"])  # no official linux build
+        self.assertIn("pwa", notion["availability"]["windows"])
+        self.assertEqual(CATALOG.order_types_for(notion, "linux"), ["pwa"])
+        self.assertEqual(notion["category"], "productivity")
+
+
 class TestDeviceContext(unittest.TestCase):
     """device context tuning: machine + device + behaviour fingerprints
     read as one plausible single user's device system, per guest os."""

@@ -1,0 +1,42 @@
+{
+  "recipe_id": "zen",
+  "category": "browser",
+  "orders": {
+    "native": {
+      "debian": {
+        "manager": "flatpak",
+        "steps": [
+          "flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo && flatpak install -y flathub app.zen_browser.zen"
+        ],
+        "verify": "flatpak list | grep zen"
+      },
+      "windows": {
+        "manager": "download",
+        "steps": [
+          "powershell -c \"irm https://zen-browser.app/download/windows -outfile $env:TEMP\\zen.exe; &$env:TEMP\\zen.exe /S\""
+        ],
+        "verify": "test -d \"$env:LOCALAPPDATA\\zen\""
+      },
+      "macos": {
+        "manager": "brew-cask",
+        "steps": [
+          "brew install --cask zen-browser"
+        ],
+        "verify": "ls /applications/zen.app"
+      }
+    }
+  },
+  "availability": {
+    "linux": [
+      "native"
+    ],
+    "windows": [
+      "native"
+    ],
+    "macos": [
+      "native"
+    ]
+  },
+  "disk_mb_est": 420,
+  "notes": "firefox-based, not chromium - approachable where raw firefox is not; arc-style spaces without arc"
+}

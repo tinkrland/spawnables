@@ -1,0 +1,32 @@
+{
+  "recipe_id": "shift",
+  "category": "browser",
+  "orders": {
+    "native": {
+      "windows": {
+        "manager": "download",
+        "steps": [
+          "powershell -c \"irm https://tryshift.com/download/win -outfile $env:TEMP\\shift.exe; &$env:TEMP\\shift.exe /S\""
+        ],
+        "verify": "test -d \"$env:LOCALAPPDATA\\shift\""
+      },
+      "macos": {
+        "manager": "brew-cask",
+        "steps": [
+          "brew install --cask shift"
+        ],
+        "verify": "ls /applications/shift.app"
+      }
+    }
+  },
+  "availability": {
+    "windows": [
+      "native"
+    ],
+    "macos": [
+      "native"
+    ]
+  },
+  "disk_mb_est": 600,
+  "notes": "the all-your-accounts browser; no linux build exists"
+}

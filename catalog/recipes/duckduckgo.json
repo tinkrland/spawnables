@@ -1,0 +1,32 @@
+{
+  "recipe_id": "duckduckgo",
+  "category": "browser",
+  "orders": {
+    "native": {
+      "macos": {
+        "manager": "brew-cask",
+        "steps": [
+          "brew install --cask duckduckgo"
+        ],
+        "verify": "ls /applications/duckduckgo.app"
+      },
+      "windows": {
+        "manager": "download",
+        "steps": [
+          "powershell -c \"iwr https://duckduckgo.com/windows -outfile $env:TEMP\\ddg.exe; &$env:TEMP\\ddg.exe /S\""
+        ],
+        "verify": "test -d \"$env:LOCALAPPDATA\\duckduckgo\""
+      }
+    }
+  },
+  "availability": {
+    "macos": [
+      "native"
+    ],
+    "windows": [
+      "native"
+    ]
+  },
+  "disk_mb_est": 300,
+  "notes": "smallest footprint of the roster; macos and windows only"
+}

@@ -1,0 +1,22 @@
+{
+  "recipe_id": "arc",
+  "category": "browser",
+  "orders": {
+    "native": {
+      "macos": {
+        "manager": "brew-cask",
+        "steps": [
+          "brew install --cask arc"
+        ],
+        "verify": "ls /applications/arc.app"
+      }
+    }
+  },
+  "availability": {
+    "macos": [
+      "native"
+    ]
+  },
+  "disk_mb_est": 400,
+  "notes": "winding down; kept for existing users. the windows build was discontinued by the browser company"
+}

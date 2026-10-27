@@ -4,13 +4,13 @@ so the adapter instance stays alive across the whole lifecycle."""
 import sys
 
 from spawnables.adapters.celesto import CelestoAdapter
-from spawnables.catalog import load_catalog
+from spawnables.catalog import Catalog
 from spawnables.events import Emitter, Recorder
 from spawnables.models import MachineOrder
 from spawnables.provisioner import Provisioner
 
 order = MachineOrder.load("orders/ubuntu-headless-smoke.json")
-catalog = load_catalog("catalog")
+catalog = Catalog("catalog")
 rec = Recorder()
 adapter = CelestoAdapter("linux")
 

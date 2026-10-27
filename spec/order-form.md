@@ -204,23 +204,38 @@ windows version is a base image concern: celesto builds the image from whatever 
 
 ## section 03 - provisioning setup / network & privacy
 
-advanced settings on the order form, straight from the design reference. seven toggle cards; each splits into guest-side steps (run in the vm during provisioning) and host-side directives (applied by the host runner at the fabric level):
+advanced settings on the order form, straight from the design reference. seven toggle cards; each splits into guest-side steps (run in the vm during provisioning) and host-side directives (applied by the host runner at the fabric level).
+
+card copy, as it reads on the form:
+
+- **private dns (via nextdns)** - encrypted connect the vm to your own nextdns profile during provisioning. lookups, your blocklists, your logs policy, never the datacenter resolver.
+- **proxy ip** - route the vm's traffic through a proxy exit. toggle it on and pick the pool: residential reads as a home connection, commercial as business infrastructure.
+- **geolocation spoofing vpn (bring your own vpn)** - plug in your own vpn config and the vm comes up behind that exit, so its public ip and geo story match the location you choose, not the datacenter it runs in.
+- **mac address spoofing** - randomise the vm's network interface mac address at boot, so no two spawns share a hardware identifier that can be linked together.
+- **don't track me for browsers, anti-fingerprinting** - every browser in the vm sends do-not-track and gets hardened against fingerprinting: canvas, webgl, fonts, audio and user-agent signals are normalised or randomised.
+- **kill switch (ip & mac spoofing)** - the vm hard-disconnects the instant the proxy or vpn fails. no packet ever leaves through the bare, unspoofed interface.
+- **match vm specs to vpn location** - opt in and the vm syncs its clock, timezone and locale to the vpn exit. pick louisville, quebec and the vm runs on quebec time; your real timezone never leaks through metadata. same with date orientation (america does mm/dd/yyyy, everyone else does dd/mm), the language of the vm should match the location, the units of measurement should match too because americans use the imperial system, as should the system currency and such.
+
+technical split, per toggle:
 
 | toggle | default | guest-side | host-side |
 |---|---|---|---|
 | private dns (via nextdns) | off | nextdns cli bound to your profile id: encrypted lookups, your blocklists, your logs policy, never the datacenter resolver | - |
 | proxy ip | off | - | route egress through a proxy exit; pick the pool: residential reads as a home connection, commercial as business infrastructure |
-| geolocation spoofing vpn (byo) | byo config | tailscale / proton / wireguard config lands in the vm and the machine comes up behind that exit | vpn exit binding |
+| geolocation spoofing vpn (byo) | byo config | tailscale / proton / windscribe / wireguard config lands in the vm and the machine comes up behind that exit | vpn exit binding |
 | mac address spoofing | on | fallback `ip link` rewrite | qemu nic mac randomized at boot, so no two spawns share a hardware identifier |
 | don't track me + anti-fingerprinting | on | managed browser policies: dnt headers, canvas/webgl/fonts/audio/user-agent signals normalised or randomised (brave ships shields; firefox gets resistfingerprinting) | - |
 | kill switch (ip & mac spoofing) | with a tunnel | nftables: only lo, the tunnel iface, and established flows leave | fabric-level hard disconnect the instant the tunnel fails |
-| match vm specs to vpn location | off | the vm reads its own egress story through the tunnel and syncs its clock, timezone, and locale to the exit | - |
+| match vm specs to vpn location | off | the vm syncs to the declared exit's story: clock (`timedatectl`), locale bundle (`localectl` LANG, LC_TIME, LC_MONETARY, LC_MEASUREMENT, LC_NUMERIC - which is where date orientation, currency and units actually live in glibc), then a live egress verification through the tunnel that fails loudly if the real exit disagrees with the declared one | - |
+
+what the story bundle means in practice: the exit country drives a known machine story - us exits come up en_US.UTF-8, mm/dd/yyyy dates, imperial units, usd, 12h clock; gb exits come up en_GB.UTF-8, dd/mm/yyyy, metric, gbp, 24h clock. with sync on, a mismatch between the order's settings and the exit resolves in the exit's favour (recorded as a sync on the card, never a silent override). with sync off, the same mismatch blocks provisioning: you asked for a machine whose story contradicts itself.
 
 rules the validator enforces:
 
 - the kill switch guards a tunnel: it needs the vpn or proxy on first. the form pre-checks it the moment a tunnel goes on.
 - match specs to vpn needs the vpn.
-- a byo vpn needs a provider (tailscale, proton, wireguard) and a **vault config reference**. secrets never ride in the order: configs and auth keys live in the vault, the order stores `@@vault:ref@@` markers, and the host runner resolves them at provision time. proton hands out wireguard profiles, so it rides the same lane.
+- a byo vpn needs a provider (tailscale, proton, windscribe, wireguard) and a **vault config reference**. secrets never ride in the order: configs and auth keys live in the vault, the order stores `@@vault:ref@@` markers, and the host runner resolves them at provision time. proton and windscribe hand out wireguard/openvpn profiles, so they ride the same lane.
+- the exit is declared on the order (`exit_geo`: country, and city when you pick one - louisville beats the country default), so the coherence layer can check the story before boot and the card can show it.
 - guest-side steps are linux-first. on other guests the host directives still apply and the card notes the skip honestly.
 
 positioning, plainly: spawnables is beyond the browser. the browser is one app among many on machines we provision: desktops, engineering suites, design tools, phones. kernel.sh (kernel/kernel-images, open source) is cited only as adjacent reference for the anti-fingerprint surface; the browser hardening step covers the same ground for the browsers the catalog provisions, and everything else in section 03 (dns, tunnels, mac spoofing, kill switch) is machine-level, not page-level.

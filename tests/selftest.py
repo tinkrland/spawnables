@@ -94,7 +94,7 @@ class TestNetworkPrivacy(unittest.TestCase):
         net = normalize(self.NET_ON)
         linux = guest_steps(net, "linux", "brave")
         self.assertTrue(any(label.startswith("vpn.") for label, _ in linux))
-        self.assertTrue(any(label == "specs.sync" for label, _ in linux))
+        self.assertTrue(any(label == "specs.sync.clock" for label, _ in linux))
         self.assertTrue(any(label == "killswitch.nft" for label, _ in linux))
         self.assertIn("wg0", dict(linux)["killswitch.nft"])
         self.assertEqual(guest_steps(net, "windows", "edge"), [])
@@ -375,6 +375,75 @@ class TestIosAdapter(unittest.TestCase):
         a = IosAdapter()
         with self.assertRaises(ImageRequired):
             a.exec("ls")
+
+
+class TestMachineStory(unittest.TestCase):
+    """match specs to vpn location: the whole local feel of the
+    machine follows the exit - clock, locale, date orientation,
+    units, currency - and mismatched order settings resolve instead
+    of failing when sync is on."""
+
+    def test_us_exit_story_is_imperial_mmdd_usd(self):
+        from spawnables.coherence import exit_story
+        story = exit_story({"exit_geo": {"country": "US"}})
+        self.assertEqual(story["date"], "mm/dd/yyyy")
+        self.assertEqual(story["units"], "imperial")
+        self.assertEqual(story["currency"], "USD")
+        self.assertEqual(story["locale"], "en_US.UTF-8")
+
+    def test_gb_exit_story_is_metric_ddmm_gbp(self):
+        from spawnables.coherence import exit_story
+        story = exit_story({"exit_geo": {"country": "GB"}})
+        self.assertEqual(story["date"], "dd/mm/yyyy")
+        self.assertEqual(story["units"], "metric")
+        self.assertEqual(story["currency"], "GBP")
+
+    def test_city_level_exit_beats_country(self):
+        from spawnables.coherence import expected_timezone
+        tz = expected_timezone({"exit_geo": {"country": "US", "city": "Louisville"}})
+        self.assertEqual(tz, "America/Kentucky/Louisville")
+
+    def test_sync_on_resolves_mismatch_instead_of_failing(self):
+        from spawnables.coherence import coherence_report, blocks_provisioning
+        o = order(timezone="Asia/Kolkata", locale="en_IN.UTF-8")
+        net = {"vpn": True, "match_specs_to_vpn": True,
+               "exit_geo": {"country": "CH", "city": "Zurich"}}
+        issues = coherence_report(o, net)
+        self.assertFalse(blocks_provisioning(o, net))
+        tz_issue = [i for i in issues if i[0] == "timezone"][0]
+        self.assertEqual(tz_issue[3], "ok")  # synced, not failed
+        self.assertTrue(any(i[0] == "story" for i in issues))
+
+    def test_sync_off_still_blocks_on_mismatch(self):
+        from spawnables.coherence import blocks_provisioning
+        o = order(timezone="Asia/Kolkata", locale="en_IN.UTF-8")
+        net = {"vpn": True, "match_specs_to_vpn": False,
+               "exit_geo": {"country": "CH", "city": "Zurich"}}
+        self.assertTrue(blocks_provisioning(o, net))
+
+    def test_guest_sync_steps_apply_locale_bundle(self):
+        from spawnables.netpriv import normalize, guest_steps
+        net = normalize({"vpn": True, "vpn_provider": "wireguard",
+                         "vpn_config_ref": "wg-main",
+                         "match_specs_to_vpn": True,
+                         "exit_geo": {"country": "CH", "city": "Zurich"}})
+        steps = dict(guest_steps(net, "linux", "brave"))
+        self.assertIn("Europe/Zurich", steps["specs.sync.clock"])
+        self.assertIn("de_CH.UTF-8", steps["specs.sync.locale"])
+        self.assertIn("LC_MEASUREMENT", steps["specs.sync.locale"])
+        self.assertIn("ipinfo.io/timezone", steps["specs.sync.verify"])
+
+    def test_locale_step_defers_to_sync_when_match_on(self):
+        o = order(timezone="Asia/Kolkata")
+        o.network = {"vpn": True, "vpn_provider": "wireguard",
+                     "vpn_config_ref": "wg-main",
+                     "match_specs_to_vpn": True,
+                     "exit_geo": {"country": "CH"}}
+        rec = Recorder()
+        Provisioner(o, CATALOG, FakeAdapter(), Emitter(rec)).run()
+        locales = [e for e in rec.events if e.stage == "provision.locale"]
+        self.assertEqual([e.status for e in locales], ["skip"])
+        self.assertIn("exit story", locales[0].detail)
 
 
 class TestCoherence(unittest.TestCase):

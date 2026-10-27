@@ -259,6 +259,19 @@ class TestProvisioner(unittest.TestCase):
         self.assertTrue(any("desktop-only" in e.detail for e in rec.events if e.stage == "provision.locale"))
         self.assertIn("provision.ready", stages)
 
+    def test_snapshot_failure_skips_honestly(self):
+        class RawDiskFake(FakeAdapter):
+            def snapshot_full(self, sid):
+                raise RuntimeError("Snapshots are not supported for raw QEMU disks")
+        o = order(path_tools=["git"])
+        a = RawDiskFake()
+        rec = Recorder()
+        p = Provisioner(o, CATALOG, a, Emitter(rec))
+        p.run()
+        stages = [(e.stage, e.status) for e in rec.events if e.stage == "provision.snapshot"]
+        self.assertIn(("provision.snapshot", "skip"), stages)
+        self.assertIn("provision.ready", [e.stage for e in rec.events])
+
     def test_plan_is_dry_run(self):
         o = order(path_tools=["git"])
         a = FakeAdapter()

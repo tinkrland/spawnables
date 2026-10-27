@@ -25,6 +25,7 @@ if [ ! -e /dev/kvm ]; then
   QA="$HOME/venv/lib/python3*/site-packages/celesto/runtime/qemu_args.py"
   sed -i 's|q35,accel=kvm", "host"|q35,accel=tcg", "max"|' $QA
   sed -i 's|microvm,accel=kvm|microvm,accel=tcg|' $QA
+  sed -i 's|"-cpu", "host"|"-cpu", "max"|g' $QA
   grep -q 'accel=tcg' $QA && log "tcg patch applied" || { echo "SPAWNABLESFAIL tcg-patch"; exit 1; }
   export SPAWNABLES_BOOT_TIMEOUT=900
 fi

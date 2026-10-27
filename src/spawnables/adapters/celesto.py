@@ -34,6 +34,10 @@ class CelestoAdapter(BaseAdapter):
         """pure: what celesto gets for this order. testable without celesto."""
         if image.get("image"):
             kwargs = {"image": image["image"]}
+        if not os.path.exists("/dev/kvm"):
+            # celesto's machine "auto" picks microvm, which is kvm-only and
+            # hardcodes -cpu host; q35 is the branch that boots under tcg.
+            kwargs["qemu_machine"] = "q35"
         else:
             # auto-config lane: celesto's published preset (ubuntu 24.04),
             # sized from the order. disk_size/miB.

@@ -29,7 +29,9 @@ PWA_SHORTCUT = {
 }
 
 LOCALE_CMD = {
-    "linux": 'timedatectl set-timezone {tz} && update-locale LANG={locale}',
+    "linux": 'timedatectl set-timezone {tz} 2>/dev/null || '
+             'ln -sf /usr/share/zoneinfo/{tz} /etc/localtime; '
+             'update-locale LANG={locale} 2>/dev/null || true',
     "windows": "tzutil /s {tz}",
     "macos": None,  # desktop-only guest: no exec bridge
     "android": "settings put global auto_time_zone on",
@@ -198,8 +200,17 @@ class Provisioner:
         em = self.emitter
         if self.adapter.caps.freeze:
             em.emit("provision.snapshot", "start", "fresh point")
-            self.adapter.snapshot_full("fresh-point")
-            em.emit("provision.snapshot", "ok", "fresh point")
+            try:
+                self.adapter.snapshot_full("fresh-point")
+                em.emit("provision.snapshot", "ok", "fresh point")
+            except Exception as e:
+                # verified live: celesto auto-config lane creates raw qemu
+                # disks, and snapshots refuse them. the card reports the
+                # real reason instead of failing the whole provision.
+                em.emit("provision.snapshot", "skip", f"{e}")
+                em.emit("provision.snapshot", "note",
+                        "freeze stays gray on raw-disk lanes; config-based "
+                        "guests snapshot normally")
         else:
             em.emit("provision.snapshot", "skip",
                     f"{self.adapter.guest} guests have no snapshots; rebuild-from-manifest covers it")

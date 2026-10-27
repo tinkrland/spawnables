@@ -45,5 +45,7 @@ if [ $code -eq 0 ]; then
 else
   echo "SPAWNABLESFAIL provision"
   log "celesto logs for debugging"
-  find "$HOME/.local/share/celesto" -name "*.log" -mmin -20 2>/dev/null | while read -r f; do echo "--- $f"; tail -15 "$f"; done
+  for d in "$HOME/.celesto" "$HOME/.local/share/celesto"; do
+    find "$d" -name "*.log" -mmin -20 2>/dev/null | while read -r f; do echo "--- $f"; tail -15 "$f"; done
+  done
 fi

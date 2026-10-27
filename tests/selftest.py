@@ -364,6 +364,27 @@ class TestIosAdapter(unittest.TestCase):
             a.exec("ls")
 
 
+class TestBootKwargs(unittest.TestCase):
+    def test_auto_config_lane_when_no_image_path(self):
+        a = CelestoAdapter("linux")
+        kw = a.boot_kwargs(order(), CATALOG.base_images["mint-22-cinnamon"])
+        self.assertEqual(kw["os"], "ubuntu")
+        self.assertEqual(kw["memory"], 2048)
+        self.assertIn("disk_size", kw)
+        self.assertNotIn("image", kw)
+
+    def test_image_path_wins_when_present(self):
+        a = CelestoAdapter("linux")
+        img = dict(CATALOG.base_images["mint-22-cinnamon"], image="s3://x/mint.img")
+        kw = a.boot_kwargs(order(), img)
+        self.assertEqual(kw["image"], "s3://x/mint.img")
+
+    def test_smoke_order_validates(self):
+        o = MachineOrder.load("orders/ubuntu-headless-smoke.json")
+        errors, _ = validate_order(o, CATALOG)
+        self.assertEqual(errors, [])
+
+
 class TestAdapterSelection(unittest.TestCase):
     def test_backend_routing(self):
         self.assertIsInstance(adapter_for(order(), CATALOG), CelestoAdapter)

@@ -1,0 +1,9 @@
+{
+  "name": "spawnables-runner",
+  "private": true,
+  "type": "module",
+  "description": "tenki lane orchestrator for spawnables host tests",
+  "dependencies": {
+    "@tenkicloud/sandbox": "^1.4.1"
+  }
+}

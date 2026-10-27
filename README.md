@@ -18,6 +18,18 @@ built on open-source celesto (apache-2.0), not celesto cloud. bring your own com
 - every catalog entry carries its own verify step. a card goes live only when everything it ordered passed.
 - the catalogs are the durable asset. plumbing is replaceable; the recipe registry is not.
 
+## guest os support
+
+verified against celestoai/celesto on 2026-10-28. windows and macos guests exist, with real limits:
+
+| guest os | hosts | pause | freeze/thaw | agent bridge | export | notes |
+|---|---|---|---|---|---|---|
+| linux | linux x86_64 (qemu/kvm), firecracker | yes | yes (`full` snapshot) | yes (ssh, exec, mcp) | yes | the first-class path |
+| windows | linux x86_64 only | stop/start only | no (no snapshots) | ssh only | disk image only | build your own image from iso; no shared folders, no outbound-domain controls |
+| macos | apple silicon macs only | no | no | desktop only (no shell/exec/ssh) | no (images cannot leave the host) | fixed 4 vcpu / 8 gb / 80 gb, max 2 running, apple sla ties images to the host |
+
+design consequence: card verbs gray out per guest os, the same pattern as the app availability matrix. linux cards get the full verb row; windows cards get pause and burn; macos cards get desktop view and burn.
+
 ## status
 
-v0 spec. schemas are drafts; nothing provisions yet. open question pinned before the catalogs commit: which celesto release surfaces windows/macos guests.
+v0 spec. schemas are drafts; nothing provisions yet. guest os limits above are verified; they gate the catalogs.

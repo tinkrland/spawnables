@@ -176,3 +176,28 @@ an order pins what it ordered:
 | snapshot | fresh-point snapshot | `provision.ready` |
 
 progress streams over `GET /api/machines/:id/events`; states and verbs live in the [card lifecycle spec](card-lifecycle.md).
+
+## sizing
+
+the form exposes presets plus custom sliders for vcpus, memory, and disk, with per-guest-os limits enforced in the form (never discovered at provision time):
+
+- linux (celesto): memory and disk adjustable at create time; vcpus is pinned at 2 in current celesto. template-level caps exist (e.g. desktop disks); the form carries them as slider bounds.
+- windows (celesto): memory and disk adjustable at create time.
+- macos (celesto): fixed 4 vcpu / 8 gb / 80 gb; custom sizes not enabled yet, so the form hides the sliders.
+- android / ios: per backend adapter; bounds pinned when each adapter lands.
+
+celesto has no live resize. changing size is a **rebuild from the manifest**, which manifest replay already makes cheap; the card presents resize as a rebuild, not an in-place stretch. on byo cloud infra, size maps to instance type at provision time.
+
+## extended guests: android and ios
+
+not celesto-backed. each needs a spawnables backend adapter, and the card verbs degrade per backend:
+
+- **android**, three real routes:
+  - android-x86 in qemu: a real VM, so pause works and freeze is plausible (qemu snapshots) but unverified. recipes key on an `android` family whose install steps are `adb install` commands; verify via `pm list packages`. gui streams to the card over scrcpy (ws-scrcpy).
+  - redroid (remote-android): containers, GPU-enabled, scales easiest, but no qemu snapshots, so no freeze.
+  - cuttlefish: google's virtual android device, aosp images, heaviest setup; parked until someone asks.
+- **ios**: the vphone ecosystem (vphone-cli, 16k stars) runs virtual iphones on apple silicon macs; vphone-linux ports it to linux qemu on apple's vresearch101 machine type. research-grade, image sourcing is legally gated, so ios is an experimental bring-your-own-image tier with the license question disclosed in the form.
+
+## windows versions and microsoft apps
+
+windows version is a base image concern: celesto builds the image from whatever iso you feed it (`celesto windows build-image`), so `win11-24h2` and `win10-22h2` are simply two base-image entries in the catalog, version pinned like everything else. microsoft apps are ordinary winget recipes: clipchamp ships inbox on windows 11 (winget id `clipchamp.clipchamp` covers the rest of the suite cases), and the availability matrix gates them the same as any app.

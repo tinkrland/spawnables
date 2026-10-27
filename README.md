@@ -11,9 +11,11 @@ built on open-source celesto (apache-2.0), not celesto cloud. bring your own com
 - [adapter contract](spec/adapters.md): one backend adapter per guest os route (celesto, android, vphone); capabilities gate the card verbs.
 - [schemas](spec/schemas/): json schema drafts for every object.
 - [src/spawnables](src/spawnables): the provisioner skeleton. `validate` and `plan` run anywhere; `provision` runs on a host with celesto installed.
-- network & privacy (order form section 03): private dns (nextdns), proxy pools, byo vpn exits (tailscale / proton / wireguard), mac spoofing, browser anti-fingerprinting, kill switch, spec matching to the vpn exit. guest-side steps run in the vm; host-side directives ride with the runner. secrets live in a vault, never in the order.
+- network & privacy (order form section 03): private dns (nextdns), proxy pools (residential / commercial / dedicated via kernel or tailscale), vpn exits (proton + windscribe, open-source tunnels and kill switches), mac spoofing, browser anti-fingerprinting, kill switch, spec matching to the vpn exit. guest-side steps run in the vm; host-side directives ride with the runner. secrets live in a vault, never in the order.
+- fingerprint coherence ([coherence.py](src/spawnables/coherence.py), [advanced controls](spec/advanced-controls.md)): the machine tells one story - timezone, language, date orientation, units, currency and exit geo must agree, or provisioning blocks. 'match specs to vpn' syncs the whole local feel of the machine to the exit instead.
+- machine-layer anti-fingerprinting ([machinefp.py](src/spawnables/machinefp.py), [the inverse playbook](spec/anti-fingerprint.md)): entropy is the enemy, so the fleet presents one boring uniform identity - plausible oem smbios and disk strings, real-vendor oui macs, fresh machine-id, boring hostnames, managed clock, distro-standard fonts - with hypervisor-level limits stated honestly on the card.
 - [catalog](catalog/): seed entries: 8 base images (ubuntu, mint, win11, win10, macos, android-x86, redroid, ios), path tools, 10 recipes (kicad, figma, netflix, brave, clipchamp, zoom, whatsapp, spotify, termux), 2 rices.
-- [tests/selftest.py](tests/selftest.py): 43/43, stdlib only, no host needed. `python3 tests/selftest.py`.
+- [tests/selftest.py](tests/selftest.py): 68/68, stdlib only, no host needed. `python3 tests/selftest.py`. `python3 tests/selftest.py`.
 
 ## design rules
 

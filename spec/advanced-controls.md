@@ -80,7 +80,11 @@ stack. so:
 
 browser automation flows and fingerprinting are different problems;
 the order form keeps them on different toggles, and the card shows
-both states separately.
+both states separately. the full signal map - browser, machine,
+network, behavioral - with the inverse of each, lives in
+[anti-fingerprint.md](anti-fingerprint.md); the machine layer itself
+is [machinefp.py](../src/spawnables/machinefp.py), always applied,
+not a toggle.
 
 ## distros: how separate linux installations actually happen
 

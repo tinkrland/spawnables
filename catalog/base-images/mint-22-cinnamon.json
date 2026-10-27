@@ -1,0 +1,14 @@
+{
+  "id": "mint-22-cinnamon",
+  "os": "linux",
+  "distro": "linuxmint",
+  "distro_family": "debian",
+  "desktop_env": "cinnamon",
+  "version": "22",
+  "arch": [
+    "x86_64"
+  ],
+  "package_manager": "apt",
+  "backend": "celesto",
+  "default_browser": "brave"
+}

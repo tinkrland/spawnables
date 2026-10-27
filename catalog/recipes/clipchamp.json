@@ -1,0 +1,21 @@
+{
+  "recipe_id": "clipchamp",
+  "category": "creative",
+  "orders": {
+    "native": {
+      "windows": {
+        "manager": "winget",
+        "steps": [
+          "winget install -e --id clipchamp.clipchamp"
+        ],
+        "verify": "get-appxpackage clipchamp"
+      }
+    }
+  },
+  "availability": {
+    "windows": [
+      "native"
+    ]
+  },
+  "notes": "ships inbox on windows 11; the recipe covers stock-iso builds and windows 10"
+}

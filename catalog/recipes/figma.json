@@ -1,0 +1,23 @@
+{
+  "recipe_id": "figma",
+  "category": "design",
+  "orders": {
+    "pwa": {
+      "url": "https://figma.com"
+    }
+  },
+  "availability": {
+    "linux": [
+      "pwa"
+    ],
+    "windows": [
+      "pwa"
+    ],
+    "macos": [
+      "pwa"
+    ],
+    "android": [
+      "pwa"
+    ]
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "recipe_id": "whatsapp",
+  "category": "comms",
+  "orders": {
+    "pwa": {
+      "url": "https://web.whatsapp.com"
+    },
+    "native": {
+      "windows": {
+        "manager": "winget",
+        "steps": [
+          "winget install -e --id 9NKSQGP7F2NH"
+        ],
+        "verify": "get-appxpackage whatsapp"
+      }
+    }
+  },
+  "availability": {
+    "linux": [
+      "pwa"
+    ],
+    "windows": [
+      "native",
+      "pwa"
+    ],
+    "macos": [
+      "pwa"
+    ],
+    "android": [
+      "native",
+      "pwa"
+    ]
+  }
+}

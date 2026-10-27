@@ -1,0 +1,15 @@
+{
+  "id": "ubuntu-24-04-gnome",
+  "os": "linux",
+  "distro": "ubuntu",
+  "distro_family": "debian",
+  "desktop_env": "gnome",
+  "version": "24.04",
+  "arch": [
+    "x86_64",
+    "arm64"
+  ],
+  "package_manager": "apt",
+  "backend": "celesto",
+  "default_browser": "brave"
+}

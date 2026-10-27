@@ -1,0 +1,31 @@
+{
+  "id": "node",
+  "installs": {
+    "debian": {
+      "steps": [
+        "curl -fsSL https://deb.nodesource.com/setup_22.x | bash -",
+        "apt install -y nodejs"
+      ],
+      "verify": "node --version"
+    },
+    "fedora": {
+      "steps": [
+        "dnf install -y nodejs"
+      ],
+      "verify": "node --version"
+    },
+    "arch": {
+      "steps": [
+        "pacman -S --noconfirm nodejs"
+      ],
+      "verify": "node --version"
+    },
+    "windows": {
+      "steps": [
+        "winget install -e --id OpenJS.NodeJS"
+      ],
+      "verify": "node --version"
+    }
+  },
+  "disk_mb_est": 220
+}

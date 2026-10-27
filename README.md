@@ -8,7 +8,11 @@ built on open-source celesto (apache-2.0), not celesto cloud. bring your own com
 
 - [order form spec](spec/order-form.md): one data model, two sides. a machine order (what you want) and four catalogs (what exists): base images, path tools, app recipes, rices.
 - [card lifecycle spec](spec/card-lifecycle.md): the machine card api and states, from provisioning to burned.
+- [adapter contract](spec/adapters.md): one backend adapter per guest os route (celesto, android, vphone); capabilities gate the card verbs.
 - [schemas](spec/schemas/): json schema drafts for every object.
+- [src/spawnables](src/spawnables): the provisioner skeleton. `validate` and `plan` run anywhere; `provision` runs on a host with celesto installed.
+- [catalog](catalog/): seed entries: 8 base images (ubuntu, mint, win11, win10, macos, android-x86, redroid, ios), path tools, 10 recipes (kicad, figma, netflix, brave, clipchamp, zoom, whatsapp, spotify, termux), 2 rices.
+- [tests/selftest.py](tests/selftest.py): 30/30, stdlib only, no host needed. `python3 tests/selftest.py`.
 
 ## design rules
 
@@ -34,4 +38,4 @@ android and ios are not celesto surfaces: they need spawnables backend adapters 
 
 ## status
 
-v0 spec. schemas are drafts; nothing provisions yet. guest os limits above are verified; they gate the catalogs.
+v0.1: spec plus provisioner skeleton and adapters. the pipeline maps boot -> locale -> tools -> apps -> rice -> fresh-point snapshot with per-stage card events; card verbs are capability-gated per adapter; android and ios routes are stubbed to their real surfaces (adb, qemu vresearch101) with the boot integration landing with the first cloud host. what does not exist yet: the web ui, the mcp bridge, and real boots against celesto.

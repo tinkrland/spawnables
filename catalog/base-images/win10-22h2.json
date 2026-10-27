@@ -1,0 +1,14 @@
+{
+  "id": "win10-22h2",
+  "os": "windows",
+  "distro": "windows",
+  "distro_family": "windows",
+  "desktop_env": "windows-shell",
+  "version": "22h2",
+  "arch": [
+    "x86_64"
+  ],
+  "package_manager": "winget",
+  "backend": "celesto",
+  "default_browser": "edge"
+}

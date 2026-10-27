@@ -1,0 +1,30 @@
+{
+  "id": "python",
+  "installs": {
+    "debian": {
+      "steps": [
+        "apt update && apt install -y python3 python3-pip"
+      ],
+      "verify": "python3 --version"
+    },
+    "fedora": {
+      "steps": [
+        "dnf install -y python3"
+      ],
+      "verify": "python3 --version"
+    },
+    "arch": {
+      "steps": [
+        "pacman -S --noconfirm python"
+      ],
+      "verify": "python3 --version"
+    },
+    "windows": {
+      "steps": [
+        "winget install -e --id Python.Python.3.12"
+      ],
+      "verify": "python --version"
+    }
+  },
+  "disk_mb_est": 180
+}

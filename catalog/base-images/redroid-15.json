@@ -1,0 +1,15 @@
+{
+  "id": "redroid-15",
+  "os": "android",
+  "distro": "redroid",
+  "distro_family": "android",
+  "desktop_env": "android",
+  "version": "15",
+  "arch": [
+    "x86_64",
+    "arm64"
+  ],
+  "package_manager": "adb",
+  "backend": "redroid",
+  "default_browser": "brave"
+}

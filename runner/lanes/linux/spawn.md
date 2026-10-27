@@ -16,4 +16,12 @@ cd runner && npm install && node tenki-spawn.mjs linux
 
 kvm truth (verified 2026-10-28): tenki sandboxes have no nested virtualization at all - no /dev/kvm, no vmx/svm flags - and celesto hard-requires `accel=kvm` on linux hosts. so the lane ships a **tcg patch**: when /dev/kvm is absent, boot.sh sed-patches the installed celesto to `accel=tcg` + cpu `max` and raises the ssh-wait budget to 900s. software emulation is 10-50x slower but it is a real guest, and the smoke order exercises the whole pipeline: locale, apt git, verify, fresh-point snapshot. a proper production host (bare metal, or any cloud vm with nested virt) skips the patch and gets kvm speed.
 
-status: first live run: celesto installed, qemu launched a real guest, died on the missing kvm (expected, now patched). second run in flight. mint/ubuntu-desktop entries still need custom images (celesto publishes headless ubuntu and linux-desktop presets; mint means building our own rootfs later).
+status: **green, first live run 2026-10-28.** `SPAWNABLESOK`: a real ubuntu 24.04 guest booted on a tenki sandbox, timezone applied, browser-hardening policy written, git installed inside the guest with its verify passing, fresh-point snapshot honestly skipped (raw-disk lane), provision.ready.
+
+three tenki truths the lane now encodes:
+
+1. no nested virt at all (no /dev/kvm, no vmx/svm) -> tcg patch: `accel=tcg` + cpu `max` + q35 machine + 900s boot budget. slow, but real.
+2. vhost-vsock blocked for the sandbox user -> `comm_channel="ssh"` rides the guest network instead.
+3. celesto auto-config creates raw qemu disks, which snapshots refuse -> freeze stays gray on this lane (the skip is a card event with the real reason); config-based guests snapshot normally.
+
+next on the lane: a grow_filesystem=false / config-based guest to turn freeze green, then mint/desktop images as custom rootfs builds.

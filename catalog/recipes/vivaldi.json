@@ -1,0 +1,41 @@
+{
+  "recipe_id": "vivaldi",
+  "category": "browser",
+  "orders": {
+    "native": {
+      "debian": {
+        "manager": "apt",
+        "steps": [
+          "curl -fsSL https://repo.vivaldi.com/archive/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/vivaldi.gpg && echo 'deb [signed-by=/usr/share/keyrings/vivaldi.gpg] https://repo.vivaldi.com/archive/stable/ ./' > /etc/apt/sources.list.d/vivaldi.list && apt update && apt install -y vivaldi-stable"
+        ],
+        "verify": "vivaldi --version"
+      },
+      "windows": {
+        "manager": "winget",
+        "steps": [
+          "winget install -e --id Vivaldi.Vivaldi"
+        ],
+        "verify": "vivaldi --version"
+      },
+      "macos": {
+        "manager": "brew-cask",
+        "steps": [
+          "brew install --cask vivaldi"
+        ],
+        "verify": "ls /applications/vivaldi.app"
+      }
+    }
+  },
+  "availability": {
+    "linux": [
+      "native"
+    ],
+    "windows": [
+      "native"
+    ],
+    "macos": [
+      "native"
+    ]
+  },
+  "disk_mb_est": 380
+}

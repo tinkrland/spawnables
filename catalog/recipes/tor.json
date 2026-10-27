@@ -1,0 +1,42 @@
+{
+  "recipe_id": "tor",
+  "category": "browser",
+  "orders": {
+    "native": {
+      "debian": {
+        "manager": "apt",
+        "steps": [
+          "apt install -y torbrowser-launcher"
+        ],
+        "verify": "command -v torbrowser-launcher"
+      },
+      "windows": {
+        "manager": "download",
+        "steps": [
+          "powershell -c \"iwr https://www.torproject.org/dist/torbrowser/14.5.4/tor-browser-windows-x86_64-portable-14.5.4.exe -outfile $env:TEMP\\tor.exe; &$env:TEMP\\tor.exe /S\""
+        ],
+        "verify": "test -d \"$env:LOCALAPPDATA\\tor browser\""
+      },
+      "macos": {
+        "manager": "brew-cask",
+        "steps": [
+          "brew install --cask tor-browser"
+        ],
+        "verify": "ls /applications/tor browser.app"
+      }
+    }
+  },
+  "availability": {
+    "linux": [
+      "native"
+    ],
+    "windows": [
+      "native"
+    ],
+    "macos": [
+      "native"
+    ]
+  },
+  "disk_mb_est": 450,
+  "notes": "tor browser keeps its own circuit; section 03 tunnel toggles do not apply inside it - the card says so"
+}

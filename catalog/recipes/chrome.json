@@ -1,0 +1,42 @@
+{
+  "recipe_id": "chrome",
+  "category": "browser",
+  "orders": {
+    "native": {
+      "debian": {
+        "manager": "apt",
+        "steps": [
+          "wget -qO /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && apt install -y /tmp/chrome.deb"
+        ],
+        "verify": "google-chrome --version"
+      },
+      "windows": {
+        "manager": "winget",
+        "steps": [
+          "winget install -e --id Google.Chrome"
+        ],
+        "verify": "chrome --version"
+      },
+      "macos": {
+        "manager": "brew-cask",
+        "steps": [
+          "brew install --cask google-chrome"
+        ],
+        "verify": "ls /applications/google chrome.app"
+      }
+    }
+  },
+  "availability": {
+    "linux": [
+      "native"
+    ],
+    "windows": [
+      "native"
+    ],
+    "macos": [
+      "native"
+    ]
+  },
+  "disk_mb_est": 400,
+  "notes": "the unmarked default browser; useful precisely because it is unremarkable"
+}

@@ -1,6 +1,6 @@
 # spawnables
 
-turnkey agent-vm control plane. you decide what a machine looks like before it exists: os, distro, desktop, timezone, path tools, apps, even a rice to skin it with. spawnables provisions it as a celesto microvm on your own infra (bare metal, a vps, your gcp/aws/azure account), hands it to any agent over mcp/ssh, and the web ui treats every machine as a card you can pause, freeze, thaw, export, or burn.
+turnkey agent-vm control plane. you decide what a machine looks like before it exists: os, distro, desktop, timezone, path tools, apps, even a rice to skin it with. spawnables provisions it as a celesto microvm on your own infra (bare metal, a vps, your gcp/aws/azure account), hands it to any agent over mcp/ssh, and the web ui treats every machine as a card you can pause, freeze, thaw, export, or burn. the machine is dedicated, not ephemeral - the happycapy / cue.im / skydive lane - and an agent can spawn companion microvms (an android guest from a windows machine, used briefly, then frozen). byoa: bring your own agent; byoc: bring your own cloud.
 
 built on open-source celesto (apache-2.0), not celesto cloud. bring your own compute; the control plane is the product.
 
@@ -14,6 +14,7 @@ built on open-source celesto (apache-2.0), not celesto cloud. bring your own com
 - network & privacy (order form section 03): private dns (nextdns), proxy pools (residential / commercial / dedicated via kernel or tailscale), vpn exits (proton + windscribe, open-source tunnels and kill switches), mac spoofing, browser anti-fingerprinting, kill switch, spec matching to the vpn exit. guest-side steps run in the vm; host-side directives ride with the runner. secrets live in a vault, never in the order.
 - fingerprint coherence ([coherence.py](src/spawnables/coherence.py), [advanced controls](spec/advanced-controls.md)): the machine tells one story - timezone, language, date orientation, units, currency and exit geo must agree, or provisioning blocks. 'match specs to vpn' syncs the whole local feel of the machine to the exit instead.
 - machine-layer anti-fingerprinting ([machinefp.py](src/spawnables/machinefp.py), [the inverse playbook](spec/anti-fingerprint.md)): entropy is the enemy, so the fleet presents one boring uniform identity - plausible oem smbios and disk strings, real-vendor oui macs, fresh machine-id, boring hostnames, managed clock, distro-standard fonts - with hypervisor-level limits stated honestly on the card.
+- device context tuning ([devctx.py](src/spawnables/devctx.py), [the three fingerprints](spec/device-context.md)): a machine + device + behaviour layer per guest os that reads as one plausible single user's device system - a latitude on linux, a macbook on macos, a pixel for android companions - plus behaviour presets the byoa gui driver executes.
 - [catalog](catalog/): seed entries: 8 base images (ubuntu, mint, win11, win10, macos, android-x86, redroid, ios), path tools, 10 recipes (kicad, figma, netflix, brave, clipchamp, zoom, whatsapp, spotify, termux), 2 rices.
 - [tests/selftest.py](tests/selftest.py): 68/68, stdlib only, no host needed. `python3 tests/selftest.py`. `python3 tests/selftest.py`.
 

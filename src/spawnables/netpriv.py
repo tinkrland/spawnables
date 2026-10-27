@@ -116,10 +116,28 @@ def guest_steps(net, os_name, browser):
                           f"apt install -y wireguard && install -m 600 @@vault:{ref}@@ /etc/wireguard/wg0.conf "
                           f"&& systemctl enable --now wg-quick@wg0"))
     if net["match_specs_to_vpn"]:
-        # the vm reads its own egress story through the tunnel and syncs to it,
-        # so the real timezone never leaks through metadata
-        steps.append(("specs.sync",
-                      "timedatectl set-timezone $(curl -s https://ipinfo.io/timezone)"))
+        # the vm syncs to the declared exit's story: clock, timezone,
+        # locale, date orientation, units, currency - so the real
+        # machine's settings never leak through metadata. derived from
+        # the declared exit (deterministic), then verified live through
+        # the tunnel so a misdeclared exit fails loudly.
+        from .coherence import exit_story, expected_timezone, tz_key
+        tz = tz_key(expected_timezone(net) or "") or ""
+        story = exit_story(net)
+        steps.append(("specs.sync.clock",
+                      f"timedatectl set-timezone {tz}"))
+        if story:
+            loc = story["locale"]
+            steps.append(("specs.sync.locale",
+                          f"locale-gen {loc} >/dev/null 2>&1; "
+                          f"localectl set-locale LANG={loc} LC_TIME={loc} "
+                          f"LC_MONETARY={loc} LC_MEASUREMENT={loc} "
+                          f"LC_NUMERIC={loc}"))
+        steps.append(("specs.sync.verify",
+                      f'test "$(curl -fsS --max-time 10 '
+                      f'https://ipinfo.io/timezone)" = "{tz}" '
+                      f'|| (echo "egress story disagrees with the declared '
+                      f'exit" && false)'))
     if net["private_dns"]:
         profile = net["private_dns_profile"]
         steps.append(("dns.nextdns",

@@ -46,10 +46,19 @@ agreement between signals. a machine whose exit ip says zurich, whose
 clock says kolkata, whose browser speaks spanish is a flag on every
 stack. so:
 
-- the order declares the exit geo (`exit_geo.country`) alongside the
+- the order declares the exit geo (`exit_geo.country`, and `city`
+  when you pick one - a city beats the country default) alongside the
   tunnel toggle, and the runner refuses to provision a machine whose
-  timezone or language disagrees with its exit (severity `fail`), while
-  recording softer disagreements (severity `warn`) on the card.
+  timezone or language disagrees with its exit (severity `fail`),
+  while recording softer disagreements (severity `warn`) on the card.
+- 'match specs to vpn location' syncs the whole local feel of the
+  machine, not just the clock: a per-country story bundle (glibc
+  locale, date orientation, measurement units, currency, clock
+  format - us: mm/dd/yyyy, imperial, usd, 12h; gb: dd/mm/yyyy, metric,
+  gbp, 24h) applied through LC_TIME/LC_MONETARY/LC_MEASUREMENT, plus
+  a live egress verification through the tunnel. with sync on,
+  order-vs-exit mismatches resolve in the exit's favour (recorded on
+  the card); with sync off, they block.
 - `expected_timezone` / `expected_accept_language` derive what the
   machine's story implies from the exit country; timezone identifiers
   resolve case-insensitively (orders are lowercase by convention).

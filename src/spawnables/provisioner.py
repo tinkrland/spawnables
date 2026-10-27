@@ -131,6 +131,15 @@ class Provisioner:
         if cmd is None:
             self.emitter.emit("provision.locale", "skip", f"no locale cmd for {os_name}")
             return
+        net = net_normalize(self.order.network or {})
+        if net.get("match_specs_to_vpn"):
+            from .coherence import exit_story
+            if exit_story(net):
+                self.emitter.emit(
+                    "provision.locale", "skip",
+                    "match specs to vpn is on: clock and locale sync "
+                    "to the exit story in the network step")
+                return
         self._exec_checked("locale", cmd.format(tz=self.order.timezone, locale=self.order.locale), os_name)
 
     def _coherence(self):

@@ -86,6 +86,65 @@ COUNTRY_LANG = {
 }
 
 
+# the full machine story per exit country: glibc locale, date
+# orientation, measurement units, currency, clock format. this is
+# what 'match specs to vpn location' actually applies - not just the
+# clock, the whole local feel of the machine.
+COUNTRY_STORY = {
+    "US": {"locale": "en_US.UTF-8", "date": "mm/dd/yyyy", "units": "imperial", "currency": "USD", "clock": "12h"},
+    "CA": {"locale": "en_CA.UTF-8", "date": "yyyy-mm-dd", "units": "metric", "currency": "CAD", "clock": "12h"},
+    "GB": {"locale": "en_GB.UTF-8", "date": "dd/mm/yyyy", "units": "metric", "currency": "GBP", "clock": "24h"},
+    "IE": {"locale": "en_IE.UTF-8", "date": "dd/mm/yyyy", "units": "metric", "currency": "EUR", "clock": "24h"},
+    "CH": {"locale": "de_CH.UTF-8", "date": "dd.mm.yyyy", "units": "metric", "currency": "CHF", "clock": "24h"},
+    "DE": {"locale": "de_DE.UTF-8", "date": "dd.mm.yyyy", "units": "metric", "currency": "EUR", "clock": "24h"},
+    "FR": {"locale": "fr_FR.UTF-8", "date": "dd/mm/yyyy", "units": "metric", "currency": "EUR", "clock": "24h"},
+    "NL": {"locale": "nl_NL.UTF-8", "date": "dd-mm-yyyy", "units": "metric", "currency": "EUR", "clock": "24h"},
+    "SE": {"locale": "sv_SE.UTF-8", "date": "yyyy-mm-dd", "units": "metric", "currency": "SEK", "clock": "24h"},
+    "DK": {"locale": "da_DK.UTF-8", "date": "dd.mm.yyyy", "units": "metric", "currency": "DKK", "clock": "24h"},
+    "JP": {"locale": "ja_JP.UTF-8", "date": "yyyy/mm/dd", "units": "metric", "currency": "JPY", "clock": "24h"},
+    "SG": {"locale": "en_SG.UTF-8", "date": "dd/mm/yyyy", "units": "metric", "currency": "SGD", "clock": "12h"},
+    "IN": {"locale": "en_IN.UTF-8", "date": "dd/mm/yyyy", "units": "metric", "currency": "INR", "clock": "12h"},
+    "AU": {"locale": "en_AU.UTF-8", "date": "dd/mm/yyyy", "units": "metric", "currency": "AUD", "clock": "12h"},
+}
+
+# city-level timezone overrides: an exit is a place, not just a country.
+# normalized lowercase city -> canonical IANA zone.
+CITY_TZ = {
+    "louisville": "America/Kentucky/Louisville",
+    "new york": "America/New_York",
+    "los angeles": "America/Los_Angeles",
+    "san francisco": "America/Los_Angeles",
+    "chicago": "America/Chicago",
+    "denver": "America/Denver",
+    "seattle": "America/Los_Angeles",
+    "quebec": "America/Toronto",
+    "montreal": "America/Toronto",
+    "toronto": "America/Toronto",
+    "vancouver": "America/Vancouver",
+    "london": "Europe/London",
+    "dublin": "Europe/Dublin",
+    "zurich": "Europe/Zurich",
+    "geneva": "Europe/Zurich",
+    "frankfurt": "Europe/Berlin",
+    "paris": "Europe/Paris",
+    "amsterdam": "Europe/Amsterdam",
+    "stockholm": "Europe/Stockholm",
+    "copenhagen": "Europe/Copenhagen",
+    "tokyo": "Asia/Tokyo",
+    "singapore": "Asia/Singapore",
+    "sydney": "Australia/Sydney",
+    "mumbai": "Asia/Kolkata",
+    "delhi": "Asia/Kolkata",
+}
+
+
+def exit_story(net):
+    """the machine story bundle implied by the declared exit country."""
+    geo = (net or {}).get("exit_geo") or {}
+    country = (geo.get("country") or "").upper()
+    return COUNTRY_STORY.get(country)
+
+
 def expected_timezone(net):
     """what timezone the machine's STORY says it is in.
 
@@ -94,6 +153,9 @@ def expected_timezone(net):
     disagree - a mismatch is flagged, not silently resolved.
     """
     exit_geo = (net or {}).get("exit_geo") or {}
+    city = (exit_geo.get("city") or "").strip().lower()
+    if city and city in CITY_TZ:
+        return CITY_TZ[city]
     if exit_geo.get("country"):
         return COUNTRY_TZ.get(exit_geo["country"].upper())
     return None
@@ -124,18 +186,50 @@ def coherence_report(order, net):
     net = net or {}
     want_tz = expected_timezone(net)
     have_tz = getattr(order, "timezone", None)
+    story = exit_story(net)
+    # match specs to vpn location on: the vm syncs to the exit story,
+    # so mismatches resolve at provision time instead of failing - the
+    # order's declared settings are simply overridden by the exit.
+    syncing = bool(net.get("match_specs_to_vpn")) and story is not None
     if want_tz and have_tz and want_tz != have_tz:
-        issues.append(
-            ("timezone", want_tz, have_tz, "fail",
-             "timezone and vpn exit geo disagree - every detection "
-             "stack checks this pair first"))
+        if syncing:
+            issues.append(
+                ("timezone", want_tz, have_tz, "ok",
+                 f"clock syncs to the exit story: the vm runs on "
+                 f"{want_tz.replace('_', ' ').split('/')[-1]} time; "
+                 "your real timezone never leaks through metadata"))
+        else:
+            issues.append(
+                ("timezone", want_tz, have_tz, "fail",
+                 "timezone and vpn exit geo disagree - every detection "
+                 "stack checks this pair first"))
     want_lang = expected_accept_language(net, order)
     have_locale = getattr(order, "locale", None)
     if want_lang and have_locale and not want_lang.lower().startswith(
             have_locale.split(".")[0].split("_")[0].lower()):
+        if syncing:
+            issues.append(
+                ("accept-language", want_lang, have_locale, "ok",
+                 f"locale syncs to the exit story: {story['locale']}"))
+        else:
+            issues.append(
+                ("accept-language", want_lang, have_locale, "fail",
+                 "the browser language and the machine's locale disagree"))
+    if syncing:
         issues.append(
-            ("accept-language", want_lang, have_locale, "fail",
-             "the browser language and the machine's locale disagree"))
+            ("story",
+             f"{story['date']} dates, {story['units']} units, "
+             f"{story['currency']}, {story['clock']} clock",
+             story["locale"], "ok",
+             "the full local feel of the machine - date orientation, "
+             "measurement units, currency, clock format - is applied "
+             "from the exit geo"))
+    if net.get("match_specs_to_vpn") and story is None and (
+            (net.get("exit_geo") or {}).get("country")):
+        issues.append(
+            ("story", "a known exit country", "no story bundle", "warn",
+             "no machine story bundle for this exit country yet - clock "
+             "and timezone still sync, the finer local signals do not"))
     tz = have_tz or want_tz
     if tz:
         resolved = tz_key(tz)

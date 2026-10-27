@@ -38,6 +38,7 @@ class MachineOrder:
     rice: dict | None = None
     agent_bridge: dict = field(default_factory=dict)
     network: dict = field(default_factory=dict)  # section 03: network & privacy
+    device_context: dict = field(default_factory=dict)  # advanced: device context tuning
     rebuild_on_thaw: bool = False
     image: str | None = None  # bring-your-own image path (ios requires it)
 
@@ -56,6 +57,7 @@ class MachineOrder:
             rice=d.get("rice"),
             agent_bridge=d.get("agent_bridge", {}),
             network=d.get("network", {}),
+            device_context=d.get("device_context", {}),
             rebuild_on_thaw=d.get("rebuild_on_thaw", False),
             image=d.get("image"),
         )

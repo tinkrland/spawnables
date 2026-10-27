@@ -240,3 +240,29 @@ rules the validator enforces:
 - guest-side steps are linux-first. on other guests the host directives still apply and the card notes the skip honestly.
 
 positioning, plainly: spawnables is beyond the browser. the browser is one app among many on machines we provision: desktops, engineering suites, design tools, phones. kernel.sh (kernel/kernel-images, open source) is cited only as adjacent reference for the anti-fingerprint surface; the browser hardening step covers the same ground for the browsers the catalog provisions, and everything else in section 03 (dns, tunnels, mac spoofing, kill switch) is machine-level, not page-level.
+
+## section 03b - advanced settings / device context tuning
+
+one more advanced toggle, and it is not about the network - it is about the machine reading as one plausible single user's device system. device data, user agent and operating system must agree with each other, and the machine behaves like a person uses it.
+
+card copy, as it reads on the form:
+
+- **device context tuning** - opt in and the whole device context is tuned to a plausible persona: the hardware it claims to be (smbios, mac, machine identity), the software surface it shows (os, user agent family, fonts, screen), and the behaviour profile the agent drives with (mouse cadence, typing bursts, natural idle) all match one another. a windows machine reads as a dell latitude running edge, a macos machine as a macbook on safari, an android companion as a pixel on chrome.
+
+three fingerprints, one story - [the full map lives here](device-context.md):
+
+| layer | what it covers | where it lives |
+|---|---|---|
+| machine fingerprint | smbios/disk strings, mac, machine-id, hostname | [machinefp.py](../src/spawnables/machinefp.py) + the persona's oem identity ([devctx.py](../src/spawnables/devctx.py)) |
+| device fingerprint | os + user agent family + fonts + screen + clock/locale story | [devctx.py](../src/spawnables/devctx.py) personas + [coherence.py](../src/spawnables/coherence.py) story sync |
+| behaviour fingerprint | mouse paths, typing cadence, idle rhythm | behaviour presets on the order; the byoa gui driver executes them |
+
+rules the validator enforces:
+
+- the toggle is on by default. it is the floor: a spawn with no persona claims is a red flag by itself.
+- the behaviour preset is data, not deception: provisioning records it on the order and the card; the agent's driver applies it. a machine whose behaviour contradicts its persona (a "quiet human" profile driving 24/7) is the gui layer's honesty problem and is called out there.
+- personas are per guest os and never mix: an android companion spawned from a windows machine is a pixel, not a laptop wearing a costume.
+
+## positioning: dedicated machine, companion microvms
+
+spawnables gives an agent one whole machine it keeps - the happycapy / cue.im / skydive lane, not an ephemeral browser session. the machine is persistent: the agent's files, apps and state live there between sessions. around it, companion microvms can be spawned for a while and frozen when their need is finished - a windows machine may briefly spawn an android companion for an app that only exists there, then freeze it. android and ios guests are companion-grade by design: utility (the app exists and works), not gaming-grade. byoa (bring your own agent) and byoc (bring your own cloud) hold: the agent chooses which of its machines to use in combination, and they all run on infrastructure the owner already has.

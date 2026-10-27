@@ -531,6 +531,59 @@ class TestMachineFP(unittest.TestCase):
         self.assertNotIn("fail", statuses)
 
 
+class TestDeviceContext(unittest.TestCase):
+    """device context tuning: machine + device + behaviour fingerprints
+    read as one plausible single user's device system, per guest os."""
+
+    def test_persona_matches_the_guest_os(self):
+        from spawnables.devctx import persona
+        self.assertIn("Latitude", persona("linux")["smbios"]["product_name"])
+        self.assertIn("Latitude", persona("windows")["smbios"]["product_name"])
+        self.assertIn("MacBook", persona("macos")["smbios"]["product_name"])
+        self.assertIn("Pixel", persona("android")["smbios"]["product_name"])
+        self.assertIn("iPhone", persona("ios")["smbios"]["product_name"])
+
+    def test_persona_mac_is_never_a_virtualization_oui(self):
+        from spawnables.devctx import mac_address_for
+        from spawnables.machinefp import FORBIDDEN_OUIS
+        import random
+        rng = random.Random(11)
+        for _ in range(60):
+            m = mac_address_for("android", rng)
+            self.assertFalse(any(m.startswith(o) for o in FORBIDDEN_OUIS))
+
+    def test_behaviour_presets_are_data_for_the_driver(self):
+        from spawnables.devctx import behaviour_profile, BEHAVIOUR_PRESETS, DEFAULT_BEHAVIOUR
+        b = behaviour_profile(None)
+        self.assertEqual(b["name"], DEFAULT_BEHAVIOUR)
+        self.assertIn("bursts", b["moves"]["typing"])  # typing cadence defined
+        self.assertIn("mouse", b["moves"])
+        self.assertEqual(len(BEHAVIOUR_PRESETS), 2)
+
+    def test_device_context_section_validates(self):
+        from spawnables.devctx import normalize, validate
+        s = normalize(None)
+        self.assertTrue(s["enabled"])  # the floor is on by default
+        self.assertEqual(validate(normalize({})), [])
+        self.assertTrue(validate(normalize({"behaviour": "robot mode"})))
+
+    def test_provisioner_emits_devctx_summary(self):
+        rec = Recorder()
+        Provisioner(order(), CATALOG, FakeAdapter(), Emitter(rec)).run()
+        events = [e for e in rec.events if e.stage == "provision.devctx"]
+        self.assertTrue(events)
+        ok = [e for e in events if e.status == "ok"]
+        self.assertTrue(any("Latitude 5540" in e.detail for e in ok))
+        self.assertTrue(any("behaviour: quiet human" in e.detail for e in ok))
+
+    def test_machinefp_host_directives_follow_the_persona(self):
+        from spawnables.machinefp import host_directives
+        self.assertIn("MacBook", host_directives("macos")["smbios"]["product_name"])
+        self.assertIn("Pixel", host_directives("android")["smbios"]["product_name"])
+        blob = str(host_directives("linux")).lower()
+        self.assertIn("latitude", blob)
+
+
 class TestCoherence(unittest.TestCase):
     def test_matching_exit_and_timezone_pass(self):
         from spawnables.coherence import coherence_report, blocks_provisioning

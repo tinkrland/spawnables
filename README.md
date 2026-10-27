@@ -11,8 +11,9 @@ built on open-source celesto (apache-2.0), not celesto cloud. bring your own com
 - [adapter contract](spec/adapters.md): one backend adapter per guest os route (celesto, android, vphone); capabilities gate the card verbs.
 - [schemas](spec/schemas/): json schema drafts for every object.
 - [src/spawnables](src/spawnables): the provisioner skeleton. `validate` and `plan` run anywhere; `provision` runs on a host with celesto installed.
+- network & privacy (order form section 03): private dns (nextdns), proxy pools, byo vpn exits (tailscale / proton / wireguard), mac spoofing, browser anti-fingerprinting, kill switch, spec matching to the vpn exit. guest-side steps run in the vm; host-side directives ride with the runner. secrets live in a vault, never in the order.
 - [catalog](catalog/): seed entries: 8 base images (ubuntu, mint, win11, win10, macos, android-x86, redroid, ios), path tools, 10 recipes (kicad, figma, netflix, brave, clipchamp, zoom, whatsapp, spotify, termux), 2 rices.
-- [tests/selftest.py](tests/selftest.py): 30/30, stdlib only, no host needed. `python3 tests/selftest.py`.
+- [tests/selftest.py](tests/selftest.py): 43/43, stdlib only, no host needed. `python3 tests/selftest.py`.
 
 ## design rules
 
@@ -35,6 +36,10 @@ verified against celestoai/celesto on 2026-10-28. windows and macos guests exist
 | ios | apple silicon macs (vphone-cli), linux via qemu vresearch101 (vphone-linux, research-grade) | no | no | desktop only | no | experimental, bring-your-own-image tier; image sourcing is legally gated |
 
 android and ios are not celesto surfaces: they need spawnables backend adapters (see [order form](spec/order-form.md)). design consequence: card verbs gray out per guest os, the same pattern as the app availability matrix. linux cards get the full verb row; windows cards get pause and burn; macos cards get desktop view and burn; android cards get pause and burn with freeze pending verification; ios cards are desktop view and burn, experimental.
+
+## stance
+
+gui first, cli available; but the backend gets built thoroughly first, because the field is scattered projects on github and the durable win is a correct core: manifest replay, vault-held secrets, capability-gated verbs, honest event streams.
 
 ## status
 

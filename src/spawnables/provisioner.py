@@ -9,8 +9,9 @@ only declare a url (keeps the registry crowdsourceable).
 
 
 from .events import Emitter
+from .netpriv import normalize as net_normalize, guest_steps, host_directives
 
-STAGES = ("boot", "locale", "tools", "apps", "rice", "snapshot")
+STAGES = ("boot", "locale", "network", "tools", "apps", "rice", "snapshot")
 
 
 class ProvisionError(Exception):
@@ -104,6 +105,7 @@ class Provisioner:
             return self.emitter.history
 
         self._locale(os_name)
+        self._network(os_name)
         self._tools(family)
         self._apps(os_name, family)
         self._rice()
@@ -126,6 +128,21 @@ class Provisioner:
             self.emitter.emit("provision.locale", "skip", f"no locale cmd for {os_name}")
             return
         self._exec_checked("locale", cmd.format(tz=self.order.timezone, locale=self.order.locale), os_name)
+
+    def _network(self, os_name):
+        net = net_normalize(self.order.network)
+        em = self.emitter
+        directives = host_directives(net)
+        if any(directives.values()):
+            em.emit("provision.network", "directive",
+                    f"host runner applies: { {k: v for k, v in directives.items() if v} }")
+        browser = self.catalog.image(self.order).get("default_browser", "brave")
+        for label, cmd in guest_steps(net, os_name, browser):
+            if not self._exec_checked(f"network.{label}", cmd, label):
+                raise ProvisionError(f"network stage failed at {label}")
+        if net != net_normalize({}) and not guest_steps(net, os_name, browser):
+            em.emit("provision.network", "skip",
+                    f"guest-side steps are linux-first on {os_name}; host directives still apply")
 
     def _tools(self, family):
         for tool_id in self.order.path_tools:

@@ -9,22 +9,25 @@ believable, and how separate linux distros actually get built.
 all auth is vault-referenced (`@@vault:ref@@`); the order never carries
 secrets. the runner holds the api calls; the guest holds the configs.
 
-- **nextdns**: `api.nextdns.io` does full profile management (create,
-  update, delete, settings) with an api key. the runner provisions one
+provider verdicts, as the owner set them:
+
+- **private dns: nextdns** (unchanged). `api.nextdns.io` does full
+  profile management with an api key. the runner provisions one
   nextdns profile per machine card and stores the returned profile id
   in the order; the guest points resolv.conf at that profile's anycast
   resolvers. vault refs: `nextdns_api_key`.
-- **proton vpn**: two lanes. vault-stored wireguard configs generated
-  from the owner's account, or the open-source client api path
-  (protonvpn-cli's server-fetch flow) with credentials in the vault.
-  byo exits; the exit country is declared on the order so coherence
-  (below) can check the story.
-- **windscribe**: official rest api (`api.windscribe.com`) plus config
-  generator endpoints (wireguard / openvpn); clients are open source.
-  vault refs: `windscribe_api_key`; the runner fetches a config for the
-  declared exit and hands the guest a tunnel.
-- **tailscale / wireguard**: unchanged - byo tailnet keys and raw
-  wireguard configs, vault-referenced, applied at the fabric level.
+- **vpn: proton + windscribe.** both ship open-source tunnels and
+  their own kill switches (which ride on top of ours). both hand out
+  wireguard profiles: proton from the account (vault-stored, or the
+  open-source protonvpn-cli api path), windscribe via its config
+  generator / official rest api. the guest brings them up as
+  wg-quick@wg0; the exit geo stays declared on the order so the
+  coherence layer can check the story.
+- **dedicated ip: kernel or tailscale.** kernel's proxy infra is the
+  borrow (open source, see the reference below) and is applied
+  host-side with a vault api token; tailscale gives a stable exit node
+  on a byo tailnet, guest-side, tailnet auth key in the vault. by this
+  verdict tailscale left the vpn lane and lives here.
 - **proxy pools**: residential / commercial, applied host-side as the
   browser's egress (see kernel reference below).
 

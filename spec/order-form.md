@@ -209,8 +209,8 @@ advanced settings on the order form, straight from the design reference. seven t
 card copy, as it reads on the form:
 
 - **private dns (via nextdns)** - encrypted connect the vm to your own nextdns profile during provisioning. lookups, your blocklists, your logs policy, never the datacenter resolver.
-- **proxy ip** - route the vm's traffic through a proxy exit. toggle it on and pick the pool: residential reads as a home connection, commercial as business infrastructure.
-- **geolocation spoofing vpn (bring your own vpn)** - plug in your own vpn config and the vm comes up behind that exit, so its public ip and geo story match the location you choose, not the datacenter it runs in.
+- **proxy ip** - route the vm's traffic through a proxy exit. toggle it on and pick the pool: residential reads as a home connection, commercial as business infrastructure, or a dedicated ip that is yours alone via kernel or tailscale.
+- **geolocation spoofing vpn (bring your own vpn)** - plug in your own vpn config and the vm comes up behind that exit, so its public ip and geo story match the location you choose, not the datacenter it runs in. connectors: proton and windscribe, both open-source tunnels with their own kill switches riding on top of ours.
 - **mac address spoofing** - randomise the vm's network interface mac address at boot, so no two spawns share a hardware identifier that can be linked together.
 - **don't track me for browsers, anti-fingerprinting** - every browser in the vm sends do-not-track and gets hardened against fingerprinting: canvas, webgl, fonts, audio and user-agent signals are normalised or randomised.
 - **kill switch (ip & mac spoofing)** - the vm hard-disconnects the instant the proxy or vpn fails. no packet ever leaves through the bare, unspoofed interface.
@@ -221,8 +221,8 @@ technical split, per toggle:
 | toggle | default | guest-side | host-side |
 |---|---|---|---|
 | private dns (via nextdns) | off | nextdns cli bound to your profile id: encrypted lookups, your blocklists, your logs policy, never the datacenter resolver | - |
-| proxy ip | off | - | route egress through a proxy exit; pick the pool: residential reads as a home connection, commercial as business infrastructure |
-| geolocation spoofing vpn (byo) | byo config | tailscale / proton / windscribe / wireguard config lands in the vm and the machine comes up behind that exit | vpn exit binding |
+| proxy ip | off | tailscale dedicated ip: `tailscale up --exit-node` on a byo tailnet (auth key in the vault) | route egress through a proxy exit; pools: residential (home connection), commercial (business infrastructure), dedicated (kernel infra applied host-side, api token in the vault, or tailscale) |
+| geolocation spoofing vpn (byo) | byo config | proton or windscribe wireguard profile from the vault lands in the vm (`wg-quick@wg0`); both clients are open source with their own kill switches | vpn exit binding |
 | mac address spoofing | on | fallback `ip link` rewrite | qemu nic mac randomized at boot, so no two spawns share a hardware identifier |
 | don't track me + anti-fingerprinting | on | managed browser policies: dnt headers, canvas/webgl/fonts/audio/user-agent signals normalised or randomised (brave ships shields; firefox gets resistfingerprinting) | - |
 | kill switch (ip & mac spoofing) | with a tunnel | nftables: only lo, the tunnel iface, and established flows leave | fabric-level hard disconnect the instant the tunnel fails |
@@ -234,7 +234,8 @@ rules the validator enforces:
 
 - the kill switch guards a tunnel: it needs the vpn or proxy on first. the form pre-checks it the moment a tunnel goes on.
 - match specs to vpn needs the vpn.
-- a byo vpn needs a provider (tailscale, proton, windscribe, wireguard) and a **vault config reference**. secrets never ride in the order: configs and auth keys live in the vault, the order stores `@@vault:ref@@` markers, and the host runner resolves them at provision time. proton and windscribe hand out wireguard/openvpn profiles, so they ride the same lane.
+- a byo vpn needs a provider (proton or windscribe) and a **vault config reference**. secrets never ride in the order: configs and auth keys live in the vault, the order stores `@@vault:ref@@` markers, and the host runner resolves them at provision time. both hand out wireguard profiles, so they ride the same lane.
+- a dedicated ip needs a provider too: kernel (applied host-side, the runner wires the proxy infra at the fabric level with a vault api token) or tailscale (guest-side `tailscale up --exit-node`, tailnet auth key in the vault).
 - the exit is declared on the order (`exit_geo`: country, and city when you pick one - louisville beats the country default), so the coherence layer can check the story before boot and the card can show it.
 - guest-side steps are linux-first. on other guests the host directives still apply and the card notes the skip honestly.
 

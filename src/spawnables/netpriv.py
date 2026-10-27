@@ -1,7 +1,7 @@
 """network & privacy: section 03 of the order form.
 
 the seven toggles from the design reference: private dns (nextdns), proxy ip
-pools, byo vpn exit (tailscale / proton / wireguard), mac spoofing, browser
+pools + dedicated ip (kernel / tailscale), vpn exit (proton / windscribe, open-source tunnels and kill switches), mac spoofing, browser
 dnt + anti-fingerprinting, kill switch, and matching vm specs to the vpn
 exit. every toggle splits into guest-side steps (run in the vm during
 provisioning) and host-side directives (applied by the host runner at the
@@ -23,23 +23,25 @@ DEFAULTS = {
     # exit_geo declares the country/city of the active tunnel exit; the
     # coherence layer reads it to keep timezone + language believable
     "exit_geo": {},
+    # dedicated-ip provider when the pool is 'dedicated' (kernel|tailscale)
+    "dedicated_ip_provider": None,
 }
 
-# providers, with the integration lane each one actually gets. all
-# auth goes through vault references (@@vault:ref@@), never the order.
-# - tailscale: byo tailnet; the runner applies the auth key at the fabric
-#   level (host-side directive). api-driven, open source client.
-# - proton: wireguard configs. two lanes: vault-stored config files
-#   (the account's own generated configs) or the open-source client api
-#   path (protonvpn-cli's server-fetch flow) with credentials in the
-#   vault. byo exits.
-# - windscribe: official rest api (api.windscribe.com) + config
-#   generator endpoints; open-source clients. api key + account ref
-#   in the vault; the runner fetches a wireguard/openvpn config for the
-#   declared exit.
-# - wireguard: any byo wireguard config, vault-referenced.
-VPN_PROVIDERS = ("tailscale", "proton", "windscribe", "wireguard")
-PROXY_POOLS = ("residential", "commercial")
+# providers, per the owner's verdicts. all auth goes through vault
+# references (@@vault:ref@@), never the order.
+# - vpn lane: proton + windscribe. both ship open-source tunnels and
+#   kill switches; both hand out wireguard profiles (proton from the
+#   account, windscribe from its config generator / official rest api).
+#   configs land in the vault; the guest gets wg-quick.
+# - dedicated ip lane: kernel or tailscale. kernel (kernel.sh, oss
+#   reference repo github.com/kernel/kernel-images) is the proxy
+#   infrastructure borrow; tailscale gives a stable exit node on a
+#   byo tailnet. tailscale left the vpn lane by this verdict.
+# - proxy pools (shared): residential reads as a home connection,
+#   commercial as business infrastructure.
+VPN_PROVIDERS = ("proton", "windscribe")
+DEDICATED_IP_PROVIDERS = ("kernel", "tailscale")
+PROXY_POOLS = ("residential", "commercial", "dedicated")
 
 # nextdns integration lane: api.nextdns.io exposes profile management
 # (create/update/delete profiles) with an api key. the runner provisions
@@ -57,7 +59,8 @@ def normalize(network):
     net = dict(DEFAULTS)
     if network:
         net.update({k: v for k, v in network.items() if k in DEFAULTS})
-        for k in ("private_dns_profile", "proxy_pool", "vpn_provider", "vpn_config_ref"):
+        for k in ("private_dns_profile", "proxy_pool", "vpn_provider", "vpn_config_ref",
+                  "dedicated_ip_provider"):
             if network.get(k):
                 net[k] = network[k]
     return net
@@ -69,6 +72,11 @@ def validate_network(net, order):
         errors.append("private dns is on but no nextdns profile id is set")
     if net["proxy"] and net.get("proxy_pool") not in PROXY_POOLS:
         errors.append(f"proxy is on but pool is unset; pick one of {PROXY_POOLS}")
+    if net.get("proxy_pool") == "dedicated":
+        if net.get("dedicated_ip_provider") not in DEDICATED_IP_PROVIDERS:
+            errors.append(f"a dedicated ip needs a provider; pick one of {DEDICATED_IP_PROVIDERS}")
+        if net.get("dedicated_ip_provider") == "tailscale" and not net.get("vpn_config_ref"):
+            errors.append("tailscale dedicated ip needs a vault auth key reference")
     if net["vpn"]:
         if net.get("vpn_provider") not in VPN_PROVIDERS:
             errors.append(f"vpn is on but provider is unset; pick one of {VPN_PROVIDERS}")
@@ -88,6 +96,8 @@ def host_directives(net):
         "mac_spoof": net["mac_spoof"],  # qemu nic mac randomized per spawn
         "kill_switch": net["kill_switch"],  # nftables: only the tunnel iface leaves
         "proxy_pool": net["proxy_pool"] if net["proxy"] else None,
+        "dedicated_ip_provider": (net.get("dedicated_ip_provider")
+                                  if net.get("proxy_pool") == "dedicated" else None),
         "vpn_exit": net["vpn_provider"] if net["vpn"] else None,
         # note: celesto passthrough for custom qemu args is unverified; the
         # runner owns the fabric until that lands.
@@ -100,21 +110,23 @@ def guest_steps(net, os_name, browser):
     if os_name != "linux":
         return steps  # guest-side steps are linux-first; host directives still apply
     if net["vpn"]:
-        provider = net["vpn_provider"]
+        # proton + windscribe: both hand out wireguard profiles (proton
+        # from the account, windscribe via its config generator); both
+        # clients are open source with their own kill switches on top
+        # of our nftables one. profiles live in the vault.
         ref = net["vpn_config_ref"]
-        if provider == "tailscale":
-            steps.append(("vpn.tailscale",
-                          f"curl -fsSL https://tailscale.com/install.sh | sh && "
-                          f"tailscale up --auth-key=@@vault:{ref}@@"))
-        elif provider == "proton":
-            # proton hands out wireguard profiles; they ride through the same lane
-            steps.append(("vpn.proton",
-                          f"apt install -y wireguard && install -m 600 @@vault:{ref}@@ /etc/wireguard/wg0.conf "
-                          f"&& systemctl enable --now wg-quick@wg0"))
-        else:
-            steps.append(("vpn.wireguard",
-                          f"apt install -y wireguard && install -m 600 @@vault:{ref}@@ /etc/wireguard/wg0.conf "
-                          f"&& systemctl enable --now wg-quick@wg0"))
+        steps.append((f"vpn.{net['vpn_provider']}",
+                      f"apt install -y wireguard && install -m 600 @@vault:{ref}@@ /etc/wireguard/wg0.conf "
+                      f"&& systemctl enable --now wg-quick@wg0"))
+    if net["proxy"] and net.get("proxy_pool") == "dedicated" and \
+            net.get("dedicated_ip_provider") == "tailscale":
+        # a stable exit of your own on a byo tailnet
+        steps.append(("dedicated.tailscale",
+                      f"curl -fsSL https://tailscale.com/install.sh | sh && "
+                      f"tailscale up --auth-key=@@vault:{net['vpn_config_ref']}@@ --exit-node=@@vault:ts-exit-node@@"))
+    # kernel dedicated ip is applied host-side: the runner wires the
+    # kernel proxy infra at the fabric level (browser egress + machine
+    # egress), api token in the vault
     if net["match_specs_to_vpn"]:
         # the vm syncs to the declared exit's story: clock, timezone,
         # locale, date orientation, units, currency - so the real
@@ -165,7 +177,8 @@ def guest_steps(net, os_name, browser):
     if net["kill_switch"] and net["vpn"]:
         # guest-side belt on top of the host-side suspenders: after the tunnel
         # is up, only lo, the tunnel iface, and established flows leave
-        iface = "tailscale0" if net["vpn_provider"] == "tailscale" else "wg0"
+        iface = ("tailscale0" if net.get("dedicated_ip_provider") == "tailscale"
+                 else "wg0")
         steps.append(("killswitch.nft",
                       f"nft add table inet ks && nft 'add chain inet ks out {{ type filter hook output "
                       f"priority 0 ; policy drop ; }}' && nft add rule inet ks out oif lo accept && "

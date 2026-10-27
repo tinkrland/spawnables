@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spawnables/machine-order.schema.json",
+  "title": "machine order",
+  "type": "object",
+  "required": ["id", "name", "base_image", "size", "timezone"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^mo_[a-z0-9]+$" },
+    "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "base_image": { "type": "string", "description": "id of a base-image catalog entry" },
+    "arch": { "enum": ["x86_64", "arm64"] },
+    "size": {
+      "type": "object",
+      "required": ["vcpus", "ram_mb", "disk_gb"],
+      "properties": {
+        "vcpus": { "type": "integer", "minimum": 1 },
+        "ram_mb": { "type": "integer", "minimum": 512 },
+        "disk_gb": { "type": "integer", "minimum": 10 }
+      }
+    },
+    "timezone": { "type": "string", "description": "iana tz name, lowercase" },
+    "locale": { "type": "string", "description": "posix locale, lowercase" },
+    "path_tools": {
+      "type": "array",
+      "items": { "type": "string", "description": "id of a path-tool catalog entry" },
+      "default": []
+    },
+    "apps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["recipe_id", "order_type"],
+        "properties": {
+          "recipe_id": { "type": "string" },
+          "order_type": { "enum": ["native", "pwa"] },
+          "pinned_version": { "type": "string", "description": "resolved at order time" },
+          "pinned_digest": { "type": "string", "description": "sha256 of the recipe at order time" }
+        }
+      },
+      "default": []
+    },
+    "rice": {
+      "type": ["object", "null"],
+      "properties": {
+        "rice_id": { "type": "string" },
+        "version": { "type": "string" },
+        "pinned_digest": { "type": "string" }
+      }
+    },
+    "agent_bridge": {
+      "type": "object",
+      "properties": {
+        "expose": { "type": "array", "items": { "enum": ["mcp", "ssh", "vnc"] } },
+        "egress": { "enum": ["on", "off"], "default": "on" }
+      }
+    },
+    "rebuild_on_thaw": {
+      "type": "boolean",
+      "default": false,
+      "description": "true = replay the order instead of restoring a stale snapshot"
+    }
+  }
+}

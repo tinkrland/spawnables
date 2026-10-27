@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spawnables/base-image.schema.json",
+  "title": "base image",
+  "type": "object",
+  "required": ["id", "os", "distro_family", "desktop_env", "version", "arch", "image"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]*$" },
+    "os": { "enum": ["linux", "windows", "macos"] },
+    "distro": { "type": "string", "description": "only meaningful for linux" },
+    "distro_family": { "enum": ["debian", "fedora", "arch", "windows", "macos"], "description": "join key for recipes and path tools" },
+    "desktop_env": { "type": "string", "examples": ["cinnamon", "gnome", "plasma", "hyprland", "windows-shell", "aqua"] },
+    "version": { "type": "string" },
+    "arch": { "type": "array", "items": { "enum": ["x86_64", "arm64"] }, "minItems": 1 },
+    "package_manager": { "type": "string", "examples": ["apt", "dnf", "pacman", "winget", "brew"] },
+    "image": { "type": "string", "description": "path/ref of the qcow2 (or equivalent) image" },
+    "default_browser": { "type": "string", "description": "browser used by the shared pwa handler" }
+  }
+}

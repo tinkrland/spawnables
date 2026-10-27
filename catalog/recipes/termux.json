@@ -1,0 +1,20 @@
+{
+  "recipe_id": "termux",
+  "category": "terminal",
+  "orders": {
+    "native": {
+      "android": {
+        "manager": "adb",
+        "steps": [
+          "adb install termux.apk"
+        ],
+        "verify": "pm list packages | grep termux"
+      }
+    }
+  },
+  "availability": {
+    "android": [
+      "native"
+    ]
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "recipe_id": "spotify",
+  "category": "entertainment",
+  "orders": {
+    "pwa": {
+      "url": "https://open.spotify.com"
+    },
+    "native": {
+      "windows": {
+        "manager": "winget",
+        "steps": [
+          "winget install -e --id Spotify.Spotify"
+        ],
+        "verify": "spotify --version"
+      }
+    }
+  },
+  "availability": {
+    "linux": [
+      "pwa"
+    ],
+    "windows": [
+      "native",
+      "pwa"
+    ],
+    "macos": [
+      "pwa"
+    ],
+    "android": [
+      "pwa"
+    ]
+  }
+}

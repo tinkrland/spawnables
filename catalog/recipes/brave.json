@@ -1,0 +1,41 @@
+{
+  "recipe_id": "brave",
+  "category": "browser",
+  "orders": {
+    "native": {
+      "debian": {
+        "manager": "apt",
+        "steps": [
+          "curl -fsSL https://brave-browser-apt-release.s3.brave.com/brave-core.asc | gpg --dearmor -o /usr/share/keyrings/brave.gpg && apt install -y brave-browser"
+        ],
+        "verify": "brave-browser --version"
+      },
+      "windows": {
+        "manager": "winget",
+        "steps": [
+          "winget install -e --id Brave.Brave"
+        ],
+        "verify": "brave --version"
+      },
+      "macos": {
+        "manager": "brew-cask",
+        "steps": [
+          "brew install --cask brave-browser"
+        ],
+        "verify": "ls /applications/brave browser.app"
+      }
+    }
+  },
+  "availability": {
+    "linux": [
+      "native"
+    ],
+    "windows": [
+      "native"
+    ],
+    "macos": [
+      "native"
+    ]
+  },
+  "disk_mb_est": 350
+}

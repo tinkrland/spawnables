@@ -1,0 +1,30 @@
+{
+  "id": "git",
+  "installs": {
+    "debian": {
+      "steps": [
+        "apt update && apt install -y git"
+      ],
+      "verify": "git --version"
+    },
+    "fedora": {
+      "steps": [
+        "dnf install -y git"
+      ],
+      "verify": "git --version"
+    },
+    "arch": {
+      "steps": [
+        "pacman -S --noconfirm git"
+      ],
+      "verify": "git --version"
+    },
+    "windows": {
+      "steps": [
+        "winget install -e --id Git.Git"
+      ],
+      "verify": "git --version"
+    }
+  },
+  "disk_mb_est": 300
+}

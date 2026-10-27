@@ -1,0 +1,41 @@
+{
+  "recipe_id": "zoom",
+  "category": "comms",
+  "orders": {
+    "native": {
+      "debian": {
+        "manager": "apt",
+        "steps": [
+          "apt install -y zoom"
+        ],
+        "verify": "zoom --version"
+      },
+      "windows": {
+        "manager": "winget",
+        "steps": [
+          "winget install -e --id Zoom.Zoom"
+        ],
+        "verify": "zoom --version"
+      },
+      "macos": {
+        "manager": "brew-cask",
+        "steps": [
+          "brew install --cask zoom"
+        ],
+        "verify": "ls /applications/zoom.us.app"
+      }
+    }
+  },
+  "availability": {
+    "linux": [
+      "native"
+    ],
+    "windows": [
+      "native"
+    ],
+    "macos": [
+      "native"
+    ]
+  },
+  "disk_mb_est": 500
+}

@@ -1,0 +1,20 @@
+{
+  "rice_id": "catppuccin-mocha-cinnamon",
+  "version": "1.0.0",
+  "compatible_desktops": [
+    "cinnamon"
+  ],
+  "theme_engine": "gtk",
+  "assets": {
+    "wallpaper": "assets/wall.png",
+    "gtk_theme": "assets/catppuccin-mocha.zip"
+  },
+  "apply": {
+    "steps": [
+      "unzip -o assets/catppuccin-mocha.zip -d ~/.themes",
+      "gsettings set org.cinnamon.desktop.interface gtk-theme 'catppuccin-mocha-standard'",
+      "gsettings set org.cinnamon.desktop.background picture-uri 'file:///usr/share/backgrounds/wall.png'"
+    ]
+  },
+  "source": "github:catppuccin/catppuccin"
+}

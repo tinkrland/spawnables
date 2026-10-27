@@ -1,0 +1,18 @@
+{
+  "id": "macos-26-apple-silicon",
+  "os": "macos",
+  "distro": "macos",
+  "distro_family": "macos",
+  "desktop_env": "aqua",
+  "version": "26",
+  "arch": [
+    "arm64"
+  ],
+  "backend": "celesto",
+  "fixed_size": {
+    "vcpus": 4,
+    "ram_mb": 8192,
+    "disk_gb": 80
+  },
+  "host_note": "apple silicon host only; images cannot leave the host"
+}

@@ -1,0 +1,39 @@
+{
+  "id": "mo_8f3k",
+  "name": "evie-desk",
+  "base_image": "mint-22-cinnamon",
+  "arch": "x86_64",
+  "size": {
+    "vcpus": 2,
+    "ram_mb": 8192,
+    "disk_gb": 60
+  },
+  "timezone": "asia/kolkata",
+  "locale": "en-in",
+  "path_tools": [
+    "git",
+    "node"
+  ],
+  "apps": [
+    {
+      "recipe_id": "kicad",
+      "order_type": "native"
+    },
+    {
+      "recipe_id": "figma",
+      "order_type": "pwa"
+    }
+  ],
+  "rice": {
+    "rice_id": "catppuccin-mocha-cinnamon",
+    "version": "1.0.0"
+  },
+  "agent_bridge": {
+    "expose": [
+      "mcp",
+      "ssh",
+      "vnc"
+    ],
+    "egress": "on"
+  }
+}

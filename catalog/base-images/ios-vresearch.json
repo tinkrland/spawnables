@@ -1,0 +1,15 @@
+{
+  "id": "ios-vresearch",
+  "os": "ios",
+  "distro": "ios",
+  "distro_family": "ios",
+  "desktop_env": "springboard",
+  "version": "research",
+  "arch": [
+    "x86_64",
+    "arm64"
+  ],
+  "backend": "vphone-linux",
+  "byo_image": true,
+  "host_note": "cloud linux host; image sourcing legally gated"
+}

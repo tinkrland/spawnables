@@ -1,0 +1,14 @@
+{
+  "id": "android-15-x86",
+  "os": "android",
+  "distro": "android-x86",
+  "distro_family": "android",
+  "desktop_env": "android",
+  "version": "15",
+  "arch": [
+    "x86_64"
+  ],
+  "package_manager": "adb",
+  "backend": "android-x86",
+  "default_browser": "brave"
+}

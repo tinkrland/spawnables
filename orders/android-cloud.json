@@ -1,0 +1,18 @@
+{
+  "id": "mo_ad1",
+  "name": "droid-desk",
+  "base_image": "redroid-15",
+  "arch": "x86_64",
+  "size": {
+    "vcpus": 2,
+    "ram_mb": 4096,
+    "disk_gb": 20
+  },
+  "timezone": "asia/kolkata",
+  "apps": [
+    {
+      "recipe_id": "termux",
+      "order_type": "native"
+    }
+  ]
+}

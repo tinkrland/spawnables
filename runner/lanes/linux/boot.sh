@@ -35,9 +35,9 @@ cd "$HOME" && rm -rf spawnables
 git clone -q "https://x-access-token:${GH}@github.com/tinkrland/spawnables.git" || { echo "SPAWNABLESFAIL clone"; exit 1; }
 cd spawnables
 
-log "provisioner against real celesto (ubuntu preset, apt git, fresh-point snapshot)"
+log "lifecycle gauntlet: provision + pause/resume + freeze/thaw + burn"
 [ -n "${SPAWNABLES_BOOT_TIMEOUT:-}" ] && log "boot timeout: ${SPAWNABLES_BOOT_TIMEOUT}s (tcg)"
-PYTHONPATH=src SPAWNABLES_BOOT_TIMEOUT="${SPAWNABLES_BOOT_TIMEOUT:-30}" "$HOME/venv/bin/python" -m spawnables --catalog catalog provision orders/ubuntu-headless-smoke.json > "$HOME/provision.log" 2>&1
+PYTHONPATH=src SPAWNABLES_BOOT_TIMEOUT="${SPAWNABLES_BOOT_TIMEOUT:-30}" "$HOME/venv/bin/python" runner/lanes/linux/lifecycle.py > "$HOME/provision.log" 2>&1
 code=$?
 tail -25 "$HOME/provision.log"
 if [ $code -eq 0 ]; then

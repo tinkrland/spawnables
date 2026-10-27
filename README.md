@@ -1,6 +1,6 @@
 # spawnables
 
-turnkey agent-vm control plane. you decide what a machine looks like before it exists: os, distro, desktop, timezone, path tools, apps, even a rice to skin it with. spawnables provisions it as a celesto microvm on your own infra (bare metal, a vps, your gcp/aws/azure account), hands it to any agent over mcp/ssh, and the web ui treats every machine as a card you can pause, freeze, thaw, export, or burn. the machine is dedicated, not ephemeral - the happycapy / cue.im / skydive lane - and an agent can spawn companion microvms (an android guest from a windows machine, used briefly, then frozen). byoa: bring your own agent; byoc: bring your own cloud.
+turnkey agent-vm control plane. you decide what a machine looks like before it exists: os, distro, desktop, timezone, path tools, apps, even a rice to skin it with. spawnables provisions it as a celesto microvm on your own infra (bare metal, a vps, your gcp/aws/azure account), hands it to any agent over mcp/ssh, and the web ui treats every machine as a card you can pause, freeze, thaw, export, or burn. the device is dedicated, not ephemeral - the happycapy / cue.im / skydive lane. any os can be the standalone main driver (android or ios included), companions are optional and ephemeral, and a manual override can bind one agent to two or more dedicated devices. byoa: bring your own agent; byoc: bring your own cloud.
 
 built on open-source celesto (apache-2.0), not celesto cloud. bring your own compute; the control plane is the product.
 

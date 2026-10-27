@@ -19,11 +19,16 @@ the behaviour fingerprint read as one plausible person's computer:
   behaviour inside provisioning, we hand the driver a believable one.
 
 designed for a dedicated machine, not an ephemeral session: the agent
-gets one whole computer it keeps (happycapy / cue.im / skydive lane),
-and companion microvms (say an android spawn used briefly from a
-windows machine) inherit a persona of their own. personas are
-per-guest-os: the companion android reads as a pixel phone, not as a
-laptop wearing a costume.
+gets one whole computer it keeps (happycapy / cue.im / skydive lane).
+any guest os can be that standalone main driver - an agent can live
+entirely on an android or ios machine if that is where its work is.
+ownership patterns, all first-class: (1) one dedicated main device on
+any os; (2) main plus optional ephemeral companions, frozen when their
+need is finished; (3) manual override: one agent bound to two (or more)
+dedicated devices - an android and a linux, say - none of them
+ephemeral. personas are per-guest-os and never mix: an android device
+reads as a pixel phone, not as a laptop wearing a costume, whether it
+is the main driver or a companion.
 """
 import random
 
@@ -82,6 +87,25 @@ DEVICE_PERSONAS = {
 # behaviour presets: data the byoa gui driver consumes. input cadence
 # is the driver's job - provisioning only records what believable looks
 # like for this machine so the driver does not have to guess.
+# desktop moves (mouse/keyboard) and touch moves (finger) per preset;
+# android and ios personas are driven through the touch lane, because
+# a phone nobody touches with a mouse reads as a costume.
+TOUCH_MOVES = {
+    "quiet human": {
+        "tap": "slight drift off-center, occasional double-tap-then-hold",
+        "typing": "bursts of 3-8 chars with realistic error correction",
+        "swipe": "flick with ease-out, sometimes re-swiped",
+        "idle": "reads before tapping; natural pauses 2-15s",
+        "hours": "the machine's local clock; not 24/7 activity",
+    },
+    "fast human": {
+        "tap": "decisive, near-center",
+        "typing": "longer bursts, rare corrections",
+        "swipe": "short quick flicks",
+        "idle": "short pauses 1-5s",
+        "hours": "the machine's local clock",
+    },
+}
 BEHAVIOUR_PRESETS = {
     "quiet human": {
         "mouse": "curved paths with ease-in-out, occasional overshoot",
@@ -99,6 +123,12 @@ BEHAVIOUR_PRESETS = {
     },
 }
 DEFAULT_BEHAVIOUR = "quiet human"
+
+# every persona can be a standalone agent's main driver device;
+# companion and multi-device (manual override) are ownership choices,
+# not capability tiers.
+MAIN_DRIVER_OSES = ("linux", "windows", "macos", "android", "ios")
+TOUCH_OSES = ("android", "ios")
 
 
 def persona(os_name):
@@ -118,10 +148,16 @@ def mac_address_for(os_name, rng=None):
     return f"{oui}:{nic}"
 
 
-def behaviour_profile(name=None):
-    """the behaviour preset recorded on the order for the gui driver."""
+def behaviour_profile(name=None, os_name="linux"):
+    """the behaviour preset recorded on the order for the gui driver,
+    in the input surface the persona is actually driven through."""
     name = name or DEFAULT_BEHAVIOUR
-    return {"name": name, "moves": BEHAVIOUR_PRESETS.get(name, BEHAVIOUR_PRESETS[DEFAULT_BEHAVIOUR])}
+    if os_name in TOUCH_OSES:
+        moves = TOUCH_MOVES.get(name, TOUCH_MOVES[DEFAULT_BEHAVIOUR])
+    else:
+        moves = BEHAVIOUR_PRESETS.get(name, BEHAVIOUR_PRESETS[DEFAULT_BEHAVIOUR])
+    return {"name": name, "surface": "touch" if os_name in TOUCH_OSES else "desktop",
+            "moves": moves}
 
 
 def normalize(section):
@@ -144,9 +180,10 @@ def validate(section):
 def summary(order, os_name):
     """what the card shows: the resolved three-layer context."""
     p = persona(os_name)
-    b = behaviour_profile((getattr(order, "device_context", {}) or {}).get("behaviour"))
+    b = behaviour_profile((getattr(order, "device_context", {}) or {}).get("behaviour"), os_name)
     return {
         "machine": f"{p['smbios']['sys_vendor']} {p['smbios']['product_name']}",
         "device": f"{os_name} + {p['ua_family']}, {p['fonts']}, {p['screen']}",
-        "behaviour": b["name"],
+        "behaviour": f"{b['name']} ({b['surface']})",
+        "role": "main driver or companion - every persona can be either",
     }

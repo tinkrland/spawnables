@@ -9,14 +9,24 @@
           "brew install --cask arc"
         ],
         "verify": "ls /applications/arc.app"
+      },
+      "windows": {
+        "manager": "winget",
+        "steps": [
+          "winget install -e --id TheBrowserCompany.Arc"
+        ],
+        "verify": "test -d \"$env:LOCALAPPDATA\\Packages\\TheBrowserCompany.Arc*\" -or (test -d \"$env:LOCALAPPDATA\\arc\")"
       }
     }
   },
   "availability": {
+    "windows": [
+      "native"
+    ],
     "macos": [
       "native"
     ]
   },
-  "disk_mb_est": 400,
-  "notes": "winding down; kept for existing users. the windows build was discontinued by the browser company"
+  "notes": "winding down (browser company moved on to dia); kept for existing users on both platforms",
+  "disk_mb_est": 500
 }

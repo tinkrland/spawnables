@@ -544,9 +544,10 @@ class TestCatalogRoster(unittest.TestCase):
 
     def test_browser_availability_is_honest(self):
         arc = CATALOG.recipes["arc"]
-        self.assertEqual(list(arc["availability"]), ["macos"])  # winding down, macos only
+        self.assertEqual(sorted(arc["availability"]), ["macos", "windows"])  # exists on both
         self.assertIn("winding down", arc["notes"])
-        self.assertIn("discontinued", arc["notes"])
+        self.assertNotIn("discontinued", arc["notes"].lower())  # never claimed it left windows
+        self.assertIn("native", arc["availability"]["windows"])
         tor = CATALOG.recipes["tor"]
         for os_name in ("linux", "windows", "macos"):
             self.assertIn("native", tor["availability"][os_name])
@@ -562,6 +563,23 @@ class TestCatalogRoster(unittest.TestCase):
             for platform, native in r["orders"]["native"].items():
                 self.assertIn("verify", native, f"{rid}/{platform} has no verify step")
                 self.assertTrue(native["steps"], f"{rid}/{platform} has no steps")
+
+    def test_apps_vscode_and_kicad(self):
+        vscode = CATALOG.recipes["vscode"]
+        for os_name in ("linux", "windows", "macos"):
+            self.assertIn("native", vscode["availability"][os_name])
+        self.assertIn("code --version", vscode["orders"]["native"]["debian"]["verify"])
+        kicad = CATALOG.recipes["kicad"]  # engineering lane since the seed roster
+        self.assertEqual(kicad["category"], "engineering")
+        for os_name in ("linux", "windows", "macos"):
+            self.assertIn("native", kicad["availability"][os_name])
+
+    def test_catalog_intentional_exclusions_are_stated(self):
+        stance = open("catalog/README.md").read()
+        self.assertIn("fusion", stance)  # cad-heavy: intentionally out of scope
+        self.assertIn("after effects", stance)  # video editors: intentionally out of scope
+        self.assertIn("edge", stance)  # not listed by default, not forbidden
+        self.assertNotIn("Brave", "edge")  # lowercase everywhere
 
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]

@@ -59,7 +59,7 @@ class FakeAdapter(CelestoAdapter):
 
 
 class TestNetworkPrivacy(unittest.TestCase):
-    NET_ON = {"vpn": True, "vpn_provider": "wireguard", "vpn_config_ref": "wg-main",
+    NET_ON = {"vpn": True, "vpn_provider": "proton", "vpn_config_ref": "wg-main",
               "kill_switch": True, "match_specs_to_vpn": True}
 
     def test_defaults_match_design_reference_independents(self):
@@ -100,10 +100,36 @@ class TestNetworkPrivacy(unittest.TestCase):
         self.assertEqual(guest_steps(net, "windows", "edge"), [])
 
     def test_tailscale_uses_auth_key_from_vault(self):
-        net = normalize({"vpn": True, "vpn_provider": "tailscale",
-                         "vpn_config_ref": "ts-key"})
+        net = normalize({"proxy": True, "proxy_pool": "dedicated",
+                         "dedicated_ip_provider": "tailscale",
+                         "vpn_config_ref": "ts-key", "kill_switch": True})
+        self.assertEqual(validate_network(net, order()), [])
         steps = dict(guest_steps(net, "linux", "brave"))
-        self.assertIn("@@vault:ts-key@@", steps["vpn.tailscale"])
+        self.assertIn("@@vault:ts-key@@", steps["dedicated.tailscale"])
+        self.assertIn("--exit-node=", steps["dedicated.tailscale"])
+
+    def test_dedicated_ip_needs_a_provider(self):
+        net = normalize({"proxy": True, "proxy_pool": "dedicated"})
+        errs = validate_network(net, order())
+        self.assertTrue(any("dedicated ip needs a provider" in e for e in errs))
+
+    def test_kernel_dedicated_is_host_side_only(self):
+        net = normalize({"proxy": True, "proxy_pool": "dedicated",
+                         "dedicated_ip_provider": "kernel"})
+        self.assertEqual(validate_network(net, order()), [])
+        steps = guest_steps(net, "linux", "brave")
+        self.assertFalse(any(l.startswith("dedicated.") for l, _ in steps))
+        from spawnables.netpriv import host_directives
+        self.assertEqual(host_directives(net)["dedicated_ip_provider"], "kernel")
+
+    def test_vpn_lane_is_proton_and_windscribe_only(self):
+        from spawnables.netpriv import VPN_PROVIDERS, DEDICATED_IP_PROVIDERS
+        self.assertEqual(VPN_PROVIDERS, ("proton", "windscribe"))
+        self.assertEqual(DEDICATED_IP_PROVIDERS, ("kernel", "tailscale"))
+        net = normalize({"vpn": True, "vpn_provider": "wireguard",
+                         "vpn_config_ref": "wg"})
+        errs = validate_network(net, order())
+        self.assertTrue(any("provider is unset" in e for e in errs))
 
     def test_browser_hardening_per_browser(self):
         net = normalize({"browser_hardening": True})

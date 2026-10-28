@@ -796,6 +796,33 @@ class TestCatalogRoster(unittest.TestCase):
         # notes never claim ipados
         self.assertIn("never claims ipados", pc["notes"])
 
+    def test_get_anyway_never_fetches(self):
+        from spawnables.ipadlane import (get_anyway_plan, validate_get_anyway,
+                                        ipa_drop_path, GET_ANYWAY_STATES)
+        plan = get_anyway_plan("Some Ipad App", bundle_id="com.example.sia")
+        self.assertEqual(validate_get_anyway(plan), [])  # refusal rule holds
+        self.assertEqual(plan["state"], "waiting-for-ipa")  # honest default
+        self.assertEqual(plan["handoff_ref"], "ipa-com.example.sia")
+        self.assertIn(ipa_drop_path("some ipad app", "com.example.sia"),
+                      [c for _, c in plan["steps"] if "test -f" in c][0])  # ipa arrives via handoff
+        joined = " ".join(c for _, c in plan["steps"])
+        self.assertIn('open -a "PlayCover"', joined)   # its supported install path
+        self.assertNotIn("curl", joined)               # no fetch, ever
+        # a smuggled fetch must fail the build
+        bad = {"steps": [("get-anyway.install", "curl -sL http://warez.example/x.ipa")]}
+        self.assertTrue(validate_get_anyway(bad))
+        self.assertIn("waiting-for-ipa", GET_ANYWAY_STATES)
+
+    def test_get_anyway_and_darwin_vm_pinned_in_spec(self):
+        of = open("spec/order-form.md").read()
+        self.assertIn("the 'get anyway' button", of)
+        self.assertIn("does not fetch the app", of)          # the opt-out means no download
+        self.assertIn("waiting-for-ipa", of)                  # the card never pretends
+        self.assertIn("fails the build if any get-anyway step ever gains a fetch", of)
+        self.assertIn("jprx/darwin-vm", of)                  # the shared link, checked
+        self.assertIn("not a full gui ios or macos", of)      # honest scope
+        self.assertIn("does not change the ipad lane", of)    # playcover still needs real hw
+
     def test_ipad_lane_spec_pins_the_workaround(self):
         of = open("spec/order-form.md").read()
         self.assertIn("the ipad lane (the honest workaround)", of)

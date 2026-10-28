@@ -31,6 +31,17 @@ class UserOrder:
 
 
 @dataclass
+class GrantOrder:
+    """an agent's scoped access to this device; spec/access-grants.md.
+
+    control-plane only - no os account is created on the guest.
+    """
+    agent: str
+    mode: str = "view"  # view (read-only, scoped) | drive (full handoff)
+    paths: list = field(default_factory=lambda: ["/"])
+
+
+@dataclass
 class Size:
     vcpus: int = 2
     ram_mb: int = 8192
@@ -50,6 +61,7 @@ class MachineOrder:
     apps: list = field(default_factory=list)  # list[AppOrder]
     rice: dict | None = None
     users: list = field(default_factory=list)  # list[UserOrder]; os accounts
+    grants: list = field(default_factory=list)  # list[GrantOrder]; agent access
     agent_bridge: dict = field(default_factory=dict)
     network: dict = field(default_factory=dict)  # section 03: network & privacy
     device_context: dict = field(default_factory=dict)  # advanced: device context tuning
@@ -70,6 +82,7 @@ class MachineOrder:
             apps=[AppOrder(**a) for a in d.get("apps", [])],
             rice=d.get("rice"),
             users=[UserOrder(**u) for u in d.get("users", [])],
+            grants=[GrantOrder(**g) for g in d.get("grants", [])],
             agent_bridge=d.get("agent_bridge", {}),
             network=d.get("network", {}),
             device_context=d.get("device_context", {}),

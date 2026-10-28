@@ -10,6 +10,7 @@ built on open-source celesto (apache-2.0), not celesto cloud. bring your own com
 - [card lifecycle spec](spec/card-lifecycle.md): the machine card api and states, from provisioning to burned.
 - [adapter contract](spec/adapters.md): one backend adapter per guest os route (celesto, android, vphone); capabilities gate the card verbs.
 - [multi-user machines](spec/multi-user.md): several os accounts on one machine, the way real shared computers work - machine identity shared, credentials in the vault, never in the manifest.
+- [agent access grants](spec/access-grants.md): agents are principals - one agent can hold scoped access (view /downloads, say) on another agent's device with no os account anywhere; control-plane permission, per agent, per path, per mode, revocable.
 - [schemas](spec/schemas/): json schema drafts for every object.
 - [src/spawnables](src/spawnables): the provisioner skeleton. `validate` and `plan` run anywhere; `provision` runs on a host with celesto installed.
 - network & privacy (order form section 03): private dns (nextdns), proxy pools (residential / commercial / dedicated via kernel or tailscale), vpn exits (proton + windscribe, open-source tunnels and kill switches), mac spoofing, browser anti-fingerprinting, kill switch, spec matching to the vpn exit. guest-side steps run in the vm; host-side directives ride with the runner. secrets live in a vault, never in the order.

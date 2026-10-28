@@ -45,7 +45,8 @@ class Machine:
 
     # -- agent access grants (spec/access-grants.md) --------------------------
 
-    def grant(self, agent, mode="view", paths=None, idempotency_key=None):
+    def grant(self, agent, mode="view", paths=None, stable_id=None,
+              idempotency_key=None):
         if mode not in ("view", "drive"):
             raise LifecycleError(f"grant mode must be view or drive, got '{mode}'")
         if not self._once(("grant", agent, mode), idempotency_key):
@@ -54,7 +55,10 @@ class Machine:
         for g in self.grants:
             if g["agent"] == agent and g["mode"] == mode:
                 return f"already granted: {agent} {mode}"
-        self.grants.append({"agent": agent, "mode": mode, "paths": list(paths)})
+        entry = {"agent": agent, "mode": mode, "paths": list(paths)}
+        if stable_id:
+            entry["stable_id"] = stable_id
+        self.grants.append(entry)
         return f"granted {agent} {mode} on {', '.join(paths)}"
 
     def revoke(self, agent, mode=None, idempotency_key=None):
@@ -68,7 +72,10 @@ class Machine:
     def access(self, agent, action, path=None):
         """view is implied by drive; view grants cover their paths only."""
         for g in self.grants:
-            if g["agent"] != agent:
+            if g.get("stable_id"):
+                if g["stable_id"] != agent:
+                    continue  # the principal is the id; the label is cosmetic
+            elif g["agent"] != agent:
                 continue
             if action == "drive" and g["mode"] == "drive":
                 return True

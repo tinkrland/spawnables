@@ -39,6 +39,7 @@ class GrantOrder:
     agent: str
     mode: str = "view"  # view (read-only, scoped) | drive (full handoff)
     paths: list = field(default_factory=lambda: ["/"])
+    stable_id: str = ""  # the principal (agentid.py); the name is a label
 
 
 @dataclass

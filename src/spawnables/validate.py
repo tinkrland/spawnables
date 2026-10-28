@@ -57,7 +57,7 @@ def validate_order(order, catalog):
         for path in g.paths:
             if not path.startswith("/"):
                 errors.append(f"grant for '{g.agent}': paths must be absolute, got '{path}'")
-        key = (g.agent, g.mode, tuple(g.paths))
+        key = (getattr(g, "stable_id", "") or g.agent, g.mode, tuple(g.paths))
         if key in seen_grants:
             errors.append(f"grant for '{g.agent}': same {g.mode} grant listed twice")
         seen_grants.add(key)

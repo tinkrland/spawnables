@@ -1220,6 +1220,15 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("beyond the browser", readme)
         self.assertIn("one size fits all", readme)
         self.assertIn("before you spawn it up", readme)
+        # no ecosystem hostages: privacy + browser + tooling stance
+        self.assertIn("no ecosystem hostages", readme)
+        self.assertIn("brave", readme)          # chromium but privacy-first
+        self.assertIn("zen", readme)            # not chromium at all
+        self.assertIn("penpot", readme)         # self-hosted oss, not forced adobe
+        self.assertIn("farbling", readme)
+        # ephemeral stays first-class alongside fixed
+        self.assertIn("ephemeral machines are still first-class", readme)
+        self.assertIn("burn it after", readme)
         # keeberia-casual, not a parts list
         self.assertNotIn("## the parts", readme)
         self.assertIn("[directory.md](directory.md)", readme)    # the map is linked

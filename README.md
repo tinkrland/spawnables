@@ -16,11 +16,21 @@ spawnables is not reinventing the wheel. the wheel is [celesto](https://github.c
 
 fixed, not ephemeral: a spawned machine stays. it accumulates files, logins, state, a personality. you pause it, you freeze it, it is there tomorrow.
 
+though "fixed" is the default, not a cage: ephemeral machines are still first-class citizens. an agent can spawn a disposable one for a ten-minute need and burn it after, or keep a companion phone alive for exactly as long as a task lasts. the card decides. spawnables does not care either way, it just refuses to assume everything should vanish.
+
 yours, not rented: the machine runs on your infrastructure ([byoc](connect/byoc/readme.md): bare metal, a vps, gcp, aws, azure), driven by your agent ([byoa](connect/byoa/readme.md): cloud or local, any mcp client), with your model ([byollm](connect/byollm/readme.md)). spawnables holds no infrastructure, no agent, and no model of its own. the control plane is the product.
 
 clean, not opinionated: no skills baked into the os, ever. the machine ships exactly what you ordered and nothing else.
 
 that is the whole pitch: the byoc + byoa + byollm trifecta, and the machine is a card you can pause, freeze, thaw, duplicate, export, or burn.
+
+## no ecosystem hostages
+
+a lot of "your own computer" products quietly mean "your own google or microsoft computer": chrome sign-in everywhere, onedrive nudges, an adobe subscription as the only door into creative work. spawnables does not assume you want any of that. the [privacy story](security/privacy/readme.md) is real rather than a coat of paint: vpn exits with a kill switch, private dns, [boring, uniform machine fingerprints](security/anti-machine-fingerprinting/readme.md) that read as one plausible person, [coherence checks](security/fingerprint-coherence/readme.md) that refuse to ship a costume contradicting itself, and secrets sealed in a vault that fails closed.
+
+the browser roster is the same stance: [brave](https://brave.com) leads (chromium, so everything works, but privacy-first, farbling the fingerprint surface itself) and [zen](https://zen-browser.app) sits right beside it, firefox-based, not chromium at all. tor is in the catalog for the days that call for it. the machine is yours; the defaults just happen to be paranoid in your favor.
+
+and if you design, you do not have to rent adobe forever. figma installs as a [pwa](setup/apps/readme.md) on every guest we run, and if you would rather own the whole pipeline, [penpot](setup/services/readme.md) is self-hosted oss: order it as a service and the machine spins it up on its own docker, on every boot, data in volumes that survive freezes. the catalog picks honest tools that do not hold your work hostage.
 
 ## beyond linux, beyond the browser
 

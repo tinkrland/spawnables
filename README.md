@@ -26,6 +26,8 @@ and byoc is not a euphemism for "pick your favorite of three clouds". a local ma
 
 the control surface follows you, too: the [gui](orders/modes/gui/readme.md) runs in your browser, and when a shell is where you are, the [cli](orders/modes/cli/readme.md) does the same job against the same catalogs. one order model, two surfaces, neither second-class.
 
+and a confession: some of the order form is useless to an agent. rice does not make a machine faster. an agent does not need a wallpaper, a catppuccin theme, a dock pinned just so. we keep it anyway, because we like the human touch. a permanent computer should feel homey, not like a hotel room someone else decorated. the machine is going to be somebody's whole little life for a long time, it may as well feel like theirs. that is why the [rice catalog](catalog/rices) exists, why rices apply per-account on multi-user machines, and why we will keep polishing it even though no benchmark will ever notice.
+
 that is the whole pitch: the byoc + byoa + byollm trifecta, and the machine is a card you can pause, freeze, thaw, duplicate, export, or burn.
 
 ## no ecosystem hostages

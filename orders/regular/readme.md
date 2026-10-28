@@ -3,7 +3,7 @@
 the everyday order fields - what most machines need and nothing more:
 
 - base_image: os + distro + desktop env, from
-  [catalog/base-images](../../../catalog/base-images) (mint, ubuntu,
+  [catalog/base-images](../../catalog/base-images) (mint, ubuntu,
   fedora, windows, macos, android personas).
 - name + timezone + locale: the machine's identity story, and it must
   agree with the fingerprint coherence check, not fight it.

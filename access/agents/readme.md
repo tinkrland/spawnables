@@ -1,7 +1,7 @@
 # agents: grants between principals
 
 agents hold scoped access to someone else's device with no os account
-created anywhere ([spec/access-grants.md](../../../spec/access-grants.md)).
+created anywhere ([spec/access-grants.md](../../spec/access-grants.md)).
 every control-plane operation passes authorize(agent, action, path)
 before touching the machine. any combination composes:
 

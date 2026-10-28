@@ -108,8 +108,10 @@ machine is more machine:
   agent to run the task overnight and wake up to it done, or set a
   schedule. nothing about that requires renting someone's computer.
 - **no skills baked in.** our vms ship with what you ordered and
-  nothing else. skills belong to the agent (byoa), not the machine -
-  a skill store in the os is bloat we refuse.
+  nothing else. happycapy bakes skills into the computer because the
+  agent is theirs; here the agent is yours (byoa) and brings its own
+  skills, so the machine stays clean - a skill store in the os would
+  be someone else's luggage.
 ## honest edges
 
 - behaviour is only as good as the driver: spawnables publishes the

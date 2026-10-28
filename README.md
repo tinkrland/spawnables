@@ -9,6 +9,7 @@ built on open-source celesto (apache-2.0), not celesto cloud. bring your own com
 - [order form spec](spec/order-form.md): one data model, two sides. a machine order (what you want) and four catalogs (what exists): base images, path tools, app recipes, rices.
 - [card lifecycle spec](spec/card-lifecycle.md): the machine card api and states, from provisioning to burned.
 - [adapter contract](spec/adapters.md): one backend adapter per guest os route (celesto, android, vphone); capabilities gate the card verbs.
+- [multi-user machines](spec/multi-user.md): several os accounts on one machine, the way real shared computers work - machine identity shared, credentials in the vault, never in the manifest.
 - [schemas](spec/schemas/): json schema drafts for every object.
 - [src/spawnables](src/spawnables): the provisioner skeleton. `validate` and `plan` run anywhere; `provision` runs on a host with celesto installed.
 - network & privacy (order form section 03): private dns (nextdns), proxy pools (residential / commercial / dedicated via kernel or tailscale), vpn exits (proton + windscribe, open-source tunnels and kill switches), mac spoofing, browser anti-fingerprinting, kill switch, spec matching to the vpn exit. guest-side steps run in the vm; host-side directives ride with the runner. secrets live in a vault, never in the order.
@@ -42,7 +43,7 @@ android and ios are not celesto surfaces: they need spawnables backend adapters 
 
 ## stance
 
-gui first, cli available; but the backend gets built thoroughly first, because the field is scattered projects on github and the durable win is a correct core: manifest replay, vault-held secrets, capability-gated verbs, honest event streams. machines ship with what you ordered and nothing else - no skills baked into the os, ever; skills are the agent's business (byoa).
+gui first, cli available; but the backend gets built thoroughly first, because the field is scattered projects on github and the durable win is a correct core: manifest replay, vault-held secrets, capability-gated verbs, honest event streams. machines ship with what you ordered and nothing else - no skills baked into the os, ever. happycapy bakes skills in because their agent needs them; here the agent is yours (byoa) and brings its own.
 
 ## status
 

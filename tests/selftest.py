@@ -595,6 +595,71 @@ class TestCatalogRoster(unittest.TestCase):
         readme = open("README.md").read()
         self.assertIn("no skills baked into the os", readme)
 
+    def test_multi_user_parse_and_validate(self):
+        o = order(users=[
+            {"username": "alex", "full_name": "alex rivera", "admin": True},
+            {"username": "sam", "rice": {"rice_id": "catppuccin-mocha-cinnamon"}},
+        ])
+        self.assertEqual(o.users[0].username, "alex")
+        self.assertTrue(o.users[0].admin)
+        errors, warnings = validate_order(o, CATALOG)
+        self.assertEqual(errors, [])  # clean multi-user order passes
+
+    def test_multi_user_validation_rejects_junk(self):
+        o = order(users=[
+            {"username": "Alex"},  # uppercase: usernames are lowercase
+            {"username": "sam", "rice": {"rice_id": "no-such-rice"}},
+        ])
+        errors, warnings = validate_order(o, CATALOG)
+        self.assertTrue(any("lowercase" in e for e in errors))
+        self.assertTrue(any("unknown rice" in e for e in errors))
+        o2 = order(users=[{"username": "sam"}, {"username": "sam"}])
+        errors2, _ = validate_order(o2, CATALOG)
+        self.assertTrue(any("listed twice" in e for e in errors2))
+
+    def test_multi_user_android_warns(self):
+        o = order(base_image="redroid-15", users=[{"username": "alex"}])
+        errors, warnings = validate_order(o, CATALOG)
+        self.assertEqual(errors, [])
+        self.assertTrue(any("no multi-user lane" in w for w in warnings))
+
+    def test_provisioner_creates_accounts_and_per_user_rice(self):
+        o = order(users=[
+            {"username": "alex", "full_name": "alex rivera", "admin": True},
+            {"username": "sam", "rice": {"rice_id": "catppuccin-mocha-cinnamon"}},
+        ])
+        a = FakeAdapter()
+        rec = Recorder()
+        Provisioner(o, CATALOG, a, Emitter(rec)).run()
+        joined = "\n".join(a.execs)
+        self.assertIn("useradd -m -s /bin/bash -c 'alex rivera' alex", joined)
+        self.assertIn("usermod -aG sudo alex", joined)  # admin flag lands
+        self.assertIn("useradd -m -s /bin/bash -c 'sam' sam", joined)
+        self.assertTrue(any("su -l sam -c" in c and "gsettings" in c for c in a.execs))  # per-user rice as sam
+        self.assertFalse(any("su -l alex -c" in c for c in a.execs))  # alex ordered no rice
+
+    def test_provisioner_windows_lane_and_android_skip(self):
+        o = order(base_image="win11-24h2", users=[{"username": "alex", "admin": True, "rice": {"rice_id": "catppuccin-mocha-cinnamon"}}])
+        a = FakeAdapter()
+        rec = Recorder()
+        Provisioner(o, CATALOG, a, Emitter(rec)).run()
+        joined = "\n".join(a.execs)
+        self.assertIn("net user alex /add", joined)
+        self.assertIn("net localgroup administrators alex /add", joined)
+        self.assertFalse(any("su -l" in c for c in a.execs))  # no unix rice pretension
+        o2 = order(base_image="redroid-15", users=[{"username": "alex"}])
+        a2 = FakeAdapter()  # celesto caps; the image's os drives the skip
+        rec2 = Recorder()
+        Provisioner(o2, CATALOG, a2, Emitter(rec2)).run()
+        self.assertFalse(any("useradd" in c for c in a2.execs))  # skipped honestly
+
+    def test_positioning_doc_pins_the_byoa_skills_reason(self):
+        dc = open("spec/device-context.md").read().replace("\n  ", " ")
+        self.assertIn("agent is theirs", dc)  # happycapy bakes skills: their agent
+        self.assertIn("brings its own skills", dc)
+        readme = open("README.md").read()
+        self.assertIn("no skills baked into the os", readme)
+
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]
         for os_name in ("linux", "windows", "macos", "android"):

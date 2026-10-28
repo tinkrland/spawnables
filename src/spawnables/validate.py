@@ -5,7 +5,11 @@ everything so the api cannot be talked into a bad provision.
 """
 
 
+import re
+
 from .netpriv import normalize as _net_normalize, validate_network as _net_validate
+
+USERNAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 
 
 def validate_order(order, catalog):
@@ -31,6 +35,21 @@ def validate_order(order, catalog):
                 f"{img['id']} sizes are fixed at {fixed['vcpus']} vcpu / "
                 f"{fixed['ram_mb']} mb / {fixed['disk_gb']} gb; the form hides the sliders"
             )
+
+    seen_users = set()
+    for u in getattr(order, "users", []) or []:
+        if not USERNAME_RE.match(u.username):
+            errors.append(
+                f"user '{u.username}': usernames are lowercase letters/digits/_/-, "
+                "start with a letter, max 32 chars"
+            )
+        if u.username in seen_users:
+            errors.append(f"user '{u.username}': listed twice")
+        seen_users.add(u.username)
+        if u.rice and catalog.rices.get(u.rice.get("rice_id")) is None:
+            errors.append(f"user '{u.username}': unknown rice '{u.rice.get('rice_id')}'")
+    if order.users and os_name in ("android", "ios"):
+        warnings.append(f"{os_name} has no multi-user lane; users are skipped at provision")
 
     for tool_id in order.path_tools:
         if catalog.path_tools.get(tool_id) is None:

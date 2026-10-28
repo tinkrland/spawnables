@@ -117,6 +117,7 @@ class Provisioner:
         self._tools(family)
         self._apps(os_name, family)
         self._rice()
+        self._users(os_name)
         self._snapshot_fresh()
         return self.emitter.history
 
@@ -251,6 +252,52 @@ class Provisioner:
             if not self._exec_checked("rice", step, rice["rice_id"]):
                 raise ProvisionError(f"rice {rice['rice_id']} failed to apply: {step}")
         self.emitter.emit("provision.rice", "ok", rice["rice_id"])
+
+    def _users(self, os_name):
+        """create the manifest's os accounts; spec/multi-user.md.
+
+        accounts are created without usable credentials - the vault
+        lane hands working credentials to the driver. per-user rice
+        applies as that user on unix lanes; windows honestly waits
+        for first login.
+        """
+        users = getattr(self.order, "users", []) or []
+        if not users:
+            return
+        if os_name not in ("linux", "windows", "macos"):
+            self.emitter.emit("provision.users", "skip", f"{os_name} has no multi-user lane")
+            return
+        for u in users:
+            name, full = u.username, (u.full_name or u.username)
+            if os_name == "linux":
+                cmds = [f"useradd -m -s /bin/bash -c '{full}' {name}"]
+                if u.admin:
+                    cmds.append(f"usermod -aG sudo {name}")
+                run_as = lambda step: f"su -l {name} -c \"{step}\""
+            elif os_name == "windows":
+                cmds = [f'net user {name} /add /fullname:"{full}" /active:yes']
+                if u.admin:
+                    cmds.append(f"net localgroup administrators {name} /add")
+                run_as = None
+            else:
+                cmds = [f'sysadminctl -addUser {name} -fullName "{full}"']
+                if u.admin:
+                    cmds.append(f"dseditgroup -o edit -a {name} -t user admin")
+                run_as = lambda step: f"sudo -u {name} bash -c \"{step}\""
+            for cmd in cmds:
+                if not self._exec_checked("users", cmd, f"create {name}"):
+                    raise ProvisionError(f"user {name} could not be created: {cmd}")
+            entry = self.catalog.rices.get((u.rice or {}).get("rice_id"))
+            if entry is None:
+                continue
+            steps = entry.get("apply", {}).get("steps", [])
+            if os_name == "windows":
+                self.emitter.emit("provision.users", "note",
+                                  f"{name}'s rice applies at first login (windows per-user lane)")
+                continue
+            for step in steps:
+                if not self._exec_checked("users", run_as(step), f"rice for {name}"):
+                    raise ProvisionError(f"user {name}'s rice failed to apply: {step}")
 
     def _snapshot_fresh(self):
         em = self.emitter

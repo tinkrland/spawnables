@@ -18,6 +18,19 @@ class AppOrder:
 
 
 @dataclass
+class UserOrder:
+    """one os account on the machine; spec/multi-user.md.
+
+    credentials never live here - the manifest names people, the
+    vault names secrets.
+    """
+    username: str
+    full_name: str = ""
+    admin: bool = False
+    rice: dict | None = None  # {"rice_id": ...} from the rices catalog
+
+
+@dataclass
 class Size:
     vcpus: int = 2
     ram_mb: int = 8192
@@ -36,6 +49,7 @@ class MachineOrder:
     path_tools: list = field(default_factory=list)
     apps: list = field(default_factory=list)  # list[AppOrder]
     rice: dict | None = None
+    users: list = field(default_factory=list)  # list[UserOrder]; os accounts
     agent_bridge: dict = field(default_factory=dict)
     network: dict = field(default_factory=dict)  # section 03: network & privacy
     device_context: dict = field(default_factory=dict)  # advanced: device context tuning
@@ -55,6 +69,7 @@ class MachineOrder:
             path_tools=list(d.get("path_tools", [])),
             apps=[AppOrder(**a) for a in d.get("apps", [])],
             rice=d.get("rice"),
+            users=[UserOrder(**u) for u in d.get("users", [])],
             agent_bridge=d.get("agent_bridge", {}),
             network=d.get("network", {}),
             device_context=d.get("device_context", {}),

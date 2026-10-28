@@ -11,6 +11,8 @@ built on open-source celesto (apache-2.0), not celesto cloud. bring your own com
 - [adapter contract](spec/adapters.md): one backend adapter per guest os route (celesto, android, vphone); capabilities gate the card verbs.
 - [multi-user machines](spec/multi-user.md): several os accounts on one machine, the way real shared computers work - machine identity shared, credentials in the vault, never in the manifest.
 - [the vault](src/spawnables/vault.py): secrets never ride in the order or the logs. orders store `@@vault:ref@@` references; the provisioner resolves at exec time (value to the adapter, ref to the events) and fails closed on a missing secret. single-use handoffs for drive grants, appiary-style: redeem once, shredded after.
+- [self-hosted services](catalog/services/penpot.json): docker instances that come up at provisioning and on every boot (penpot first) - the agent never hand-rolls self-hosting.
+- [duplication + presets](src/spawnables/presets.py): duplicate a card's manifest, tweak one thing, run; or save it as a named preset. one mechanism, presets are just kept copies.
 - [agent access grants](spec/access-grants.md): agents are principals - one agent can hold scoped access (view /downloads, say) on another agent's device with no os account anywhere; control-plane permission, per agent, per path, per mode, revocable.
 - [schemas](spec/schemas/): json schema drafts for every object.
 - [src/spawnables](src/spawnables): the provisioner skeleton. `validate` and `plan` run anywhere; `provision` runs on a host with celesto installed.

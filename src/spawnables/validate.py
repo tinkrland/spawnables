@@ -86,6 +86,20 @@ def validate_order(order, catalog):
         if app.order_type == "native" and catalog.native_steps(recipe, family) is None:
             errors.append(f"{app.recipe_id}: no native steps for family {family}")
 
+    for sid in order.services:
+        svc = catalog.services.get(sid)
+        if svc is None:
+            errors.append(f"unknown service: {sid}")
+            continue
+        if os_name not in svc.get("os", ["linux"]):
+            errors.append(
+                f"service {sid}: self-hosted services are linux-guest-only; "
+                f"this machine's os is {os_name}")
+        elif order.size.ram_mb < svc.get("ram_mb_floor", 0):
+            warnings.append(
+                f"service {sid} wants ~{svc['ram_mb_floor'] // 1024}gb ram; "
+                f"the machine has {order.size.ram_mb // 1024}gb - it will run, tightly")
+
     if order.rice:
         rice = catalog.rice(order)
         if rice is None:

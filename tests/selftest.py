@@ -820,8 +820,8 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("metal-capable graphics device", of)          # gpu apps need it, stated
         self.assertIn("software-renders", of)                       # the fallback, named
         self.assertIn("unverified until the first apple-silicon host lands", of)  # no fake verification
-        self.assertIn("not for latency-free crisp film playback", of)  # the workload class verdict
-        self.assertIn("developer, designer and automation work", of)
+        self.assertIn("not latency-free crisp film playback", of)  # the workload class verdict
+        self.assertIn("developer, designer, automation and student work", of)  # broadened 2026-10-28
         self.assertIn("inside the grade we promise", of)            # software-render is utility-grade
 
     def test_get_anyway_and_darwin_vm_pinned_in_spec(self):
@@ -841,6 +841,83 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("never claiming ipados", of)   # the costume refusal stands
         self.assertIn("user-provided (decrypted)", of)  # we ship the runner, not apps
         self.assertIn("playcover", of)
+
+    def test_self_hosted_services_penpot(self):
+        svc = CATALOG.services["penpot"]
+        self.assertEqual(svc["version"], "2.18.5")            # pinned, not floating
+        joined = " ".join(s["cmd"] for s in svc["steps"])
+        self.assertIn("penpot/penpot/2.18.5/docker/images/docker-compose.yaml", joined)  # official compose at the tag
+        self.assertIn("systemctl enable --now docker", joined)  # comes back on boot by itself
+        self.assertIn("docker compose up -d", joined)
+        self.assertEqual(svc["verify"], "curl -sf http://localhost:9001 -o /dev/null")  # local-first
+        self.assertEqual(svc["os"], ["linux"])                  # linux-guest-only
+        # validation: ok on linux, rejected elsewhere, unknown rejected
+        errors, _ = validate_order(order(base_image="ubuntu-24-04-gnome", services=["penpot"]), CATALOG)
+        self.assertEqual(errors, [])
+        errors, _ = validate_order(order(base_image="win11-24h2", services=["penpot"]), CATALOG)
+        self.assertTrue(any("linux-guest-only" in e for e in errors))
+        errors, _ = validate_order(order(services=["ghost-svc"]), CATALOG)
+        self.assertTrue(any("unknown service" in e for e in errors))
+        # tight ram is a warning, never a silent order
+        errs, warns = validate_order(order(base_image="ubuntu-24-04-gnome",
+                                           services=["penpot"],
+                                           size={"ram_mb": 1024, "vcpus": 1, "disk_gb": 20}), CATALOG)
+        self.assertEqual(errs, [])
+        self.assertTrue(any("tightly" in w for w in warns))
+
+    def test_provisioner_emits_services_stage(self):
+        o = order(base_image="ubuntu-24-04-gnome", services=["penpot"])
+        a, rec = FakeAdapter(), Recorder()
+        Provisioner(o, CATALOG, a, Emitter(rec)).run()
+        joined = " ".join(a.execs)
+        self.assertIn("docker compose up -d", joined)             # brought up at provisioning
+        self.assertIn("systemctl enable --now docker", joined)    # and on every boot
+        self.assertTrue(any(e.stage == "provision.services.penpot" and e.status == "ok"
+                            for e in rec.events))
+        # non-linux guests: honest skip, nothing started
+        o2 = order(base_image="win11-24h2", services=["penpot"])
+        a2, rec2 = FakeAdapter("windows"), Recorder()
+        Provisioner(o2, CATALOG, a2, Emitter(rec2)).run()
+        self.assertTrue(any(e.stage == "provision.services" and e.status == "skip" for e in rec2.events))
+        self.assertNotIn("docker", " ".join(a2.execs))
+
+    def test_duplicate_and_presets(self):
+        from spawnables.presets import clone_manifest, save_preset, load_presets
+        import tempfile, json as _json
+        src = {"id": "mo_orig", "name": "evie-desk", "base_image": "ubuntu-24-04-gnome",
+               "size": {"vcpus": 2, "ram_gb": 4, "disk_gb": 40},
+               "network": {"vpn": True, "vpn_provider": "proton",
+                           "vpn_config_ref": "wg-main", "kill_switch": True},
+               "services": ["penpot"]}
+        c = clone_manifest(src)                                   # duplicate: verbatim + fresh identity
+        self.assertNotEqual(c["id"], "mo_orig")
+        self.assertEqual(c["name"], "evie-desk copy")
+        self.assertEqual(c["network"]["vpn_config_ref"], "wg-main")  # vault refs carry over
+        self.assertEqual(c["services"], ["penpot"])
+        # tweak one thing before running
+        c2 = clone_manifest(src, overrides={"size": {"ram_gb": 8}}, name="evie-desk-big")
+        self.assertEqual(c2["size"]["ram_gb"], 8)
+        self.assertEqual(c2["size"]["vcpus"], 2)                  # merge, not replace
+        self.assertEqual(c2["name"], "evie-desk-big")
+        self.assertEqual(src["id"], "mo_orig")                    # the original is untouched
+        # presets: same mechanism, the copy is kept
+        with tempfile.TemporaryDirectory() as d:
+            save_preset(d, "Design Student Box", src, description="penpot + figma pwa")
+            presets = load_presets(d)
+            self.assertIn("design-student-box", presets)
+            self.assertEqual(presets["design-student-box"]["manifest"]["services"], ["penpot"])
+            self.assertEqual(presets["design-student-box"]["description"], "penpot + figma pwa")
+
+    def test_services_and_duplicate_pinned_in_spec(self):
+        of = open("spec/order-form.md").read()
+        self.assertIn("self-hosted services on the machine", of)
+        self.assertIn("penpot", of)
+        self.assertIn("on every machine boot by itself", of)      # the owner's ask, verbatim
+        self.assertIn("never hand-rolls self-hosting", of)
+        self.assertIn("duplicating a machine's configuration; presets", of)
+        self.assertIn("nothing but identity is new", of)          # duplicate = verbatim copy
+        self.assertIn("presets are manifests, not a second schema", of)
+        self.assertIn("student work", of)                         # workload class broadened
 
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]

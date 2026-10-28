@@ -8,4 +8,4 @@ macos card offers desktop view and burn only; sizing is fixed
 
 this is also the lane that runs ipad-only apps: that story lives in
 [../ipad](../ipad/readme.md). machinery:
-[runner/lanes/macos](../runner/lanes/macos).
+[runner/lanes/macos](../../runner/lanes/macos).

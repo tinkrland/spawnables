@@ -18,5 +18,5 @@ subfolders:
   [build-rootfs.sh](rootfs/build-rootfs.sh), which needs a provision
   host with docker and says so honestly everywhere else.
 
-machinery: [runner/lanes/linux](../runner/lanes/linux); the order that
-exercises mint: [orders/mint-desktop-smoke.json](../orders/mint-desktop-smoke.json).
+machinery: [runner/lanes/linux](../../runner/lanes/linux); the order that
+exercises mint: [orders/mint-desktop-smoke.json](../../orders/mint-desktop-smoke.json).

@@ -11,7 +11,7 @@ phone as its only machine. three routes exist:
 
 exec is adb; the gui streams to the card over ws-scrcpy. recipes key on
 an `android` family whose steps are `adb install`. personas are
-[base images](../catalog/base-images), not costumes: aosp wearing a
+[base images](../../catalog/base-images), not costumes: aosp wearing a
 model string is a red flag we surface, not hide. machinery:
-[runner/lanes/android](../runner/lanes/android). subfolders here:
+[runner/lanes/android](../../runner/lanes/android). subfolders here:
 [samsung](samsung/readme.md) and [tablet](tablet/readme.md).

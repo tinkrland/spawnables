@@ -21,6 +21,8 @@ from spawnables.adapters.ios_vphone import IosAdapter, ImageRequired
 from spawnables.events import Emitter, Recorder
 from spawnables.netpriv import (normalize, validate_network, guest_steps,
                                 host_directives, DEFAULTS)
+from spawnables.vault import Vault, DictBackend, VaultError, HandoffError, refs_in
+from spawnables.devctx import persona
 
 CATALOG = Catalog(Path(__file__).resolve().parents[1] / "catalog")
 
@@ -124,7 +126,7 @@ class TestNetworkPrivacy(unittest.TestCase):
 
     def test_vpn_lane_is_proton_and_windscribe_only(self):
         from spawnables.netpriv import VPN_PROVIDERS, DEDICATED_IP_PROVIDERS
-        self.assertEqual(VPN_PROVIDERS, ("proton", "windscribe"))
+        self.assertEqual(VPN_PROVIDERS, ("proton", "windscribe", "mullvad"))
         self.assertEqual(DEDICATED_IP_PROVIDERS, ("kernel", "tailscale"))
         net = normalize({"vpn": True, "vpn_provider": "wireguard",
                          "vpn_config_ref": "wg"})
@@ -148,16 +150,71 @@ class TestNetworkPrivacy(unittest.TestCase):
         self.assertTrue(d["kill_switch"] is False)
 
     def test_provisioner_emits_network_stage(self):
+        v = Vault(DictBackend())
+        v.put("wg-main", "[interface] private-key = REAL-SECRET")
         o = order(network=self.NET_ON)
         a = FakeAdapter()
         rec = Recorder()
-        p = Provisioner(o, CATALOG, a, Emitter(rec))
-        p.run()
+        Provisioner(o, CATALOG, a, Emitter(rec), vault=v).run()
         stages = [e.stage for e in rec.events]
         self.assertTrue(any(s.startswith("provision.network.") for s in stages))
         self.assertTrue(any("directive" == e.status for e in rec.events if e.stage == "provision.network"))
-        self.assertTrue(any("@@vault:wg-main@@" in c for c in a.execs))
+        self.assertTrue(any("REAL-SECRET" in c for c in a.execs))   # value reaches the guest
+        self.assertFalse(any("REAL-SECRET" in getattr(e, "detail", "") for e in rec.events))  # never the logs
+        self.assertTrue(any("@@vault:wg-main@@" in c for c in a.execs) is False)  # ref resolved, not shipped
         self.assertTrue(any("ipinfo.io/timezone" in c for c in a.execs))
+
+    def test_vault_fail_closed_without_vault_or_secret(self):
+        o = order(network=self.NET_ON)
+        a = FakeAdapter()
+        rec = Recorder()
+        with self.assertRaises(ProvisionError):
+            Provisioner(o, CATALOG, a, Emitter(rec)).run()  # refs present, no vault
+        self.assertTrue(any("needs a vault" in getattr(e, "detail", "") for e in rec.events))
+        a2, rec2 = FakeAdapter(), Recorder()
+        v = Vault(DictBackend())  # vault present, secret missing
+        with self.assertRaises(ProvisionError):
+            Provisioner(o, CATALOG, a2, Emitter(rec2), vault=v).run()
+        self.assertTrue(any("no secret named" in getattr(e, "detail", "") for e in rec2.events))
+
+    def test_vault_resolve_and_single_use_handoff(self):
+        v = Vault(DictBackend())
+        v.put("wg-main", "WGCFG")
+        self.assertEqual(v.resolve("install @@vault:wg-main@@ /etc/w"), "install WGCFG /etc/w")
+        self.assertEqual(refs_in("x @@vault:a-b_1@@ y"), ["a-b_1"])
+        with self.assertRaises(VaultError):
+            v.resolve("@@vault:missing@@")  # fail closed, never ships a raw ref
+        token = v.issue_handoff(["wg-main"], ttl_seconds=60)
+        self.assertEqual(v.redeem(token), {"wg-main": "WGCFG"})
+        with self.assertRaises(HandoffError):
+            v.redeem(token)  # single-use: shredded after redemption
+        with self.assertRaises(HandoffError):
+            v.redeem("not-a-token")
+        with self.assertRaises(VaultError):
+            v.issue_handoff(["nope"])  # cannot hand off what does not exist
+
+    def test_android_lane_personas_and_images(self):
+        self.assertEqual(persona("android", "samsung")["smbios"]["product_name"], "SM-S921B")
+        self.assertEqual(persona("android", "samsung")["ouis"], ("00:16:32",))  # samsung OUI, never qemu
+        self.assertEqual(persona("android", "tablet")["smbios"]["product_name"], "Pixel Tablet")
+        self.assertEqual(persona("android", "tablet")["screen"], "2560x1600")
+        from spawnables.machinefp import oem_profile
+        self.assertEqual(oem_profile("android", "samsung")["sys_vendor"], "samsung electronics")
+        from spawnables.devctx import summary
+        o = order(base_image="redroid-15-samsung")
+        s = summary(o, "android", "samsung")
+        self.assertIn("samsung electronics SM-S921B", s["machine"])
+        errors, _ = validate_order(order(base_image="redroid-15-samsung"), CATALOG)
+        self.assertEqual(errors, [])
+        errors, _ = validate_order(order(base_image="redroid-15-tablet", arch="arm64"), CATALOG)
+        self.assertEqual(errors, [])
+
+    def test_android_lane_spec_notes_are_honest(self):
+        of = open("spec/order-form.md").read()
+        self.assertIn("samsung lane", of)
+        self.assertIn("one ui system features are absent", of)   # the ceiling, stated
+        self.assertIn("ipados: not yet cracked in oss", of)       # dated gap, not a promise
+        self.assertIn("mismatched costume", of)                    # no fake ipad
 
     def test_windows_network_skips_guest_steps_honestly(self):
         o = order(base_image="win11-24h2",
@@ -466,7 +523,8 @@ class TestMachineStory(unittest.TestCase):
                      "match_specs_to_vpn": True,
                      "exit_geo": {"country": "CH"}}
         rec = Recorder()
-        Provisioner(o, CATALOG, FakeAdapter(), Emitter(rec)).run()
+        v = Vault(DictBackend()); v.put("wg-main", "WGCFG")
+        Provisioner(o, CATALOG, FakeAdapter(), Emitter(rec), vault=v).run()
         locales = [e for e in rec.events if e.stage == "provision.locale"]
         self.assertEqual([e.status for e in locales], ["skip"])
         self.assertIn("exit story", locales[0].detail)
@@ -778,7 +836,10 @@ class TestDeviceContext(unittest.TestCase):
 
     def test_every_persona_can_be_a_standalone_main_driver(self):
         from spawnables.devctx import MAIN_DRIVER_OSES, DEVICE_PERSONAS, persona
-        self.assertEqual(set(MAIN_DRIVER_OSES), set(DEVICE_PERSONAS))
+        # every persona (incl. lane variants like android_samsung) hangs
+        # off a main-driver os: variants are lanes of an os, never new oses
+        for k in DEVICE_PERSONAS:
+            self.assertIn(k.split("_")[0], MAIN_DRIVER_OSES)
         for os_name in MAIN_DRIVER_OSES:
             self.assertTrue(persona(os_name)["smbios"]["product_name"])
 

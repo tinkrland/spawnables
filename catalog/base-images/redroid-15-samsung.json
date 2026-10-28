@@ -1,0 +1,17 @@
+{
+  "id": "redroid-15-samsung",
+  "os": "android",
+  "distro": "redroid",
+  "distro_family": "android",
+  "desktop_env": "android",
+  "version": "15",
+  "arch": [
+    "x86_64",
+    "arm64"
+  ],
+  "package_manager": "adb",
+  "backend": "redroid",
+  "default_browser": "brave",
+  "persona_variant": "samsung",
+  "notes": "samsung lane: build.prop claims a galaxy model so play store + galaxy-store apks see a samsung device; one ui system features are honestly absent (card states it)"
+}

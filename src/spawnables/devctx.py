@@ -54,6 +54,30 @@ DEVICE_PERSONAS = {
         "fonts": "windows-standard (segoe ui set)",
         "screen": "1920x1080",
     },
+    "android_samsung": {
+        # samsung lane: the device claims to be a galaxy, so the play
+        # store and galaxy-store apks see a samsung model. one ui
+        # system features are honestly absent - the card says so.
+        "smbios": {"sys_vendor": "samsung electronics",
+                   "product_name": "SM-S921B", "board_name": "s921b",
+                   "bios_vendor": "samsung electronics",
+                   "disk_model": "S5DLC1B"},
+        "ouis": ("00:16:32",),  # samsung electronics; extend from ieee
+        "ua_family": "chrome mobile",
+        "fonts": "samsung-standard (one ui sans, roboto)",
+        "screen": "1080x2340",
+    },
+    "android_tablet": {
+        # tablet lane: bigger screen, tablet dpi, a tablet model string
+        # so play store serves tablet layouts. utility-grade stands.
+        "smbios": {"sys_vendor": "Google LLC", "product_name": "Pixel Tablet",
+                   "board_name": "tangorpro", "bios_vendor": "Google LLC",
+                   "disk_model": "0U001"},
+        "ouis": ("00:16:32",),  # samsung-built tablet hardware claim
+        "ua_family": "chrome mobile",
+        "fonts": "android-standard (roboto, noto)",
+        "screen": "2560x1600",
+    },
     "macos": {
         "smbios": {"sys_vendor": "Apple Inc.", "product_name": "MacBookPro18,3",
                    "board_name": "Mac-4B582AFAE7129164", "bios_vendor": "Apple Inc.",
@@ -131,10 +155,14 @@ MAIN_DRIVER_OSES = ("linux", "windows", "macos", "android", "ios")
 TOUCH_OSES = ("android", "ios")
 
 
-def persona(os_name):
-    """the device persona for a guest os. unknown guests get the
-    linux persona and a note, never a mismatched costume."""
-    return DEVICE_PERSONAS.get(os_name, DEVICE_PERSONAS["linux"])
+def persona(os_name, variant=None):
+    """the device persona for a guest os, optionally a lane variant
+    (samsung, tablet) pinned by the base image. unknown guests get
+    the linux persona and a note, never a mismatched costume."""
+    p = DEVICE_PERSONAS.get(f"{os_name}_{variant}") if variant else None
+    if p is None:
+        p = DEVICE_PERSONAS.get(os_name, DEVICE_PERSONAS["linux"])
+    return p
 
 
 def mac_address_for(os_name, rng=None):
@@ -177,9 +205,9 @@ def validate(section):
     return errors
 
 
-def summary(order, os_name):
+def summary(order, os_name, variant=None):
     """what the card shows: the resolved three-layer context."""
-    p = persona(os_name)
+    p = persona(os_name, variant)
     b = behaviour_profile((getattr(order, "device_context", {}) or {}).get("behaviour"), os_name)
     return {
         "machine": f"{p['smbios']['sys_vendor']} {p['smbios']['product_name']}",

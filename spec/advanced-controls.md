@@ -16,11 +16,15 @@ provider verdicts, as the owner set them:
   nextdns profile per machine card and stores the returned profile id
   in the order; the guest points resolv.conf at that profile's anycast
   resolvers. vault refs: `nextdns_api_key`.
-- **vpn: proton + windscribe.** both ship open-source tunnels and
-  their own kill switches (which ride on top of ours). both hand out
-  wireguard profiles: proton from the account (vault-stored, or the
+- **vpn: proton + windscribe + mullvad.** all three are open
+  source and battle-tested, and all three ship their own kill
+  switches (which ride on top of ours). all three hand out wireguard
+  profiles: proton from the account (vault-stored, or the
   open-source protonvpn-cli api path), windscribe via its config
-  generator / official rest api. the guest brings them up as
+  generator / official rest api, mullvad from its numbered account
+  (single-hop or multihop). configs land in the vault; the order
+  stores only the ref; the vault lane resolves at exec time and the
+  value never reaches the logs. the guest brings them up as
   wg-quick@wg0; the exit geo stays declared on the order so the
   coherence layer can check the story.
 - **dedicated ip: kernel or tailscale.** kernel's proxy infra is the

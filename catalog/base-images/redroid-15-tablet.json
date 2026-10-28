@@ -1,0 +1,17 @@
+{
+  "id": "redroid-15-tablet",
+  "os": "android",
+  "distro": "redroid",
+  "distro_family": "android",
+  "desktop_env": "android",
+  "version": "15",
+  "arch": [
+    "x86_64",
+    "arm64"
+  ],
+  "package_manager": "adb",
+  "backend": "redroid",
+  "default_browser": "brave",
+  "persona_variant": "tablet",
+  "notes": "tablet lane: tablet model + 2560x1600 screen + tablet dpi; play store serves tablet layouts"
+}

@@ -9,7 +9,7 @@ target exists. so this folder is the honest workaround, not an os lane.
   hosts, so a spawned macos machine runs ipad-only apps through
   [playcover](https://playcover.io) (freeware, no cli: `open -a` over
   launchservices is the supported install path, enforced in
-  [ipadlane.py](../src/spawnables/ipadlane.py)).
+  [ipadlane.py](../../src/spawnables/ipadlane.py)).
 - the card copy says "ipad apps on macos", never "ipados". a macbook
   persona running ipad apps is exactly what a real person with an
   m-series mac does, so the device story never contradicts itself.

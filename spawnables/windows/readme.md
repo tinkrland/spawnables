@@ -9,5 +9,5 @@ windows 10 22h2 and 11 24h2 images. honest limits, surfaced on the card:
 - the lane is staged pending an iso: the definitions and adapters are
   in, the boot is not run yet.
 
-machinery: [runner/lanes/windows](../runner/lanes/windows); personas:
-[catalog/base-images](../catalog/base-images).
+machinery: [runner/lanes/windows](../../runner/lanes/windows); personas:
+[catalog/base-images](../../catalog/base-images).

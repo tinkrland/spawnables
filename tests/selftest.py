@@ -3,6 +3,7 @@
 run: python3 tests/selftest.py
 """
 import sys
+import pathlib
 import unittest
 from pathlib import Path
 
@@ -1070,16 +1071,16 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertNotIn("https://fonts", html)             # no external fonts, ever
 
     def test_rootfs_build_definitions(self):
-        mint = open("linux/rootfs/mint-22-cinnamon.Dockerfile").read()
+        mint = open("spawnables/linux/rootfs/mint-22-cinnamon.Dockerfile").read()
         self.assertIn("linuxmintd/mint22-amd64:latest", mint)   # verified on hub 2026-10-28
         self.assertIn("cinnamon-core", mint)                    # the desktop env is real
-        ubuntu = open("linux/rootfs/ubuntu-24-04-gnome.Dockerfile").read()
+        ubuntu = open("spawnables/linux/rootfs/ubuntu-24-04-gnome.Dockerfile").read()
         self.assertIn("ubuntu:24.04", ubuntu)
         self.assertIn("gnome-shell", ubuntu)
         # the build script refuses honestly without docker (this sandbox has none)
         import subprocess
         # this host has no docker, so the honest refusal is what runs
-        r = subprocess.run(["bash", "linux/rootfs/build-rootfs.sh",
+        r = subprocess.run(["bash", "spawnables/linux/rootfs/build-rootfs.sh",
                             "mint-22-cinnamon"], capture_output=True, text=True,
                            timeout=10)
         self.assertIn("ROOTFSNEEDSDOCKER", r.stdout)
@@ -1091,23 +1092,23 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertEqual(errors, [])
 
     def test_os_home_folders_with_honest_readmes(self):
-        ipad = open("ipad/readme.md").read()
+        ipad = open("spawnables/ipad/readme.md").read()
         self.assertIn("we do not claim one", ipad)              # the honest stance, first
         self.assertIn("ipad apps on macos", ipad)
         self.assertNotIn("ipados guest", ipad.replace("there is no ipados guest", ""))  # never claimed
         self.assertIn("waiting-for-ipa", ipad)                  # the get-anyway states
         self.assertIn("never fetch the app", ipad)              # the refusal, restated
-        self.assertTrue(open("ios/readme.md").read().count("vphone") >= 1)
-        self.assertIn("bring-your-own-image", open("ios/readme.md").read())
-        samsung = open("android/samsung/readme.md").read()
+        self.assertTrue(open("spawnables/ios/readme.md").read().count("vphone") >= 1)
+        self.assertIn("bring-your-own-image", open("spawnables/ios/readme.md").read())
+        samsung = open("spawnables/android/samsung/readme.md").read()
         self.assertIn("store- or vendor-gated", samsung)        # why the persona exists
         self.assertIn("honest ceiling", samsung)                 # the aosp-in-a-costume truth
-        tablet = open("android/tablet/readme.md").read()
+        tablet = open("spawnables/android/tablet/readme.md").read()
         self.assertIn("not new machinery", tablet)               # persona differences, honestly scoped
         self.assertIn("touch presets", tablet)
-        self.assertIn("tcg patch", open("linux/readme.md").read())
-        self.assertIn("gray out", open("windows/readme.md").read())
-        self.assertIn("apple-silicon host only", open("macos/readme.md").read())
+        self.assertIn("tcg patch", open("spawnables/linux/readme.md").read())
+        self.assertIn("gray out", open("spawnables/windows/readme.md").read())
+        self.assertIn("apple-silicon host only", open("spawnables/macos/readme.md").read())
 
     def test_orders_tree_modes_and_settings(self):
         base = open("orders/readme.md").read()
@@ -1190,6 +1191,17 @@ class TestCatalogRoster(unittest.TestCase):
             body = open(f).read()
             self.assertIn(needle, body, f)      # each folder says the thing it exists for
             self.assertEqual(body, body.lower())  # lowercase only
+
+    def test_guest_homes_live_inside_the_spawnables_folder(self):
+        # owner ruling: the guest-os homes are subfolders of a folder
+        # NAMED spawnables, inside the repo spawnables
+        for f in ["windows", "linux", "macos", "android", "ios", "ipad"]:
+            self.assertTrue(pathlib.Path("spawnables", f, "readme.md").is_file(),
+                            f"spawnables/{f}/readme.md")
+        self.assertTrue(pathlib.Path("spawnables/linux/rootfs/build-rootfs.sh").is_file())
+        # the other root folders stay at repo root, outside the wrapper
+        for f in ["security", "lifecycle", "access", "setup", "connect", "orders"]:
+            self.assertTrue(pathlib.Path(f, "readme.md").is_file(), f)
 
     def test_modes_gui_first_in_the_browser(self):
         modes = open("orders/modes/readme.md").read()

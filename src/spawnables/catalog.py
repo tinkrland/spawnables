@@ -6,7 +6,7 @@ loads a catalog directory and answers the questions the order form asks.
 import json
 from pathlib import Path
 
-KINDS = ("base-images", "path-tools", "recipes", "rices")
+KINDS = ("base-images", "path-tools", "recipes", "rices", "services")
 
 
 class Catalog:
@@ -16,6 +16,7 @@ class Catalog:
         self.path_tools = {}
         self.recipes = {}
         self.rices = {}
+        self.services = {}
         for kind in KINDS:
             table = getattr(self, kind.replace("-", "_"))
             d = self.root / kind
@@ -23,7 +24,8 @@ class Catalog:
                 continue
             for f in sorted(d.glob("*.json")):
                 entry = json.loads(f.read_text())
-                key = entry.get("id") or entry.get("recipe_id") or entry.get("rice_id") or f.stem
+                key = (entry.get("id") or entry.get("recipe_id")
+                       or entry.get("rice_id") or entry.get("service_id") or f.stem)
                 table[key] = entry
 
     def image(self, order):

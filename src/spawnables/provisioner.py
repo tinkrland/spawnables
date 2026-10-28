@@ -16,7 +16,7 @@ from .netpriv import (normalize as net_normalize, guest_steps,
                       host_directives)
 from .vault import Vault, VaultError, refs_in as vault_refs_in
 
-STAGES = ("boot", "locale", "network", "tools", "apps", "rice", "snapshot")
+STAGES = ("boot", "locale", "network", "tools", "apps", "services", "rice", "snapshot")
 
 
 class ProvisionError(Exception):
@@ -119,6 +119,7 @@ class Provisioner:
         self._devctx(os_name)
         self._tools(family)
         self._apps(os_name, family)
+        self._services(os_name)
         self._rice()
         self._users(os_name)
         self._snapshot_fresh()
@@ -261,6 +262,32 @@ class Provisioner:
                 raise ProvisionError(
                     f"app {app.recipe_id} failed its verify step; it is the named missing app on the card"
                 )
+
+    def _services(self, os_name):
+        """self-hosted services: docker instances the runner brings up
+        at provisioning and on every machine boot - the agent never
+        hand-rolls self-hosting."""
+        if not self.order.services:
+            return
+        em = self.emitter
+        if os_name != "linux":
+            em.emit("provision.services", "skip",
+                    f"self-hosted services are linux-guest-only; "
+                    f"none start on {os_name}")
+            return
+        for sid in self.order.services:
+            svc = self.catalog.services.get(sid)
+            if svc is None:
+                raise ProvisionError(f"unknown service: {sid}")
+            for step in svc["steps"]:
+                if not self._exec_checked(f"services.{sid}", step["cmd"],
+                                           f"{sid}.{step['label']}"):
+                    raise ProvisionError(f"service {sid} failed at {step['label']}")
+            if not self._exec_checked(f"services.{sid}", svc["verify"],
+                                       f"{sid}.verify"):
+                raise ProvisionError(f"service {sid} came up but failed its verify")
+            em.emit(f"provision.services.{sid}", "ok",
+                    f"{sid} up at localhost:{svc.get('port')}")
 
     def _rice(self):
         rice = self.catalog.rice(self.order)

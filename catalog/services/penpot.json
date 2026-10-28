@@ -1,0 +1,31 @@
+{
+  "service_id": "penpot",
+  "category": "design",
+  "version": "2.18.5",
+  "license": "agpl-3.0 (oss)",
+  "os": [
+    "linux"
+  ],
+  "port": 9001,
+  "ram_mb_floor": 2048,
+  "steps": [
+    {
+      "label": "docker",
+      "cmd": "apt-get update && apt-get install -y docker.io docker-compose-v2"
+    },
+    {
+      "label": "boot",
+      "cmd": "systemctl enable --now docker"
+    },
+    {
+      "label": "fetch",
+      "cmd": "mkdir -p /opt/spawnables-services/penpot && curl -fsSL https://raw.githubusercontent.com/penpot/penpot/2.18.5/docker/images/docker-compose.yaml -o /opt/spawnables-services/penpot/compose.yaml"
+    },
+    {
+      "label": "up",
+      "cmd": "cd /opt/spawnables-services/penpot && docker compose up -d"
+    }
+  ],
+  "verify": "curl -sf http://localhost:9001 -o /dev/null",
+  "notes": "the oss figma alternative, self-hosted on the machine: the runner brings the official compose up at provisioning (pinned at tag 2.18.5) and docker's restart policy brings it back on every machine boot by itself - the agent never hand-rolls self-hosting. data lives in compose volumes, so pause/freeze/thaw carries the service and its data with the machine. local-first: it answers on localhost:9001; exposing it to the network is the owner's explicit choice, never a default. honest floors on the card: ~2gb ram, linux guests only"
+}

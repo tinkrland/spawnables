@@ -59,6 +59,7 @@ class MachineOrder:
     locale: str = "en-us"
     path_tools: list = field(default_factory=list)
     apps: list = field(default_factory=list)  # list[AppOrder]
+    services: list = field(default_factory=list)  # self-hosted services, e.g. penpot
     rice: dict | None = None
     users: list = field(default_factory=list)  # list[UserOrder]; os accounts
     grants: list = field(default_factory=list)  # list[GrantOrder]; agent access
@@ -80,6 +81,7 @@ class MachineOrder:
             locale=d.get("locale", "en-us"),
             path_tools=list(d.get("path_tools", [])),
             apps=[AppOrder(**a) for a in d.get("apps", [])],
+            services=list(d.get("services", [])),
             rice=d.get("rice"),
             users=[UserOrder(**u) for u in d.get("users", [])],
             grants=[GrantOrder(**g) for g in d.get("grants", [])],

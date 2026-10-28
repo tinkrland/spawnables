@@ -29,17 +29,19 @@ DEFAULTS = {
 
 # providers, per the owner's verdicts. all auth goes through vault
 # references (@@vault:ref@@), never the order.
-# - vpn lane: proton + windscribe. both ship open-source tunnels and
-#   kill switches; both hand out wireguard profiles (proton from the
-#   account, windscribe from its config generator / official rest api).
-#   configs land in the vault; the guest gets wg-quick.
+# - vpn lane: proton + windscribe + mullvad. all three are open
+#   source and battle-tested, and all three hand out wireguard
+#   profiles: proton from the account (or the open-source
+#   protonvpn-cli api path), windscribe via its config generator /
+#   official rest api, mullvad from its numbered account (single-hop
+#   or multihop). configs land in the vault; the guest gets wg-quick.
 # - dedicated ip lane: kernel or tailscale. kernel (kernel.sh, oss
 #   reference repo github.com/kernel/kernel-images) is the proxy
 #   infrastructure borrow; tailscale gives a stable exit node on a
 #   byo tailnet. tailscale left the vpn lane by this verdict.
 # - proxy pools (shared): residential reads as a home connection,
 #   commercial as business infrastructure.
-VPN_PROVIDERS = ("proton", "windscribe")
+VPN_PROVIDERS = ("proton", "windscribe", "mullvad")
 DEDICATED_IP_PROVIDERS = ("kernel", "tailscale")
 PROXY_POOLS = ("residential", "commercial", "dedicated")
 

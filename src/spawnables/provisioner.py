@@ -12,7 +12,9 @@ from .events import Emitter
 from .coherence import coherence_report, exit_story
 from .machinefp import guest_steps as machinefp_steps
 from .devctx import normalize as devctx_normalize, validate as devctx_validate, summary as devctx_summary
-from .netpriv import normalize as net_normalize, guest_steps, host_directives
+from .netpriv import (normalize as net_normalize, guest_steps,
+                      host_directives)
+from .vault import Vault, VaultError, refs_in as vault_refs_in
 
 STAGES = ("boot", "locale", "network", "tools", "apps", "rice", "snapshot")
 
@@ -43,11 +45,12 @@ LOCALE_CMD = {
 
 
 class Provisioner:
-    def __init__(self, order, catalog, adapter, emitter=None):
+    def __init__(self, order, catalog, adapter, emitter=None, vault=None):
         self.order = order
         self.catalog = catalog
         self.adapter = adapter
         self.emitter = emitter or Emitter()
+        self.vault = vault
 
     # -- planning ---------------------------------------------------------
 
@@ -124,7 +127,21 @@ class Provisioner:
     def _exec_checked(self, stage, cmd, label):
         em = self.emitter
         em.emit(f"provision.{stage}", "start", label)
-        result = self.adapter.exec(cmd)
+        cmd_exec = cmd
+        refs = vault_refs_in(cmd)
+        if refs:
+            # the value goes to the adapter, never to the events: the
+            # label above carries the ref, logs never carry the value.
+            if self.vault is None:
+                em.emit(f"provision.{stage}", "fail",
+                        f"{label}: @@vault:{refs[0]}@@ needs a vault; none configured")
+                return False
+            try:
+                cmd_exec = self.vault.resolve(cmd)
+            except VaultError as e:
+                em.emit(f"provision.{stage}", "fail", f"{label}: {e}")
+                return False
+        result = self.adapter.exec(cmd_exec)
         if not result.ok:
             em.emit(f"provision.{stage}", "fail", f"{label}: {result.stderr or result.stdout}".strip())
             return False
@@ -167,7 +184,8 @@ class Provisioner:
         section = devctx_normalize(self.order.device_context or {})
         for err in devctx_validate(section):
             self.emitter.emit("provision.devctx", "warn", err)
-        s = devctx_summary(self.order, os_name)
+        s = devctx_summary(self.order, os_name,
+                             self.catalog.image(self.order).get("persona_variant"))
         self.emitter.emit(
             "provision.devctx", "ok" if section["enabled"] else "skip",
             f"{s['machine']}; {s['device']}; behaviour: {s['behaviour']}")

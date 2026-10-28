@@ -39,10 +39,11 @@ FORBIDDEN_OUIS = ("52:54:00", "08:00:27", "00:0c:29", "00:50:56")
 # the uniform oem story now lives per guest os in devctx.DEVICE_PERSONAS
 # (a macbook on macos, a pixel on android, a latitude on linux/windows).
 # machinefp keeps the linux default importable for the runner.
-def oem_profile(os_name="linux"):
-    """the persona's smbios/disk identity for the host runner."""
+def oem_profile(os_name="linux", variant=None):
+    """the persona's smbios/disk identity for the host runner. the
+    variant (samsung, tablet) comes from the base image's lane."""
     from .devctx import persona
-    return persona(os_name)["smbios"]
+    return persona(os_name, variant)["smbios"]
 
 # boring hostnames people actually use, per language. a fresh vm called
 # "ubuntu" or "localhost" is a signal; "desk-pc" is furniture.

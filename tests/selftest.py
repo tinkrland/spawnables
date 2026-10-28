@@ -813,6 +813,17 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertTrue(validate_get_anyway(bad))
         self.assertIn("waiting-for-ipa", GET_ANYWAY_STATES)
 
+    def test_playcover_vm_conditions_and_workload_class_pinned(self):
+        of = open("spec/order-form.md").read()
+        self.assertIn("playcover in a spawned vm (the honest conditions)", of)
+        self.assertIn("apple-silicon-host-only", of)               # the lane requirement, restated
+        self.assertIn("metal-capable graphics device", of)          # gpu apps need it, stated
+        self.assertIn("software-renders", of)                       # the fallback, named
+        self.assertIn("unverified until the first apple-silicon host lands", of)  # no fake verification
+        self.assertIn("not for latency-free crisp film playback", of)  # the workload class verdict
+        self.assertIn("developer, designer and automation work", of)
+        self.assertIn("inside the grade we promise", of)            # software-render is utility-grade
+
     def test_get_anyway_and_darwin_vm_pinned_in_spec(self):
         of = open("spec/order-form.md").read()
         self.assertIn("the 'get anyway' button", of)

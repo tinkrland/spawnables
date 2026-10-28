@@ -1,0 +1,13 @@
+{
+  "id": "mo_mintdesk",
+  "name": "mintdesk",
+  "base_image": "mint-22-cinnamon",
+  "arch": "x86_64",
+  "size": { "vcpus": 2, "ram_mb": 4096, "disk_gb": 24 },
+  "timezone": "asia/kolkata",
+  "apps": [
+    { "recipe_id": "obsidian", "order_type": "native" },
+    { "recipe_id": "brave", "order_type": "native" }
+  ],
+  "services": ["penpot"]
+}

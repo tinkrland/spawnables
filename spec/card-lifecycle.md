@@ -4,6 +4,8 @@ every machine is a card in the web ui. the card is the control surface: watch it
 
 ## api
 
+served by [server.py](../src/spawnables/server.py), stdlib only, port 8600 by default; the gui at [web/index.html](../web/index.html) is its only face.
+
 ```
 POST   /api/machines              create + provision from a machine order
 GET    /api/machines              card grid

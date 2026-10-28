@@ -919,6 +919,177 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("presets are manifests, not a second schema", of)
         self.assertIn("student work", of)                         # workload class broadened
 
+    def _plane(self, tmpdir):
+        from spawnables.server import ControlPlane, serve
+        import threading, tempfile
+
+        def factory(order, image):
+            return FakeAdapter()
+        httpd = serve(CATALOG, adapter_factory=factory,
+                      presets_dir=tmpdir, web_dir="web", port=0)
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        port = httpd.server_address[1]
+        return httpd, f"http://127.0.0.1:{port}"
+
+    def _req(self, method, url, path, body=None):
+        import urllib.request, json as _json
+        data = _json.dumps(body).encode() if body is not None else None
+        r = urllib.request.Request(url + path, data=data, method=method,
+                                   headers={"content-type": "application/json"})
+        try:
+            with urllib.request.urlopen(r, timeout=5) as resp:
+                return resp.status, _json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            return e.code, _json.loads(e.read())
+
+    def test_control_plane_catalogs_and_validate(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            httpd, url = self._plane(d)
+            try:
+                st, j = self._req("GET", url, "/api/catalogs")
+                self.assertEqual(st, 200)
+                self.assertIn("mint-22-cinnamon", j["data"]["base_images"])  # distro selection renders from the table
+                self.assertIn("penpot", j["data"]["services"])
+                # an invalid order is rejected with the real reasons
+                st, j = self._req("POST", url, "/api/orders/validate",
+                                  {"manifest": {"id": "mo_x", "name": "x",
+                                   "base_image": "mint-22-cinnamon",
+                                   "timezone": "utc",
+                                   "apps": [{"recipe_id": "ghost",
+                                             "order_type": "native"}]}})
+                self.assertFalse(j["ok"])
+                self.assertTrue(any("unknown app" in e for e in j["errors"]))
+            finally:
+                httpd.shutdown()
+
+    def test_control_plane_provisions_and_verbs(self):
+        import tempfile, json as _json
+        with tempfile.TemporaryDirectory() as d:
+            httpd, url = self._plane(d)
+            try:
+                m = _json.load(open("orders/mint-desktop-smoke.json"))
+                st, j = self._req("POST", url, "/api/machines", {"manifest": m})
+                self.assertEqual(st, 200)   # mint + obsidian + brave + penpot provisions
+                self.assertEqual(j["data"]["state"], "ready")
+                # idempotency: same key, one pause
+                st, j = self._req("POST", url, "/api/machines/mo_mintdesk/pause",
+                                  {"idempotency_key": "k1"})
+                self.assertEqual(j["data"], "paused: processes end, files stay")
+                st, j = self._req("POST", url, "/api/machines/mo_mintdesk/pause",
+                                  {"idempotency_key": "k1"})
+                self.assertEqual(j["data"], "already-applied")
+                # burn demands the typed name
+                st, j = self._req("POST", url, "/api/machines/mo_mintdesk/burn",
+                                  {"confirm": "wrong-name"})
+                self.assertEqual(st, 409)
+                st, j = self._req("POST", url, "/api/machines/mo_mintdesk/burn",
+                                  {"confirm": "mintdesk"})
+                self.assertTrue(j["ok"])
+                st, j = self._req("GET", url, "/api/machines/mo_mintdesk/events")
+                self.assertTrue(any(e["stage"].startswith("provision") for e in j["data"]))
+            finally:
+                httpd.shutdown()
+
+    def test_control_plane_backend_refuses_honestly(self):
+        import tempfile
+        from spawnables.server import serve
+        with tempfile.TemporaryDirectory() as d:
+            httpd = serve(CATALOG, adapter_factory=None,
+                          presets_dir=d, web_dir="web", port=0)
+            import threading
+            threading.Thread(target=httpd.serve_forever, daemon=True).start()
+            url = f"http://127.0.0.1:{httpd.server_address[1]}"
+            try:
+                st, j = self._req("POST", url, "/api/machines",
+                                  {"manifest": {"id": "mo_z", "name": "z",
+                                   "base_image": "ubuntu-24-04-headless",
+                                   "timezone": "utc"}})
+                self.assertEqual(st, 503)   # honest: no backend, named reason
+                self.assertIn("no provision backend", j["error"])
+            finally:
+                httpd.shutdown()
+
+    def test_control_plane_duplicate_grants_get_anyway(self):
+        import tempfile, json as _json
+        with tempfile.TemporaryDirectory() as d:
+            httpd, url = self._plane(d)
+            try:
+                m = _json.load(open("orders/mint-desktop-smoke.json"))
+                self._req("POST", url, "/api/machines", {"manifest": m})
+                # duplicate: verbatim + fresh identity, tweak applied
+                st, j = self._req("POST", url, "/api/machines/mo_mintdesk/duplicate",
+                                  {"overrides": {"size": {"ram_mb": 8192}}})
+                self.assertNotEqual(j["data"]["draft"]["id"], "mo_mintdesk")
+                self.assertEqual(j["data"]["draft"]["size"]["ram_mb"], 8192)
+                self.assertEqual(j["data"]["draft"]["size"]["disk_gb"], 24)  # merge kept the rest
+                # grants: view is a window, not a key
+                st, j = self._req("POST", url, "/api/machines/mo_mintdesk/grants",
+                                  {"agent": "agent2", "mode": "view",
+                                   "paths": ["/downloads"]})
+                self.assertTrue(j["ok"])
+                st, j = self._req("POST", url, "/api/machines/mo_mintdesk/revoke",
+                                  {"agent": "agent2"})
+                self.assertTrue(j["ok"])
+                # get-anyway only exists on the macos lane
+                st, j = self._req("POST", url, "/api/machines/mo_mintdesk/get-anyway",
+                                  {"app_name": "some ipad app"})
+                self.assertEqual(st, 400)  # honest: this machine's os is linux
+            finally:
+                httpd.shutdown()
+
+    def test_control_plane_presets_endpoint(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            httpd, url = self._plane(d)
+            try:
+                st, j = self._req("POST", url, "/api/presets",
+                                  {"name": "Mint Student Box",
+                                   "manifest": {"id": "mo_p", "name": "p",
+                                    "base_image": "mint-22-cinnamon",
+                                    "timezone": "utc",
+                                    "services": ["penpot"]}})
+                self.assertTrue(j["ok"])
+                st, j = self._req("GET", url, "/api/presets")
+                self.assertIn("mint-student-box", j["data"])
+            finally:
+                httpd.shutdown()
+
+    def test_gui_single_file_lowercase(self):
+        html = open("web/index.html").read()
+        self.assertIn("text-transform:lowercase", html)      # the convention, body-wide
+        self.assertIn("/api/catalogs", html)                # pickers render from the tables
+        self.assertIn("/api/orders/validate", html)         # validation before promise
+        self.assertIn("/api/machines", html)                 # provision
+        self.assertIn("duplicate", html)                     # the duplicate button
+        self.assertIn("burn is forever", html)               # typed-name confirm copy
+        self.assertIn("get anyway", html)                    # the ipad-lane button
+        self.assertIn("not available on this mac", html)     # honest trigger copy
+        self.assertIn("title='this guest cannot'", html)     # verbs gray out honestly
+        self.assertNotIn("https://fonts", html)             # no external fonts, ever
+
+    def test_rootfs_build_definitions(self):
+        mint = open("runner/lanes/linux/rootfs/mint-22-cinnamon.Dockerfile").read()
+        self.assertIn("linuxmintd/mint22-amd64:latest", mint)   # verified on hub 2026-10-28
+        self.assertIn("cinnamon-core", mint)                    # the desktop env is real
+        ubuntu = open("runner/lanes/linux/rootfs/ubuntu-24-04-gnome.Dockerfile").read()
+        self.assertIn("ubuntu:24.04", ubuntu)
+        self.assertIn("gnome-shell", ubuntu)
+        # the build script refuses honestly without docker (this sandbox has none)
+        import subprocess
+        # this host has no docker, so the honest refusal is what runs
+        r = subprocess.run(["bash", "runner/lanes/linux/rootfs/build-rootfs.sh",
+                            "mint-22-cinnamon"], capture_output=True, text=True,
+                           timeout=10)
+        self.assertIn("ROOTFSNEEDSDOCKER", r.stdout)
+        self.assertNotEqual(r.returncode, 0)
+        # the mint desktop order validates against the catalog
+        import json as _json
+        m = _json.load(open("orders/mint-desktop-smoke.json"))
+        errors, _ = validate_order(MachineOrder.from_dict(m), CATALOG)
+        self.assertEqual(errors, [])
+
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]
         for os_name in ("linux", "windows", "macos", "android"):

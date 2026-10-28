@@ -1,65 +1,33 @@
 # spawnables
 
-turnkey agent-vm control plane. you decide what a machine looks like before it exists: os, distro, desktop, timezone, path tools, apps, even a rice to skin it with. spawnables provisions it as a celesto microvm on your own infra (bare metal, a vps, your gcp/aws/azure account), hands it to any agent over mcp/ssh, and the web ui treats every machine as a card you can pause, freeze, thaw, export, or burn. the device is dedicated, not ephemeral - the happycapy / cue.im / skydive lane. any os can be the standalone main driver (android or ios included), companions are optional and ephemeral, and a manual override can bind one agent to two or more dedicated devices. byoa: bring your own agent; byoc: bring your own cloud.
+agents keep getting handed a browser tab and a terminal, and every once in a while you notice how weird that is. spawnables is my attempt at the thing in between.
 
-built on open-source celesto (apache-2.0), not celesto cloud. bring your own compute; the control plane is the product.
+## the problem
 
-## the parts
+right now there are basically two ways to give an agent a computer, and both are kind of limiting.
 
-- [order form spec](spec/order-form.md): one data model, two sides. a machine order (what you want) and four catalogs (what exists): base images, path tools, app recipes, rices.
-- [card lifecycle spec](spec/card-lifecycle.md): the machine card api and states, from provisioning to burned.
-- [adapter contract](spec/adapters.md): one backend adapter per guest os route (celesto, android, vphone); capabilities gate the card verbs.
-- [multi-user machines](spec/multi-user.md): several os accounts on one machine, the way real shared computers work - machine identity shared, credentials in the vault, never in the manifest.
-- [the vault](src/spawnables/vault.py): secrets never ride in the order or the logs. orders store `@@vault:ref@@` references; the provisioner resolves at exec time (value to the adapter, ref to the events) and fails closed on a missing secret. single-use handoffs for drive grants, appiary-style: redeem once, shredded after.
-- [the control plane](src/spawnables/server.py): the card-lifecycle api, stdlib only - machines, verbs with idempotency keys, typed-name burn, events (json + sse), duplicate, presets, grants, get-anyway. binds 127.0.0.1; no backend configured means an honest 503, never a fake card.
-- [the gui](web/index.html): one file, no build step, no external fonts. the order form renders from the catalogs (os -> distro -> desktop, tools, apps, services, rice), validates before promising, and every card carries its verbs, grayed out per guest os.
-- [desktop rootfs builds](spawnables/linux/rootfs/build-rootfs.sh): mint-22-cinnamon + ubuntu-24-04-gnome rootfs definitions (hub bases verified 2026-10-28), built on a provision host with docker; refuses honestly without one.
-- [self-hosted services](catalog/services/penpot.json): docker instances that come up at provisioning and on every boot (penpot first) - the agent never hand-rolls self-hosting.
-- [duplication + presets](src/spawnables/presets.py): duplicate a card's manifest, tweak one thing, run; or save it as a named preset. one mechanism, presets are just kept copies.
-- [per-guest homes](spawnables/linux/readme.md): [linux](spawnables/linux/readme.md) (rootfs builds live in [linux/rootfs](spawnables/linux/rootfs/)), [windows](spawnables/windows/readme.md), [macos](spawnables/macos/readme.md), [android](spawnables/android/readme.md) ([samsung](spawnables/android/samsung/readme.md), [tablet](spawnables/android/tablet/readme.md)), [ios](spawnables/ios/readme.md), [ipad](spawnables/ipad/readme.md) - the honest workaround readme, never a claimed ipados.
-- [the orders tree](orders/readme.md): [modes](orders/modes/readme.md) ([gui](orders/modes/gui/readme.md), [cli](orders/modes/cli/readme.md)) plus [regular](orders/regular/readme.md), [advanced](orders/advanced/readme.md), and [security](orders/security/readme.md) settings, each with a lowercase readme.
-- [security tree](security/readme.md): [network](security/network/readme.md), [privacy](security/privacy/readme.md), [fingerprint-coherence](security/fingerprint-coherence/readme.md), [anti-machine-fingerprinting](security/anti-machine-fingerprinting/readme.md), [device-context](security/device-context/readme.md).
-- [lifecycle](lifecycle/readme.md): verbs, idempotency, the ephemeral companion story, duplicate/preset.
-- [access](access/readme.md): [multi-user](access/multi-user/readme.md) shared machines + [agent grants](access/agents/readme.md) (view-only on one path, shared drive with one sudo owner, any combination).
-- [setup](setup/readme.md): [apps](setup/apps/readme.md), [services](setup/services/readme.md) connected before you run it, [duplication](setup/duplication/readme.md).
-- [connect](connect/readme.md): [byoc](connect/byoc/readme.md) (bare metal, vps, gcp, aws, azure) + [byoa](connect/byoa/readme.md) (cloud and local agents).
-- [agent stable ids](src/spawnables/agentid.py): every agent principal gets a cryptographic, unalterable stable id distinct from its username; grants bind to the id, so a rename moves nothing.
-- [agent access grants](spec/access-grants.md): agents are principals - one agent can hold scoped access (view /downloads, say) on another agent's device with no os account anywhere; control-plane permission, per agent, per path, per mode, revocable.
-- [schemas](spec/schemas/): json schema drafts for every object.
-- [src/spawnables](src/spawnables): the provisioner skeleton. `validate` and `plan` run anywhere; `provision` runs on a host with celesto installed.
-- network & privacy (order form section 03): private dns (nextdns), proxy pools (residential / commercial / dedicated via kernel or tailscale), vpn exits (proton + windscribe, open-source tunnels and kill switches), mac spoofing, browser anti-fingerprinting, kill switch, spec matching to the vpn exit. guest-side steps run in the vm; host-side directives ride with the runner. secrets live in a vault, never in the order.
-- fingerprint coherence ([coherence.py](src/spawnables/coherence.py), [advanced controls](spec/advanced-controls.md)): the machine tells one story - timezone, language, date orientation, units, currency and exit geo must agree, or provisioning blocks. 'match specs to vpn' syncs the whole local feel of the machine to the exit instead.
-- machine-layer anti-fingerprinting ([machinefp.py](src/spawnables/machinefp.py), [the inverse playbook](spec/anti-fingerprint.md)): entropy is the enemy, so the fleet presents one boring uniform identity - plausible oem smbios and disk strings, real-vendor oui macs, fresh machine-id, boring hostnames, managed clock, distro-standard fonts - with hypervisor-level limits stated honestly on the card.
-- device context tuning ([devctx.py](src/spawnables/devctx.py), [the three fingerprints](spec/device-context.md)): a machine + device + behaviour layer per guest os that reads as one plausible single user's device system - a latitude on linux, a macbook on macos, a pixel for android companions - plus behaviour presets the byoa gui driver executes.
-- [catalog](catalog/): seed entries: 10 base images (ubuntu, mint, win11, win10, macos, android-x86, redroid, redroid-samsung, redroid-tablet, ios), path tools, 20 recipes - browsers (chrome, brave, vivaldi, zen, arc, shift, tor, duckduckgo, aside), apps (vscode, obsidian, notion, kicad, figma, netflix, clipchamp, zoom, whatsapp, spotify, termux) - and 2 rices. availability is stated honestly (arc is winding down but lives on windows and macos; notion on linux is the pwa, no official build exists). cad-heavy (fusion) and video-editing (after effects) apps are intentionally out of scope for now, and edge is not listed by default but nothing stops an agent from installing it after handoff - see [catalog/README.md](catalog/README.md).
-- [tests/selftest.py](tests/selftest.py): 68/68, stdlib only, no host needed. `python3 tests/selftest.py`. `python3 tests/selftest.py`.
+the first is the ephemeral sandbox. spin up a firecracker microvm, run the code, hand back stdout, throw it away. or the browser-automation lane: a real chrome somewhere, driven through the dom. both are turnkey, both are useful, and both are gone when the task ends. nothing persists, nothing accumulates, and the moment the work needs anything outside the terminal or the dom, the lane just stops existing.
 
-## design rules
+the second is the dedicated agent computer. there are real services now that give your agent its own always-on machine with its own little life, and honestly some of them are nice. the catch is they only exist inside packaged agent saas. the computer is yours the way a hotel room is yours: you check in, you use it, you leave. you do not pick the infrastructure, you do not pick the agent, and you do not really control the machine.
 
-- gui first. the desktop is the product, not a debugging view.
-- the order is stored with the machine forever: ordered vs verified is always visible, export carries the recipe with the data.
-- pause keeps your files. freeze keeps your open apps too. burn is forever, so it asks twice.
-- every catalog entry carries its own verify step. a card goes live only when everything it ordered passed.
-- the catalogs are the durable asset. plumbing is replaceable; the recipe registry is not.
+## the point
 
-## guest os support
+spawnables is not reinventing the wheel. the wheel is [celesto](https://github.com/celestoai/celesto) (apache-2.0, open source) and it is a good wheel. what spawnables adds is the easy path to an agent having its own fixed computer that is actually under your control.
 
-verified against celestoai/celesto on 2026-10-28. windows and macos guests exist, with real limits:
+fixed, not ephemeral: a spawned machine stays. it accumulates files, logins, state, a personality. you pause it, you freeze it, it is there tomorrow.
 
-| guest os | hosts | pause | freeze/thaw | agent bridge | export | notes |
-|---|---|---|---|---|---|---|
-| linux | linux x86_64 (qemu/kvm), firecracker | yes | yes (`full` snapshot) | yes (ssh, exec, mcp) | yes | the first-class path |
-| windows | linux x86_64 only | stop/start only | no (no snapshots) | ssh only | disk image only | build your own image from iso; no shared folders, no outbound-domain controls |
-| macos | apple silicon macs only | no | no | desktop only (no shell/exec/ssh) | no (images cannot leave the host) | fixed 4 vcpu / 8 gb / 80 gb, max 2 running, apple sla ties images to the host |
-| android | any linux host (spawnables adapter, not celesto) | yes on the vm route | unverified (vm route: plausible, container route: no) | adb only | yes (disk image) | three routes: android-x86 (qemu vm), redroid (container), cuttlefish; gui streams via scrcpy |
-| ios | apple silicon macs (vphone-cli), linux via qemu vresearch101 (vphone-linux, research-grade) | no | no | desktop only | no | experimental, bring-your-own-image tier; image sourcing is legally gated |
+yours, not rented: the machine runs on your infrastructure ([byoc](connect/byoc/readme.md): bare metal, a vps, gcp, aws, azure), driven by your agent ([byoa](connect/byoa/readme.md): cloud or local, any mcp client), with your model ([byollm](connect/byollm/readme.md)). spawnables holds no infrastructure, no agent, and no model of its own. the control plane is the product.
 
-android and ios are not celesto surfaces: they need spawnables backend adapters (see [order form](spec/order-form.md)). design consequence: card verbs gray out per guest os, the same pattern as the app availability matrix. linux cards get the full verb row; windows cards get pause and burn; macos cards get desktop view and burn; android cards get pause and burn with freeze pending verification; ios cards are desktop view and burn, experimental.
+clean, not opinionated: no skills baked into the os, ever. the machine ships exactly what you ordered and nothing else.
 
-## stance
+that is the whole pitch: the byoc + byoa + byollm trifecta, and the machine is a card you can pause, freeze, thaw, duplicate, export, or burn.
 
-gui first, cli available; but the backend gets built thoroughly first, because the field is scattered projects on github and the durable win is a correct core: manifest replay, vault-held secrets, capability-gated verbs, honest event streams. machines ship with what you ordered and nothing else - no skills baked into the os, ever. happycapy bakes skills in because their agent needs them; here the agent is yours (byoa) and brings its own.
+## beyond linux, beyond the browser
 
-## status
+to be fair, some sandbox options are open source and you can spin them up yourself. they are almost always linux sandboxes though. which is fine until the task is not a linux task.
 
-v0.1.2: spec, provisioner, adapters, network & privacy, and a **live green linux lane with every card verb verified**: provision, pause, resume, freeze (real full snapshot), thaw (restore with installed tools intact), and burn, all against a real ubuntu 24.04 guest on a tenki sandbox vm - see [the linux lane](runner/lanes/linux/spawn.md). the pipeline maps boot -> locale -> tools -> apps -> rice -> fresh-point snapshot with per-stage card events; card verbs are capability-gated per adapter; android and ios routes are stubbed to their real surfaces (adb, qemu vresearch101) with the boot integration landing with the first cloud host. what does not exist yet: the web ui, the mcp bridge, and real boots against celesto.
+a lot of real life runs through consumer apps that ship for windows, macos, android, or ios and never for linux. an agent living in a linux sandbox can only reach those through the browser, and the dom is exactly the part many of these apps do not have. spawnables is for when the work goes beyond the browser.
+
+so instead of pretending one size fits all, you bring the tool for the specific task: a [mint desktop](spawnables/linux/readme.md) when the work is human-ish, a [windows box](spawnables/windows/readme.md) when the app is a windows app, a [macos machine](spawnables/macos/readme.md) on real apple silicon for the apple-only ones (and [ipad apps via playcover](spawnables/ipad/readme.md)), an [android phone or tablet](spawnables/android/readme.md) when the work lives in phone apps. you customize what you think fits, before you spawn it up, down to the distro, the desktop, the apps, the rice, the network story. and every card says honestly what it can and cannot do.
+
+everything else lives in [directory.md](directory.md).

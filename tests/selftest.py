@@ -776,8 +776,8 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("future lane, not shipped", ac)  # honest about scope
 
     def test_access_grants_spec_is_linked(self):
-        readme = open("README.md").read()
-        self.assertIn("spec/access-grants.md", readme)
+        directory = open("directory.md").read()  # readme is prose; links live here
+        self.assertIn("spec/access-grants.md", directory)
         spec = open("spec/access-grants.md").read()
         self.assertIn("no os account", spec)          # control-plane only
         self.assertIn("drive implies view", spec)      # mode hierarchy stated
@@ -1202,6 +1202,46 @@ class TestCatalogRoster(unittest.TestCase):
         # the other root folders stay at repo root, outside the wrapper
         for f in ["security", "lifecycle", "access", "setup", "connect", "orders"]:
             self.assertTrue(pathlib.Path(f, "readme.md").is_file(), f)
+
+    def test_readme_is_prose_with_the_problem_and_the_trifecta(self):
+        readme = open("README.md").read()
+        # the two lanes that exist today, named
+        self.assertIn("firecracker", readme)                    # ephemeral sandboxes
+        self.assertIn("browser-automation", readme)             # or the dom lane
+        self.assertIn("saas", readme)                            # or packaged agent saas
+        # the point
+        self.assertIn("not reinventing the wheel", readme)
+        self.assertIn("fixed computer", readme)
+        self.assertIn("trifecta", readme)
+        self.assertIn("byollm", readme)
+        self.assertIn("no skills baked into the os", readme)     # kept needle
+        # beyond linux / beyond the browser
+        self.assertIn("linux sandboxes", readme)
+        self.assertIn("beyond the browser", readme)
+        self.assertIn("one size fits all", readme)
+        self.assertIn("before you spawn it up", readme)
+        # keeberia-casual, not a parts list
+        self.assertNotIn("## the parts", readme)
+        self.assertIn("[directory.md](directory.md)", readme)    # the map is linked
+        self.assertEqual(readme, readme.lower())                 # lowercase only
+
+    def test_directory_is_the_link_map(self):
+        d = open("directory.md").read()
+        for needle in ["spawnables/ipad/readme.md",          # the honest workaround
+                       "connect/byollm/readme.md",           # the trifecta is linked
+                       "src/spawnables/agentid.py",
+                       "orders/modes/gui/readme.md",
+                       "security/anti-machine-fingerprinting/readme.md",
+                       "runner/lanes" if "runner/lanes](runner/" in d else "runner/"]:
+            self.assertIn(needle, d)
+        self.assertEqual(d, d.lower())                         # lowercase only
+
+    def test_byollm_the_third_of_the_trifecta(self):
+        b = open("connect/byollm/readme.md").read()
+        self.assertIn("model-blind", b)         # the control plane never calls an llm
+        self.assertIn("trifecta", b)
+        c = open("connect/readme.md").read()
+        self.assertIn("byollm", c)              # listed alongside byoc and byoa
 
     def test_modes_gui_first_in_the_browser(self):
         modes = open("orders/modes/readme.md").read()

@@ -91,10 +91,25 @@ computer" - a hosted cloud machine (their infra, runs 24/7, separate
 from your computer) with a skill store and frontier models built in.
 spawnables answers a different question: whose computer is it? byoc
 puts the machine on infrastructure you already own and byoa makes
-the agent yours - we do not sell skills or models, we sell the
-machine: a real, persistent, device-context-tuned os (any guest os,
-android and ios included) that any agent can drive. happycapy is a
-service you rent; spawnables is a machine you own.
+the agent yours - we sell the machine, not skills or models. and the
+machine is more machine:
+
+- **you pick the device.** with happycapy you get their computer,
+  whatever it is. with spawnables you order the os, distro, desktop,
+  apps, persona - a linux box, a windows box, an android phone, a
+  mac; main driver or companion, dedicated or ephemeral.
+- **privacy and plausibility are baked in.** section 03 (private dns,
+  tunnels, kill switch, mac spoof, browser hardening) and the device
+  context layers ship with every machine. a hosted agent computer
+  has none of that - it is their network, their story.
+- **overnight is not a moat.** "can my agent work while i sleep"
+  works here too: the machine runs 24/7 because it is a vm on your
+  infra, and overnight / hands-free mode is a setup choice - tell the
+  agent to run the task overnight and wake up to it done, or set a
+  schedule. nothing about that requires renting someone's computer.
+- **no skills baked in.** our vms ship with what you ordered and
+  nothing else. skills belong to the agent (byoa), not the machine -
+  a skill store in the os is bloat we refuse.
 ## honest edges
 
 - behaviour is only as good as the driver: spawnables publishes the

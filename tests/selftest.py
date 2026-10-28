@@ -782,6 +782,28 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("drive implies view", spec)      # mode hierarchy stated
         self.assertIn("revocable", spec)
 
+    def test_ipad_lane_recipe_honest(self):
+        pc = CATALOG.recipes["playcover"]
+        self.assertIsNotNone(pc)  # the runner ships, gpl-3.0
+        self.assertEqual(pc["availability"], {"macos": ["native"]})  # apple silicon only
+        joined = " ".join(pc["orders"]["native"]["macos"]["steps"])
+        self.assertIn("github.com/PlayCover/PlayCover/releases", joined)  # official release
+        self.assertIn("hdiutil", joined)  # real mac install, not a web promise
+        self.assertIn("playcover.app", pc["orders"]["native"]["macos"]["verify"])
+        # windows/linux cannot order it
+        errors, _ = validate_order(order(base_image="mint-22-cinnamon", apps=[{"recipe_id": "playcover", "order_type": "native"}]), CATALOG)
+        self.assertTrue(any("not available" in e for e in errors))
+        # notes never claim ipados
+        self.assertIn("never claims ipados", pc["notes"])
+
+    def test_ipad_lane_spec_pins_the_workaround(self):
+        of = open("spec/order-form.md").read()
+        self.assertIn("the ipad lane (the honest workaround)", of)
+        self.assertIn("apple silicon macs run ipad apps natively", of)
+        self.assertIn("never claiming ipados", of)   # the costume refusal stands
+        self.assertIn("user-provided (decrypted)", of)  # we ship the runner, not apps
+        self.assertIn("playcover", of)
+
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]
         for os_name in ("linux", "windows", "macos", "android"):

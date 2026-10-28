@@ -1070,16 +1070,16 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertNotIn("https://fonts", html)             # no external fonts, ever
 
     def test_rootfs_build_definitions(self):
-        mint = open("runner/lanes/linux/rootfs/mint-22-cinnamon.Dockerfile").read()
+        mint = open("linux/rootfs/mint-22-cinnamon.Dockerfile").read()
         self.assertIn("linuxmintd/mint22-amd64:latest", mint)   # verified on hub 2026-10-28
         self.assertIn("cinnamon-core", mint)                    # the desktop env is real
-        ubuntu = open("runner/lanes/linux/rootfs/ubuntu-24-04-gnome.Dockerfile").read()
+        ubuntu = open("linux/rootfs/ubuntu-24-04-gnome.Dockerfile").read()
         self.assertIn("ubuntu:24.04", ubuntu)
         self.assertIn("gnome-shell", ubuntu)
         # the build script refuses honestly without docker (this sandbox has none)
         import subprocess
         # this host has no docker, so the honest refusal is what runs
-        r = subprocess.run(["bash", "runner/lanes/linux/rootfs/build-rootfs.sh",
+        r = subprocess.run(["bash", "linux/rootfs/build-rootfs.sh",
                             "mint-22-cinnamon"], capture_output=True, text=True,
                            timeout=10)
         self.assertIn("ROOTFSNEEDSDOCKER", r.stdout)
@@ -1089,6 +1089,43 @@ class TestCatalogRoster(unittest.TestCase):
         m = _json.load(open("orders/mint-desktop-smoke.json"))
         errors, _ = validate_order(MachineOrder.from_dict(m), CATALOG)
         self.assertEqual(errors, [])
+
+    def test_os_home_folders_with_honest_readmes(self):
+        ipad = open("ipad/readme.md").read()
+        self.assertIn("we do not claim one", ipad)              # the honest stance, first
+        self.assertIn("ipad apps on macos", ipad)
+        self.assertNotIn("ipados guest", ipad.replace("there is no ipados guest", ""))  # never claimed
+        self.assertIn("waiting-for-ipa", ipad)                  # the get-anyway states
+        self.assertIn("never fetch the app", ipad)              # the refusal, restated
+        self.assertTrue(open("ios/readme.md").read().count("vphone") >= 1)
+        self.assertIn("bring-your-own-image", open("ios/readme.md").read())
+        samsung = open("android/samsung/readme.md").read()
+        self.assertIn("store- or vendor-gated", samsung)        # why the persona exists
+        self.assertIn("honest ceiling", samsung)                 # the aosp-in-a-costume truth
+        tablet = open("android/tablet/readme.md").read()
+        self.assertIn("not new machinery", tablet)               # persona differences, honestly scoped
+        self.assertIn("touch presets", tablet)
+        self.assertIn("tcg patch", open("linux/readme.md").read())
+        self.assertIn("gray out", open("windows/readme.md").read())
+        self.assertIn("apple-silicon host only", open("macos/readme.md").read())
+
+    def test_orders_tree_modes_and_settings(self):
+        base = open("orders/readme.md").read()
+        self.assertIn("rebuild-from-manifest", base)            # the resize stance
+        for f in ["modes/readme.md", "modes/gui/readme.md",
+                  "modes/cli/readme.md", "regular/readme.md",
+                  "advanced/readme.md", "security/readme.md"]:
+            body = open(f"orders/{f}").read()
+            self.assertGreater(len(body), 200)                    # exists and actually explains
+            self.assertEqual(body, body.lower())                # lowercase only
+        gui = open("orders/modes/gui/readme.md").read()
+        self.assertIn("idempotency keys", gui)
+        cli = open("orders/modes/cli/readme.md").read()
+        self.assertIn("python3 -m spawnables", cli)
+        self.assertIn("no mode is second-class", cli)            # one model, two surfaces
+        sec = open("orders/security/readme.md").read()
+        self.assertIn("never an os account", sec)               # grants stance
+        self.assertIn("fails\n  closed", sec)                  # vault fails closed
 
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]

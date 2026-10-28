@@ -537,7 +537,7 @@ class TestCatalogRoster(unittest.TestCase):
 
     def test_browser_roster_is_complete(self):
         browsers = ("chrome", "brave", "vivaldi", "zen", "arc", "shift",
-                     "tor", "duckduckgo")
+                     "tor", "duckduckgo", "aside")
         for b in browsers:
             self.assertIn(b, CATALOG.recipes, f"{b} missing from the roster")
             self.assertEqual(CATALOG.recipes[b]["category"], "browser")
@@ -555,6 +555,10 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertEqual(sorted(ddg["availability"]), ["macos", "windows"])  # no linux build
         zen = CATALOG.recipes["zen"]
         self.assertIn("not chromium", zen["notes"].lower())
+        aside = CATALOG.recipes["aside"]  # ai-native: windows + macos only
+        self.assertEqual(sorted(aside["availability"]), ["macos", "windows"])
+        self.assertTrue(any("releases.aside.com" in s for s in aside["orders"]["native"]["windows"]["steps"]))
+        self.assertTrue(any("releases.aside.com" in s for s in aside["orders"]["native"]["macos"]["steps"]))
 
     def test_every_browser_native_lane_carries_a_verify(self):
         for rid, r in CATALOG.recipes.items():

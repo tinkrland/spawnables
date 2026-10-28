@@ -86,6 +86,15 @@ honest ceiling - which is a capability note, not a role restriction.
 every device inherits a persona of its own and keeps it whether it is
 the main driver or a companion.
 
+the lane, checked 2026-10-28: happycapy.ai sells an "agent-native
+computer" - a hosted cloud machine (their infra, runs 24/7, separate
+from your computer) with a skill store and frontier models built in.
+spawnables answers a different question: whose computer is it? byoc
+puts the machine on infrastructure you already own and byoa makes
+the agent yours - we do not sell skills or models, we sell the
+machine: a real, persistent, device-context-tuned os (any guest os,
+android and ios included) that any agent can drive. happycapy is a
+service you rent; spawnables is a machine you own.
 ## honest edges
 
 - behaviour is only as good as the driver: spawnables publishes the

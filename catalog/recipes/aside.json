@@ -1,0 +1,32 @@
+{
+  "recipe_id": "aside",
+  "category": "browser",
+  "orders": {
+    "native": {
+      "windows": {
+        "manager": "download",
+        "steps": [
+          "powershell -c \"iwr https://releases.aside.com/dev-updater/windows/1.0.1022.1/AsideInstaller-1.0.1022.1-win-x64.exe -outfile $env:TEMP\\aside.exe; &$env:TEMP\\aside.exe /S\""
+        ],
+        "verify": "test -d \"$env:LOCALAPPDATA\\programs\\aside\""
+      },
+      "macos": {
+        "manager": "download",
+        "steps": [
+          "curl -fsSL -o /tmp/aside.dmg https://releases.aside.com/dev-updater/Aside-1.0.1022.1-x64.dmg && hdiutil attach -nobrowse /tmp/aside.dmg && cp -R /volumes/aside/aside.app /applications/"
+        ],
+        "verify": "ls /applications/aside.app"
+      }
+    }
+  },
+  "availability": {
+    "windows": [
+      "native"
+    ],
+    "macos": [
+      "native"
+    ]
+  },
+  "disk_mb_est": 450,
+  "notes": "ai-native browser (yc): rebuilt for people and agents, works across your logged-in sites - an agent workbench more than a privacy play. no linux build. release pin: 1.0.1022.1 (dev-updater feed; versions bump)"
+}

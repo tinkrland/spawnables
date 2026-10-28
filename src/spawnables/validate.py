@@ -48,6 +48,20 @@ def validate_order(order, catalog):
         seen_users.add(u.username)
         if u.rice and catalog.rices.get(u.rice.get("rice_id")) is None:
             errors.append(f"user '{u.username}': unknown rice '{u.rice.get('rice_id')}'")
+    seen_grants = set()
+    for g in getattr(order, "grants", []) or []:
+        if g.mode not in ("view", "drive"):
+            errors.append(f"grant for '{g.agent}': mode must be view or drive")
+        if not g.agent or not isinstance(g.agent, str):
+            errors.append("grants need an agent name")
+        for path in g.paths:
+            if not path.startswith("/"):
+                errors.append(f"grant for '{g.agent}': paths must be absolute, got '{path}'")
+        key = (g.agent, g.mode, tuple(g.paths))
+        if key in seen_grants:
+            errors.append(f"grant for '{g.agent}': same {g.mode} grant listed twice")
+        seen_grants.add(key)
+
     if order.users and os_name in ("android", "ios"):
         warnings.append(f"{os_name} has no multi-user lane; users are skipped at provision")
 

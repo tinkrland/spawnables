@@ -660,6 +660,62 @@ class TestCatalogRoster(unittest.TestCase):
         readme = open("README.md").read()
         self.assertIn("no skills baked into the os", readme)
 
+    def test_agent_grants_parse_and_validate(self):
+        o = order(grants=[{"agent": "agent2", "mode": "view", "paths": ["/downloads"]},
+                           {"agent": "agent3", "mode": "drive"}])
+        self.assertEqual(o.grants[0].paths, ["/downloads"])
+        errors, _ = validate_order(o, CATALOG)
+        self.assertEqual(errors, [])  # scoped view + drive grants pass
+
+    def test_agent_grants_validation_rejects_junk(self):
+        o = order(grants=[{"agent": "a2", "mode": "rw", "paths": ["/downloads"]},   # bad mode
+                           {"agent": "a3", "mode": "view", "paths": ["downloads"]},  # relative path
+                           {"agent": "a4", "mode": "view", "paths": ["/downloads"]},
+                           {"agent": "a4", "mode": "view", "paths": ["/downloads"]}])  # dup
+        errors, _ = validate_order(o, CATALOG)
+        self.assertTrue(any("view or drive" in e for e in errors))
+        self.assertTrue(any("absolute" in e for e in errors))
+        self.assertTrue(any("listed twice" in e for e in errors))
+
+    def test_grants_live_on_the_card_with_scoped_view(self):
+        from spawnables.lifecycle import Machine, AccessError
+        o = order(grants=[{"agent": "agent2", "mode": "view", "paths": ["/downloads"]}])
+        m = Machine(o, FakeAdapter())
+        self.assertTrue(m.access("agent2", "view", "/downloads/report.zip"))
+        self.assertFalse(m.access("agent2", "view", "/etc/passwd"))  # scope is a wall
+        self.assertFalse(m.access("agent2", "drive"))  # view never escalates
+        m.grant("agent3", "drive")
+        self.assertTrue(m.access("agent3", "drive"))
+        self.assertTrue(m.access("agent3", "view", "/etc/passwd"))  # drive implies all view
+        self.assertEqual(m.grant("agent2", "view", ["/downloads"]), "already granted: agent2 view")
+        self.assertEqual(m.revoke("agent2"), "revoked agent2")
+        self.assertFalse(m.access("agent2", "view", "/downloads/x"))
+        self.assertEqual(m.revoke("agent2"), "nothing to revoke")
+        with self.assertRaises(AccessError):
+            m.authorize("agent2", "drive")  # view-only agents cannot drive or burn
+        with self.assertRaises(AccessError):
+            m.authorize("agent2", "view", "/etc/passwd")
+        m.authorize("agent3", "drive")  # drive agents pass
+
+    def test_grant_idempotency_and_manifest_seeding(self):
+        from spawnables.lifecycle import Machine
+        m = Machine(order(), FakeAdapter())
+        first = m.grant("agent2", "view", ["/downloads"], idempotency_key="k1")
+        self.assertTrue(first.startswith("granted"))
+        self.assertEqual(m.grant("agent2", "view", ["/downloads"], idempotency_key="k1"),
+                         "already-applied")  # flaky browser double-send acts once
+        self.assertEqual(len(m.grants), 1)
+        self.assertEqual(m.revoke("agent2", idempotency_key="k2"), "revoked agent2")
+        self.assertEqual(m.revoke("agent2", idempotency_key="k2"), "already-applied")
+
+    def test_access_grants_spec_is_linked(self):
+        readme = open("README.md").read()
+        self.assertIn("spec/access-grants.md", readme)
+        spec = open("spec/access-grants.md").read()
+        self.assertIn("no os account", spec)          # control-plane only
+        self.assertIn("drive implies view", spec)      # mode hierarchy stated
+        self.assertIn("revocable", spec)
+
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]
         for os_name in ("linux", "windows", "macos", "android"):

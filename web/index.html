@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>spawnables</title>
+<style>
+  :root { --ink:#1c1c1c; --dim:#666; --line:#e3e0da; --card:#faf9f6; --accent:#2f6f4f; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:ui-monospace,monospace; color:var(--ink);
+         background:#f4f2ed; text-transform:lowercase; }
+  header { padding:14px 22px; border-bottom:1px solid var(--line);
+           display:flex; gap:18px; align-items:baseline; background:var(--card); }
+  header h1 { font-size:15px; margin:0; letter-spacing:.04em; }
+  header span { color:var(--dim); font-size:12px; }
+  main { display:grid; grid-template-columns: 400px 1fr; gap:18px; padding:18px 22px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:8px;
+            padding:14px 16px; }
+  h2 { font-size:12px; color:var(--dim); margin:2px 0 10px; letter-spacing:.06em; }
+  label { display:block; font-size:11px; color:var(--dim); margin:10px 0 3px; }
+  select, input[type=text], input[type=number] { width:100%; padding:6px 8px;
+        font:inherit; background:#fff; border:1px solid var(--line); border-radius:6px; }
+  .row { display:flex; gap:10px; } .row > * { flex:1; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { font-size:11px; border:1px solid var(--line); border-radius:999px;
+          padding:3px 9px; cursor:pointer; user-select:none; background:#fff; }
+  .chip.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .chip.off { opacity:.35; cursor:not-allowed; }
+  button { font:inherit; font-size:12px; padding:7px 14px; border-radius:6px;
+           border:1px solid var(--ink); background:var(--ink); color:#fff; cursor:pointer; }
+  button.ghost { background:#fff; color:var(--ink); border-color:var(--line); }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  #flash { font-size:11px; white-space:pre-wrap; margin:10px 0; }
+  .bad { color:#a33; } .warn { color:#a76a00; } .good { color:var(--accent); }
+  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+           gap:14px; }
+  .card { border:1px solid var(--line); border-radius:8px; padding:12px 14px;
+          background:#fff; }
+  .card h3 { margin:0 0 2px; font-size:13px; }
+  .card .meta { font-size:11px; color:var(--dim); margin-bottom:8px; }
+  .verbs { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+  .verbs button { padding:4px 9px; font-size:11px; }
+  .events { font-size:10px; max-height:120px; overflow:auto; background:var(--card);
+            border-radius:6px; padding:6px 8px; margin-top:6px; white-space:pre-wrap; }
+  dialog { border:1px solid var(--line); border-radius:8px; font:inherit;
+           text-transform:lowercase; padding:18px; }
+  dialog::backdrop { background:rgba(0,0,0,.4); }
+</style>
+</head>
+<body>
+<header>
+  <h1>spawnables</h1>
+  <span>the card is the control surface</span>
+  <span id="backend"></span>
+</header>
+<main>
+  <section id="orderform">
+    <h2>order a machine</h2>
+    <label>os</label><select id="f_os"></select>
+    <label>distro / desktop</label><select id="f_image"></select>
+    <label>name</label><input id="f_name" type="text" placeholder="evie-desk">
+    <label>timezone</label><input id="f_tz" type="text" value="asia/kolkata">
+    <div class="row">
+      <div><label>vcpus</label><input id="f_vcpus" type="number" value="2" min="1" max="8"></div>
+      <div><label>ram (mb)</label><input id="f_ram" type="number" value="4096" min="1024" step="512"></div>
+      <div><label>disk (gb)</label><input id="f_disk" type="number" value="40" min="8"></div>
+    </div>
+    <label>path tools</label><div class="chips" id="f_tools"></div>
+    <label>apps</label><div class="chips" id="f_apps"></div>
+    <label>self-hosted services</label><div class="chips" id="f_services"></div>
+    <label>rice</label><select id="f_rice"><option value="">none</option></select>
+    <label>network: vpn exit</label>
+    <div class="row">
+      <select id="f_vpn_provider">
+        <option value="">no vpn</option>
+        <option value="proton">proton</option>
+        <option value="windscribe">windscribe</option>
+        <option value="mullvad">mullvad</option>
+      </select>
+      <input id="f_vpn_ref" type="text" placeholder="vault ref (wg-main)">
+    </div>
+    <div class="chips" id="f_netflags">
+      <span class="chip" data-k="kill_switch">kill switch</span>
+      <span class="chip" data-k="match_specs_to_vpn">match specs to exit</span>
+    </div>
+    <div id="flash"></div>
+    <div class="row">
+      <button class="ghost" id="b_validate">validate</button>
+      <button id="b_provision">provision</button>
+    </div>
+    <button class="ghost" id="b_save_preset">save as preset</button>
+  </section>
+
+  <section id="cardssection">
+    <h2>machines</h2>
+    <div class="cards" id="cards"></div>
+  </section>
+</main>
+
+<dialog id="burn_dlg">
+  <p id="burn_msg"></p>
+  <input id="burn_input" type="text" placeholder="type the machine's name">
+  <div class="row" style="margin-top:10px">
+    <button class="ghost" id="burn_cancel">cancel</button>
+    <button id="burn_go">burn forever</button>
+  </div>
+</dialog>
+<dialog id="preset_dlg">
+  <p>name this preset</p>
+  <input id="preset_name" type="text" placeholder="design student box">
+  <div class="row" style="margin-top:10px">
+    <button class="ghost" id="preset_cancel">cancel</button>
+    <button id="preset_go">keep it</button>
+  </div>
+</dialog>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let CAT = {base_images:{}, path_tools:{}, recipes:{}, rices:{}, services:{}};
+const picked = {tools:new Set(), apps:new Set(), services:new Set(),
+                net:new Set()};
+
+async function api(method, path, body) {
+  const r = await fetch(path, {method,
+    headers: {"content-type": "application/json"},
+    body: body ? JSON.stringify(body) : undefined});
+  const j = await r.json().catch(() => ({ok:false, error:"bad json"}));
+  return {status:r.status, ...j};
+}
+
+function flash(msg, cls) {
+  $("flash").innerHTML = cls ? `<span class="${cls}">${msg}</span>` : msg;
+}
+
+function manifest() {
+  const img = CAT.base_images[$("f_image").value] || {};
+  const m = {
+    id: "mo_" + Math.random().toString(36).slice(2, 7),
+    name: $("f_name").value || img.id + "-desk",
+    base_image: img.id || Object.keys(CAT.base_images)[0],
+    timezone: $("f_tz").value,
+    size: {vcpus: +$("f_vcpus").value, ram_mb: +$("f_ram").value,
+           disk_gb: +$("f_disk").value},
+    path_tools: [...picked.tools],
+    apps: [...picked.apps].map(a => ({recipe_id: a, order_type: "native"})),
+    services: [...picked.services],
+  };
+  if ($("f_rice").value) m.rice = {rice_id: $("f_rice").value};
+  const net = {};
+  if ($("f_vpn_provider").value) {
+    net.vpn = true; net.vpn_provider = $("f_vpn_provider").value;
+    net.vpn_config_ref = $("f_vpn_ref").value || "wg-main";
+  }
+  picked.net.forEach(k => net[k] = true);
+  if (Object.keys(net).length) m.network = net;
+  return m;
+}
+
+function os_list() {
+  const oses = [...new Set(Object.values(CAT.base_images).map(i => i.os))];
+  $("f_os").innerHTML = oses.map(o => `<option>${o}</option>`).join("");
+  $("f_os").onchange = fill_images;
+  fill_images();
+}
+
+function fill_images() {
+  const os = $("f_os").value;
+  const imgs = Object.values(CAT.base_images).filter(i => i.os === os);
+  $("f_image").innerHTML = imgs.map(i =>
+    `<option value="${i.id}">${i.distro} ${i.version} · ${i.desktop_env}</option>`).join("");
+  fill_chips(os);
+  fill_rices();
+}
+
+function chips(el, items, set) {
+  el.innerHTML = "";
+  for (const it of items) {
+    const c = document.createElement("span");
+    c.className = "chip" + (set.has(it) ? " on" : "");
+    c.textContent = it;
+    c.onclick = () => { set.has(it) ? set.delete(it) : set.add(it);
+                        c.classList.toggle("on"); };
+    el.appendChild(c);
+  }
+}
+
+function fill_chips(os) {
+  const img = CAT.base_images[$("f_image").value] || {};
+  const avail = (table) => Object.values(table).filter(
+    t => (t.availability?.[os] || t.os === [os] || t.os?.includes?.(os) ||
+          t.installs?.[img.distro_family]));
+  chips($("f_tools"), Object.keys(CAT.path_tools).filter(
+    t => CAT.path_tools[t].installs?.[img.distro_family]), picked.tools);
+  chips($("f_apps"), avail(CAT.recipes).map(r => r.recipe_id), picked.apps);
+  chips($("f_services"), Object.values(CAT.services).filter(
+    s => s.os?.includes?.(os)).map(s => s.service_id), picked.services);
+}
+
+function fill_rices() {
+  const img = CAT.base_images[$("f_image").value] || {};
+  const ok = Object.values(CAT.rices).filter(
+    r => (r.compatible_desktops || []).includes(img.desktop_env));
+  $("f_rice").innerHTML = '<option value="">none</option>' +
+    ok.map(r => `<option value="${r.rice_id}">${r.rice_id}</option>`).join("");
+}
+
+$("f_netflags").querySelectorAll(".chip").forEach(c => {
+  c.onclick = () => { const k = c.dataset.k;
+    picked.net.has(k) ? picked.net.delete(k) : picked.net.add(k);
+    c.classList.toggle("on"); };
+});
+
+$("b_validate").onclick = async () => {
+  const r = await api("POST", "/api/orders/validate", {manifest: manifest()});
+  if (r.ok) flash("valid order. nothing promised, everything checked.", "good");
+  else flash(r.errors.join("\n"), "bad");
+  if (r.warnings?.length) flash(r.errors.join("\n") + "\n" +
+    r.warnings.join("\n"), r.ok ? "warn" : "bad");
+};
+
+$("b_provision").onclick = async () => {
+  const r = await api("POST", "/api/machines", {manifest: manifest()});
+  if (!r.ok) { flash(r.error, "bad"); return; }
+  flash("provisioned. the card is live.", "good");
+  refresh_cards();
+};
+
+$("b_save_preset").onclick = () => $("preset_dlg").showModal();
+$("preset_go").onclick = async () => {
+  const r = await api("POST", "/api/presets",
+    {name: $("preset_name").value, manifest: manifest(),
+     description: "saved from the order form"});
+  $("preset_dlg").close();
+  flash(r.ok ? "preset kept." : r.error, r.ok ? "good" : "bad");
+};
+
+async function refresh_cards() {
+  const r = await api("GET", "/api/machines");
+  if (!r.ok) return;
+  const el = $("cards");
+  el.innerHTML = "";
+  for (const c of r.data) {
+    const d = document.createElement("div");
+    d.className = "card";
+    const verbs = c.verbs || {};
+    const b = (v, label) =>
+      `<button ${verbs[v] ? "" : "disabled title='this guest cannot'"}>
+       ${label}</button>`;
+    d.innerHTML = `
+      <h3>${c.name}</h3>
+      <div class="meta">${c.base_image} · ${c.state}</div>
+      <div class="verbs">
+        ${b("pause", "pause")} ${b("resume", "resume")}
+        ${b("freeze", "freeze")} ${b("thaw", "thaw")}
+        ${b("export", "export")}
+        <button data-burn="${c.id}">burn</button>
+        <button class="ghost" data-dup="${c.id}">duplicate</button>
+        <button class="ghost" data-ga="${c.id}">get anyway</button>
+      </div>
+      <div class="events" id="ev_${c.id}">loading events…</div>`;
+    el.appendChild(d);
+    d.querySelector("[data-dup]").onclick = async () => {
+      const r2 = await api("POST", `/api/machines/${c.id}/duplicate`,
+        {overrides: {}, name: c.name + " copy"});
+      if (r2.ok) {
+        $("f_name").value = r2.data.draft.name;
+        flash("duplicate drafted: tweak one thing, then provision.", "good");
+      }
+    };
+    d.querySelector("[data-ga]").onclick = async () => {
+      const app = prompt("which app showed 'not available on this mac'?");
+      if (!app) return;
+      const r2 = await api("POST", `/api/machines/${c.id}/get-anyway`,
+        {app_name: app});
+      flash(r2.ok ? `get anyway: ${r2.data.state} - the ipa arrives by ` +
+           `handoff, never a fetch.` : r2.error, r2.ok ? "good" : "bad");
+    };
+    d.querySelector("[data-burn]").onclick = () => {
+      $("burn_msg").textContent = `burn is forever: disk, snapshots, ` +
+        `exports, and the stored order for '${c.name}' are shredded. ` +
+        `type the machine's name to confirm.`;
+      $("burn_input").value = "";
+      $("burn_dlg").showModal();
+      $("burn_go").onclick = async () => {
+        const r2 = await api("POST", `/api/machines/${c.id}/burn`,
+          {confirm: $("burn_input").value,
+           idempotency_key: "burn-" + Date.now()});
+        $("burn_dlg").close();
+        if (r2.ok) refresh_cards();
+        else flash(r2.error, "bad");
+      };
+    };
+    for (const v of ["pause", "resume", "freeze", "thaw"]) {
+      const btn = [...d.querySelectorAll(".verbs button")]
+        .find(x => x.textContent === v);
+      if (btn && verbs[v]) btn.onclick = async () => {
+        const r2 = await api("POST", `/api/machines/${c.id}/${v}`,
+          {idempotency_key: v + "-" + Date.now()});
+        if (r2.ok) { refresh_cards(); }
+        else flash(r2.error, "bad");
+      };
+    }
+    const ev = await api("GET", `/api/machines/${c.id}/events`);
+    d.querySelector(`#ev_${c.id}`).textContent =
+      (ev.data || []).map(e => `${e.stage} ${e.status} ${e.detail}`)
+      .join("\n").slice(0, 2000) || "quiet machine.";
+  }
+}
+
+$("burn_cancel").onclick = () => $("burn_dlg").close();
+$("preset_cancel").onclick = () => $("preset_dlg").close();
+
+(async () => {
+  const r = await api("GET", "/api/catalogs");
+  if (r.ok) { CAT = r.data; os_list(); }
+  $("backend").textContent = r.ok ? "" : "catalogs unreachable";
+  refresh_cards();
+  setInterval(refresh_cards, 15000);
+})();
+</script>
+</body>
+</html>

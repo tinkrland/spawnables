@@ -1237,6 +1237,10 @@ class TestCatalogRoster(unittest.TestCase):
         # the cli exists beside the gui
         self.assertIn("cli", readme)
         self.assertIn("neither second-class", readme)
+        # rice: useless to an agent, kept for the human touch
+        self.assertIn("useless to an agent", readme)
+        self.assertIn("feel homey", readme)
+        self.assertIn("rice catalog", readme)
         # keeberia-casual, not a parts list
         self.assertNotIn("## the parts", readme)
         self.assertIn("[directory.md](directory.md)", readme)    # the map is linked

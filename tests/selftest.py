@@ -1127,6 +1127,78 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("never an os account", sec)               # grants stance
         self.assertIn("fails\n  closed", sec)                  # vault fails closed
 
+    def test_agent_stable_ids_unalterable_and_not_the_username(self):
+        import tempfile
+        from spawnables.agentid import AgentRegistry, prove, stable_id_for
+        with tempfile.TemporaryDirectory() as d:
+            reg = AgentRegistry(f"{d}/agents.json")
+            rec1, seed1 = reg.register("agent2")
+            rec2, seed2 = reg.register("agent2")   # same label, different principal
+            self.assertNotEqual(rec1["stable_id"], rec2["stable_id"])  # id != username
+            self.assertEqual(len(rec1["stable_id"]), 64)              # sha256 hex
+            self.assertTrue(prove(rec1["stable_id"], seed1))          # seed proves id
+            self.assertFalse(prove(rec1["stable_id"], seed2))        # nothing else does
+            self.assertEqual(stable_id_for(seed1), rec1["stable_id"])  # deterministic
+            # renaming moves the label, never the principal
+            before = rec1["stable_id"]
+            reg.rename(before, "agent2-renamed")
+            self.assertEqual(reg.username_of(before), "agent2-renamed")
+            self.assertEqual(reg.find(before)["stable_id"], before)
+            # the seed never lands in the registry file
+            self.assertNotIn(seed1, open(f"{d}/agents.json").read())
+
+    def test_grants_bind_to_the_principal_not_the_label(self):
+        import tempfile
+        from spawnables.agentid import AgentRegistry
+        with tempfile.TemporaryDirectory() as d:
+            reg = AgentRegistry(f"{d}/agents.json")
+            rec, _ = reg.register("agent2")
+            sid = rec["stable_id"]
+            o = order(base_image="ubuntu-24-04-headless")
+            m = Machine(o, FakeAdapter())
+            m.grant("agent2", mode="view", paths=["/downloads"], stable_id=sid)
+            # the principal matches; the bare label does not
+            self.assertTrue(m.access(sid, "view", "/downloads/report.zip"))
+            self.assertFalse(m.access("agent2", "view", "/downloads/report.zip"))
+            # rename: nothing moves
+            reg.rename(sid, "agent2-renamed")
+            self.assertTrue(m.access(sid, "view", "/downloads/report.zip"))
+            # a legacy grant (no stable id) still matches by name - back-compat
+            m.grant("agent3", mode="drive")
+            self.assertTrue(m.access("agent3", "drive"))
+            # drive implies view; view never implies drive
+            self.assertFalse(m.access("agent2-renamed", "drive"))
+
+    def test_root_folders_security_lifecycle_access_setup_connect(self):
+        for f, needle in [
+            ("security/network/readme.md", "kill switch"),
+            ("security/privacy/readme.md", "nothing else"),
+            ("security/fingerprint-coherence/readme.md", "auto-block"),
+            ("security/anti-machine-fingerprinting/readme.md", "known_gaps"),
+            ("security/device-context/readme.md", "three fingerprints"),
+            ("lifecycle/readme.md", "exact session"),
+            ("lifecycle/readme.md", "ephemeral"),
+            ("access/multi-user/readme.md", "useradd"),
+            ("access/agents/readme.md", "view-only on one path"),
+            ("access/agents/readme.md", "only agent1 keeps sudo"),
+            ("setup/apps/readme.md", "pwa orders go through one shared handler"),
+            ("setup/services/readme.md", "on every boot"),
+            ("setup/duplication/readme.md", "nothing but identity is new"),
+            ("connect/byoc/readme.md", "bare metal"),
+            ("connect/byoa/readme.md", "cloud agents and local agents"),
+        ]:
+            body = open(f).read()
+            self.assertIn(needle, body, f)      # each folder says the thing it exists for
+            self.assertEqual(body, body.lower())  # lowercase only
+
+    def test_modes_gui_first_in_the_browser(self):
+        modes = open("orders/modes/readme.md").read()
+        self.assertIn("gui first", modes)
+        gui = open("orders/modes/gui/readme.md").read()
+        self.assertIn("runs in the browser", gui)             # where it exists
+        self.assertIn("http://127.0.0.1:8600", gui)           # open and go
+        self.assertIn("no external fonts", gui)
+
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]
         for os_name in ("linux", "windows", "macos", "android"):

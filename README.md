@@ -18,6 +18,12 @@ built on open-source celesto (apache-2.0), not celesto cloud. bring your own com
 - [duplication + presets](src/spawnables/presets.py): duplicate a card's manifest, tweak one thing, run; or save it as a named preset. one mechanism, presets are just kept copies.
 - [per-guest homes](linux/readme.md): [linux](linux/readme.md) (rootfs builds live in [linux/rootfs](linux/rootfs/)), [windows](windows/readme.md), [macos](macos/readme.md), [android](android/readme.md) ([samsung](android/samsung/readme.md), [tablet](android/tablet/readme.md)), [ios](ios/readme.md), [ipad](ipad/readme.md) - the honest workaround readme, never a claimed ipados.
 - [the orders tree](orders/readme.md): [modes](orders/modes/readme.md) ([gui](orders/modes/gui/readme.md), [cli](orders/modes/cli/readme.md)) plus [regular](orders/regular/readme.md), [advanced](orders/advanced/readme.md), and [security](orders/security/readme.md) settings, each with a lowercase readme.
+- [security tree](security/readme.md): [network](security/network/readme.md), [privacy](security/privacy/readme.md), [fingerprint-coherence](security/fingerprint-coherence/readme.md), [anti-machine-fingerprinting](security/anti-machine-fingerprinting/readme.md), [device-context](security/device-context/readme.md).
+- [lifecycle](lifecycle/readme.md): verbs, idempotency, the ephemeral companion story, duplicate/preset.
+- [access](access/readme.md): [multi-user](access/multi-user/readme.md) shared machines + [agent grants](access/agents/readme.md) (view-only on one path, shared drive with one sudo owner, any combination).
+- [setup](setup/readme.md): [apps](setup/apps/readme.md), [services](setup/services/readme.md) connected before you run it, [duplication](setup/duplication/readme.md).
+- [connect](connect/readme.md): [byoc](connect/byoc/readme.md) (bare metal, vps, gcp, aws, azure) + [byoa](connect/byoa/readme.md) (cloud and local agents).
+- [agent stable ids](src/spawnables/agentid.py): every agent principal gets a cryptographic, unalterable stable id distinct from its username; grants bind to the id, so a rename moves nothing.
 - [agent access grants](spec/access-grants.md): agents are principals - one agent can hold scoped access (view /downloads, say) on another agent's device with no os account anywhere; control-plane permission, per agent, per path, per mode, revocable.
 - [schemas](spec/schemas/): json schema drafts for every object.
 - [src/spawnables](src/spawnables): the provisioner skeleton. `validate` and `plan` run anywhere; `provision` runs on a host with celesto installed.

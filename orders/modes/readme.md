@@ -1,5 +1,6 @@
 # modes
 
-one order model, two surfaces. the gui and the cli are both thin: they
-collect or load a manifest, validate it against the catalog, and hand
-it to the same provisioner. no mode has powers the other lacks.
+one order model, two surfaces - and it is gui first: the primary way to
+order and run a machine is the browser, and the cli exists because
+sometimes a shell is where you are. no mode has powers the other lacks;
+both validate against the same catalog and drive the same provisioner.

@@ -41,6 +41,40 @@ borrow the *shape*: browser egress rides the proxy pool, sessions are
 reusable, and the stealth surface is keyed on the browser the catalog
 provisions.
 
+verified in kernel's own tree, 2026-10-28:
+
+- **their proxies attach at the browser, not the machine.** the
+  proxies api (read in kernel/proxies-demo) is
+  `proxies.create(type=..., config={country: ...})` returning a
+  proxy id that is bound to one browser session
+  (create -> use -> delete). that is exactly the leak spawnables
+  refuses: with a browser-attached proxy, every process outside the
+  browser still egresses on the real route. our proxy lane applies
+  at the machine level - dns, ntp, package managers, the whole
+  system egress through the tunnel, because the guest has one
+  network story, not one browser's story.
+- **their demo checks language per exit.** proxies-demo literally
+  reports `detected_language` per regional exit - post-hoc coherence
+  measurement. spawnables enforces the same coherence at provision
+  time (exit_geo vs clock vs language, section 03) instead of
+  measuring the flag after it shipped.
+- **exit-through-your-own-device is a kernel prototype too**
+  (kernel/user-device-egress): cloud browser -> https relay ->
+  reverse ssh tunnel -> the user's mac or iphone, which is the
+  website-facing exit. honest framing kept ("a routing prototype,
+  not evidence of improved checkout success"; tls stays end to end).
+  this is the natural extreme of byo egress for spawnables: a
+  future lane where a machine's traffic exits through the owner's
+  own home connection - the most plausible exit there is. recorded
+  as a future lane, not shipped.
+- reference stack around the lane: kernel/forwarder (go mitm proxy
+  with pac), their utls fork + fhttp (tls fingerprint surface), and
+  kernel/web-bot-auth (signed orchestrated requests).
+- kernel/hypeman (multi-hypervisor vm runtime for oci images,
+  cloud hypervisor + firecracker) is noted as a vm-layer reference
+  alongside celesto; celesto stays the engine per the standing
+  verdict.
+
 ## coherence: the fingerprint tells one story
 
 code: [coherence.py](../src/spawnables/coherence.py). the principle the

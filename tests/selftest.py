@@ -708,6 +708,14 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertEqual(m.revoke("agent2", idempotency_key="k2"), "revoked agent2")
         self.assertEqual(m.revoke("agent2", idempotency_key="k2"), "already-applied")
 
+    def test_kernel_reference_is_verified_in_tree(self):
+        ac = open("spec/advanced-controls.md").read()
+        self.assertIn("verified in kernel's own tree", ac)  # dated, not folklore
+        self.assertIn("attach at the browser", ac)  # the leak we refuse
+        self.assertIn("machine level", ac)             # our lane is the whole system
+        self.assertIn("user-device-egress", ac)      # byo-exit prototype recorded
+        self.assertIn("future lane, not shipped", ac)  # honest about scope
+
     def test_access_grants_spec_is_linked(self):
         readme = open("README.md").read()
         self.assertIn("spec/access-grants.md", readme)

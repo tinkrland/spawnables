@@ -585,6 +585,16 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("edge", stance)  # not listed by default, not forbidden
         self.assertNotIn("Brave", "edge")  # lowercase everywhere
 
+    def test_positioning_doc_pins_the_moats(self):
+        dc = open("spec/device-context.md").read()
+        self.assertIn("happycapy", dc)
+        self.assertIn("you pick the device", dc)
+        self.assertIn("baked in", dc)          # privacy ships with every machine
+        self.assertIn("overnight is not a moat", dc)
+        self.assertIn("no skills baked in", dc)  # the os ships clean
+        readme = open("README.md").read()
+        self.assertIn("no skills baked into the os", readme)
+
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]
         for os_name in ("linux", "windows", "macos", "android"):

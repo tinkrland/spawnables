@@ -42,7 +42,7 @@ android and ios are not celesto surfaces: they need spawnables backend adapters 
 
 ## stance
 
-gui first, cli available; but the backend gets built thoroughly first, because the field is scattered projects on github and the durable win is a correct core: manifest replay, vault-held secrets, capability-gated verbs, honest event streams.
+gui first, cli available; but the backend gets built thoroughly first, because the field is scattered projects on github and the durable win is a correct core: manifest replay, vault-held secrets, capability-gated verbs, honest event streams. machines ship with what you ordered and nothing else - no skills baked into the os, ever; skills are the agent's business (byoa).
 
 ## status
 

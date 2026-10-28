@@ -22,6 +22,10 @@ yours, not rented: the machine runs on your infrastructure ([byoc](connect/byoc/
 
 clean, not opinionated: no skills baked into the os, ever. the machine ships exactly what you ordered and nothing else.
 
+and byoc is not a euphemism for "pick your favorite of three clouds". a local machine under your desk, bare metal, a cheap vps, gcp, aws, azure, or a mix of all of them - the [runner](connect/byoc/readme.md) is identical and the control plane holds no preference. moving is exporting a machine and running it somewhere else, because there is nowhere to get locked in.
+
+the control surface follows you, too: the [gui](orders/modes/gui/readme.md) runs in your browser, and when a shell is where you are, the [cli](orders/modes/cli/readme.md) does the same job against the same catalogs. one order model, two surfaces, neither second-class.
+
 that is the whole pitch: the byoc + byoa + byollm trifecta, and the machine is a card you can pause, freeze, thaw, duplicate, export, or burn.
 
 ## no ecosystem hostages

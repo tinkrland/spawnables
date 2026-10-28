@@ -1229,6 +1229,14 @@ class TestCatalogRoster(unittest.TestCase):
         # ephemeral stays first-class alongside fixed
         self.assertIn("ephemeral machines are still first-class", readme)
         self.assertIn("burn it after", readme)
+        # byoc is not three-cloud-only: local + bare metal + vps too
+        self.assertIn("local machine under your desk", readme)
+        self.assertIn("bare metal", readme)
+        self.assertIn("vps", readme)
+        self.assertIn("nowhere to get locked in", readme)
+        # the cli exists beside the gui
+        self.assertIn("cli", readme)
+        self.assertIn("neither second-class", readme)
         # keeberia-casual, not a parts list
         self.assertNotIn("## the parts", readme)
         self.assertIn("[directory.md](directory.md)", readme)    # the map is linked

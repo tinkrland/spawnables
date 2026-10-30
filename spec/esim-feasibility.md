@@ -48,6 +48,10 @@ the unlock that matters most for agents: **twofa without a phone at all.** when 
 
 honest ceilings: "hardwareless modem" is not a thing, because rf cannot be emulated and no carrier will attach a phantom radio. a number costs a sim or esim plan and a modem. esim download needs a module that supports it *and* a carrier willing to issue a profile to an iot imei, which some do at data rates and some refuse. sms can lag, and some services send codes by app push instead, which no modem will ever receive.
 
+## market: us first (owner call 2026-10-30)
+
+the market is the united states first. that changes four things and the code carries them (`regions.py`): where profiles come from (carrier sm-dp+ servers want an eid+imei pair and a plan; mvnos and resellers like us mobile, tello, mint and airalo sell activation codes and qr payloads, which are the exact shapes `sim.ingest` takes; removable euiccs load over pc/sc and then into a modem), what compliance rides on the number (sms at any volume is a2p and needs 10dlc brand+campaign registration; calls need stir/shaken attestation or they are labelled spam or blocked; 911 reachability needs a registered e911 address; the carrier's subscriber of record is a legal person under kyc, while the agent owns the sim), which companion apps exist (t-mobile digits, at&t numbersync, verizon number share), and which code dials the voicemail box on resume (verizon `*86`, at&t `*98`, t-mobile `1`), with a note on the card that boxes move and the code is confirmed at provisioning rather than trusted.
+
 ## appendix three: the carrier companion line, voice only (checked 2026-10-30, corrected same day)
 
 the useful correction to the "no modem, no number" wall: you do not always need the sim inside the phone guest. carriers run their own companion services (jio call, t-mobile digits) that route a number over the data layer to a logged-in app. in a container with no baseband, that is the only way calls work at all.

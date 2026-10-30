@@ -1611,7 +1611,7 @@ class TestCatalogRoster(unittest.TestCase):
         drain = " ".join(c for _, c in away_plan())
         self.assertIn("messaging-list-sms", drain)      # queued + stored messages
         self.assertIn("voice-list-calls", drain)        # missed-call log
-        self.assertIn("*99", drain)                     # the voicemail box, dialled on resume
+        self.assertIn("*86", drain)                     # us-first voicemail box, dialled on resume
         # the hypervisor attach: qemu gets a real ccid reader, host binds a card
         hv = hypervisor_attach_plan()
         joined = " ".join(c for _, c in hv)
@@ -1620,6 +1620,21 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("vpcd", joined)
         self.assertIn("pcsc_scan", joined)              # guest-side proof
         self.assertIn("a card is not a network", open("spec/esim-feasibility.md").read())
+
+    def test_market_is_us_first_and_compliance_rides_the_number(self):
+        from spawnables.regions import region_profile, voicemail_number, compliance_notes
+        prof = region_profile()
+        self.assertEqual(prof["market"], "us")
+        self.assertIn("_note", prof["voicemail"])            # codes move: confirm, do not trust
+        self.assertEqual(voicemail_number("verizon"), "*86")
+        notes = " ".join(compliance_notes())
+        self.assertIn("10dlc", notes)                        # a2p registration follows the number
+        self.assertIn("stir/shaken", notes)                  # unattested calls get blocked
+        self.assertIn("e911", notes)
+        self.assertIn("kyc", notes)                          # agent owns the sim, not the subscriber of record
+        from spawnables.vuicc import away_plan
+        vm = [c for label, c in away_plan() if label == "away.drain.voicemail"][0]
+        self.assertIn("*86", vm)                             # us-first code in the drain plan
 
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]

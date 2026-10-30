@@ -138,13 +138,16 @@ def away_capabilities(route="modem", keeper=True, carrier_voicemail=True):
     }
 
 
-def away_plan(voicemail_number="*99", keeper_dir="/var/lib/spawnables/keeper"):
+def away_plan(voicemail_number=None, keeper_dir="/var/lib/spawnables/keeper", carrier="verizon"):
     """the keeper + drain: catch the away window, then hand it back.
 
     the keeper is small on purpose: it is the only thing that stays awake
     while the primary vm sleeps, bounded by the modem it holds. it writes
     what arrived to a shared dir the guest reads on resume.
     """
+    if voicemail_number is None:
+        from .regions import voicemail_number as _vm
+        voicemail_number = _vm(carrier)  # us-first market profile (regions.py)
     return [
         ("away.keeper.init", "mkdir -p " + keeper_dir + " && chown modemmanager: " + keeper_dir),
         ("away.keeper.modem", "mmcli -m any --enable   # the keeper's only job: stay attached"),

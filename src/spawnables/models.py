@@ -66,6 +66,7 @@ class MachineOrder:
     grants: list = field(default_factory=list)  # list[GrantOrder]; agent access
     agent_bridge: dict = field(default_factory=dict)
     network: dict = field(default_factory=dict)  # section 03: network & privacy
+    sim: dict = field(default_factory=dict)  # sim/esim lane (spec/esim-feasibility.md)
     device_context: dict = field(default_factory=dict)  # advanced: device context tuning
     rebuild_on_thaw: bool = False
     image: str | None = None  # bring-your-own image path (ios requires it)
@@ -88,6 +89,7 @@ class MachineOrder:
             grants=[GrantOrder(**g) for g in d.get("grants", [])],
             agent_bridge=d.get("agent_bridge", {}),
             network=d.get("network", {}),
+            sim=d.get("sim", {}),
             device_context=d.get("device_context", {}),
             rebuild_on_thaw=d.get("rebuild_on_thaw", False),
             image=d.get("image"),

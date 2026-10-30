@@ -62,7 +62,7 @@ that is what "testing something in that game" means here, and it is the same sha
 ## rules this line inherits, unchanged
 
 - **no jailbreak as a precondition**, and no circumvention shipped as a feature.
-- **no capability claimed that the transport or the frame rate cannot carry.**
+- **no capability claimed that the transport, the timing, or the number cannot carry.**
 - **quarantined by default**: a device bridge gets the device and one destination, nothing else.
 
 ## first work items

@@ -1708,6 +1708,18 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("container", pc["live_calls"])        # no radio at all on that route
         self.assertIn("24_7_needed", pc)
 
+    def test_custom_board_is_a_carrier_board_not_a_modem(self):
+        doc = open("spec/hardware-carrier-board.md").read()
+        self.assertIn("carrier board", doc)
+        self.assertIn("does **not** mean designing a modem", doc)   # the honest boundary
+        self.assertIn("mff2", doc.lower())                          # the real eid in silicon
+        self.assertIn("certification rides", doc.lower() + " certification rides")  # or the manual rule
+        self.assertIn("cannot make a number exist", doc)            # hardware != contract
+        self.assertIn("10dlc", doc.lower())
+        self.assertIn("keeper", doc.lower())                        # watchdog as hardware
+        # the doc must not pretend a board replaces a carrier
+        self.assertNotIn("free number", doc.lower())
+
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]
         for os_name in ("linux", "windows", "macos", "android"):

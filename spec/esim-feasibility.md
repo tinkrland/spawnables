@@ -166,3 +166,7 @@ no for catching up, yes for being *reachable*. `sim.duty_cycle()` carries the sp
 - **the private-core route needs no modem at all** - its always-on piece is a container, which is the cheap kind of always-on.
 
 and the software lte question again, for the record: no software stack attaches to a public network (appendix seven). everything that pretends otherwise has a transmitter in it somewhere, or is not touching the public network at all.
+
+## appendix nine: replacing the usb stick with a custom pcb (2026-10-30)
+
+yes, and the useful framing is that you are not designing a modem. you are designing the board a certified module plugs into: power, usb, sim routing, antennas, a watchdog, and an mff2 euicc soldered down. that keeps the radio certification on the module and puts the three things we actually need on our own hardware: a genuine eid in silicon, a keeper with a watchdog, and one port per guest. full design, bill of materials, certification rules and ballparks are in [hardware-carrier-board.md](hardware-carrier-board.md).

@@ -54,6 +54,15 @@
   <span id="backend"></span>
 </header>
 <main>
+  <section id="cloudsection">
+    <h2>connect with cloud</h2>
+    <p class="meta">no docker, no qemu, no disk images on this machine: the provider
+      owns the hypervisor and this control plane owns a token. azure and gcp are real
+      oauth; aws has no user oauth, so it is role federation and the card says so.</p>
+    <div class="row" id="cloudbuttons"></div>
+    <pre id="cloudout" class="events" hidden></pre>
+  </section>
+
   <section id="orderform">
     <h2>order a machine</h2>
     <label>os</label><select id="f_os"></select>
@@ -115,6 +124,54 @@
 </dialog>
 
 <script>
+
+    // -- cloud connect ---------------------------------------------------
+    async function loadCloud() {
+      const res = await fetch('/api/cloud/providers').then(r => r.json());
+      const box = document.getElementById('cloudbuttons');
+      box.innerHTML = '';
+      for (const p of res.data) {
+        const b = document.createElement('button');
+        b.className = p.connected ? '' : 'ghost';
+        b.textContent = `${p.label}${p.connected ? ' · connected' : ' · connect'}`;
+        b.onclick = () => connectCloud(p);
+        box.appendChild(b);
+      }
+    }
+
+    async function connectCloud(p) {
+      const out = document.getElementById('cloudout');
+      out.hidden = false;
+      const body = { provider: p.id };
+      // a public client id is the one thing the owner must supply for gcp/azure
+      if (p.id !== 'aws') {
+        const cid = prompt(`${p.label}: oauth public client id`);
+        if (!cid) return;
+        body.client_id = cid;
+      }
+      if (p.id === 'gcp') {
+        body.project = prompt('gcp project id') || '';
+      }
+      const plan = await fetch('/api/cloud/connect', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }).then(r => r.json()).then(r => r.data);
+      if (plan.kind === 'device_code') {
+        out.textContent = `${p.label}: open ${plan.steps[0].url}\n`
+          + `then type the code shown there. ${plan.honest}`;
+      } else if (plan.kind === 'pkce') {
+        out.textContent = `${p.label}: ${plan.authorize_url}\n${plan.honest}`;
+        window.open(plan.authorize_url, '_blank');
+      } else if (plan.template) {
+        out.textContent = JSON.stringify(plan.template, null, 2);
+      } else {
+        out.textContent = JSON.stringify(plan, null, 2);
+      }
+      out.textContent += `\n\n${plan.note_turnkey}`;
+    }
+
+    loadCloud();
+
 const $ = (id) => document.getElementById(id);
 let CAT = {base_images:{}, path_tools:{}, recipes:{}, rices:{}, services:{}};
 const picked = {tools:new Set(), apps:new Set(), services:new Set(),

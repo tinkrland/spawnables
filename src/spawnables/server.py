@@ -36,6 +36,7 @@ from .events import Emitter
 from .validate import validate_order
 from .presets import clone_manifest, save_preset, load_presets
 from .adapters import VerbNotSupported
+from .vault import Vault
 from .ipadlane import get_anyway_plan, validate_get_anyway
 
 VERBS = ("pause", "resume", "freeze", "thaw", "export", "burn")
@@ -62,6 +63,79 @@ class ControlPlane:
         self.lock = threading.Lock()
         self.machines = {}  # id -> {machine, emitter, events, manifest, ok}
         self._machine_seq = 0
+        # the cloud lane: credentials live in the vault under cloud:<provider>,
+        # and nothing here needs qemu, disk images or docker on this host
+        self.cloud_vault = Vault()
+
+    # -- cloud connect -----------------------------------------------------
+
+    def cloud_providers(self):
+        from .cloud import PROVIDERS, LOCAL_REQUIREMENTS
+        out = []
+        for pid, meta in PROVIDERS.items():
+            out.append({
+                "id": pid,
+                "label": meta["label"],
+                "auth": meta["auth"],
+                "console": meta["console"],
+                "local_requirements": list(LOCAL_REQUIREMENTS[pid]),
+                "docker_needed": bool(LOCAL_REQUIREMENTS[pid]),
+                "connected": self.cloud_vault.exists(f"cloud:{pid}"),
+                "verified": meta["verified"],
+            })
+        return out
+
+    def cloud_connect(self, body):
+        from .cloud import connect_plan, PROVIDERS, no_local_stack_note
+        provider = body.get("provider")
+        if provider not in PROVIDERS:
+            raise ApiError(400, f"unknown provider {provider!r}")
+        plan = connect_plan(
+            provider,
+            client_id=body.get("client_id"),
+            project=body.get("project"),
+            tenant=body.get("tenant") or "common",
+            redirect_uri=body.get("redirect_uri"),
+            sso_start_url=body.get("sso_start_url"),
+            role_arn=body.get("role_arn"),
+            external_id=body.get("external_id"),
+        )
+        plan["note_turnkey"] = no_local_stack_note()
+        return plan
+
+    def cloud_complete(self, body):
+        """store what the provider gave back. the token never reaches the gui
+        log: it goes straight into the vault under one name per provider."""
+        provider = body.get("provider")
+        token = body.get("token")
+        if not provider or not token:
+            raise ApiError(400, "complete needs provider and token")
+        self.cloud_vault.put(f"cloud:{provider}", token)
+        return {"provider": provider, "connected": True,
+                "stored_as": f"cloud:{provider}"}
+
+    def cloud_machine(self, body):
+        """build the provider calls for one machine. dry by default: the card
+        shows exactly what would be sent before anything is created."""
+        from .cloud import create_steps
+        provider = body.get("provider")
+        name = body.get("name") or f"spawnables-{self._machine_seq + 1}"
+        token = self.cloud_vault.get(f"cloud:{provider}") if self.cloud_vault.exists(
+            f"cloud:{provider}") else None
+        steps = create_steps(
+            provider, name=name, region=body.get("region") or "us-east-1",
+            size=body.get("size") or "e2-standard-2",
+            ssh_public_key=body.get("ssh_public_key") or "ssh-ed25519 AAAA spawnables",
+            project=body.get("project"),
+            resource_group=body.get("resource_group"),
+            subscription=body.get("subscription"),
+            subnet=body.get("subnet"),
+            security_group=body.get("security_group"),
+            disk_gb=int(body.get("disk_gb") or 40),
+            token=token,
+        )
+        return {"provider": provider, "name": name,
+                "dry_run": not bool(token), "steps": steps}
 
     # -- core ops ----------------------------------------------------------
 
@@ -285,6 +359,18 @@ def make_handler(plane):
             if not parts or parts[0] != "api":
                 raise ApiError(404, f"no {p}")
             parts = parts[1:]
+            if method == "GET" and parts == ["cloud", "providers"]:
+                self._json(200, {"ok": True, "data": plane.cloud_providers()})
+                return
+            if method == "POST" and parts == ["cloud", "connect"]:
+                self._json(200, {"ok": True, "data": plane.cloud_connect(self._read_body())})
+                return
+            if method == "POST" and parts == ["cloud", "complete"]:
+                self._json(200, {"ok": True, "data": plane.cloud_complete(self._read_body())})
+                return
+            if method == "POST" and parts == ["cloud", "machines"]:
+                self._json(200, {"ok": True, "data": plane.cloud_machine(self._read_body())})
+                return
             if method == "GET" and parts == ["catalogs"]:
                 self._json(200, {"ok": True, "data": {
                     "base_images": plane.catalog.base_images,

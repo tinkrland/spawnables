@@ -42,3 +42,17 @@ this lane signs the owner's own accounts into the owner's own machines.
 it is not a bypass for somebody else's 2fa, and nothing here tries to be:
 the lane never invents a session, never reuses someone else's seed, and
 never claims a device is something it is not.
+
+## the phone side gets the same coherence rule (2026-10-30)
+
+the machine always had it: exit geo, clock and language must agree, or provisioning stops. the phone that approves a scan was carrying the other half of the story with no checks at all, which is backwards - a qr flow is *two* devices proving they are one person, and detection reads the agreement between them.
+
+`coherence.mobile_coherence()` now applies the machine rule to a phone guest, plus three tells that only exist on the mobile side:
+
+- **screen vs persona.** a pixel 8 rendering at 720x1280 is an emulator tell that build.prop editing cannot hide. mismatch is a fail, not a warning.
+- **camera surface.** a guest that cannot open a camera did not scan anything. if the decode happens on the host (which is what redroid needs, since it ships no camera), the card says so instead of claiming the phone scanned it.
+- **no radio story.** a modem-less guest is on the host's network and must never claim a mobile-network exit. this is the same labelling rule as the cellular line, enforced at the fingerprint layer.
+
+and one about the pair: if the phone and the desktop tell different clocks, that is flagged as a proximity signal - the classic account-takeover shape where a login in one country gets approved from another.
+
+`twofa.scan_check()` is the gate. it returns the issues, whether the flow is blocked, and the labels the card may claim. the honest default companion now describes itself accurately: `camera: false`, `scan_surface: host`, `has_radio: false`.

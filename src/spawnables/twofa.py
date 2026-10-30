@@ -94,6 +94,13 @@ def companion_order(order, agent=None, name=None, ttl_minutes=30):
         "base_image": "redroid-15",
         "timezone": order.timezone,
         "locale": order.locale,
+        # redroid ships no camera: the honest default is a host-side decode with
+        # the guest carrying only the app session. claiming otherwise is the lie
+        # the labelling rule exists to prevent.
+        "persona": "android",
+        "camera": False,
+        "scan_surface": "host",
+        "has_radio": False,
         "size": {"vcpus": 2, "ram_mb": 2048, "disk_gb": 16},
         "path_tools": [],
         "apps": [],
@@ -103,6 +110,38 @@ def companion_order(order, agent=None, name=None, ttl_minutes=30):
     if agent:
         companion["grants"] = [{"agent": agent, "mode": "drive", "paths": ["/"]}]
     return companion
+
+
+def scan_check(companion, net=None, desktop=None):
+    """does this companion honestly carry the phone's side of a scan?
+
+    the same coherence discipline a machine gets, applied to the phone, plus
+    the two mobile-only tells: screen vs declared model, and whether a camera
+    surface actually exists. returns (issues, blocked, labels) - labels are
+    what the card is allowed to claim.
+    """
+    from .coherence import mobile_coherence
+    probe = {
+        "timezone": companion.get("timezone"),
+        "locale": companion.get("locale"),
+        "persona": companion.get("persona") or "android",
+        "os": "android",
+        "variant": companion.get("variant"),
+        "screen": companion.get("screen"),
+        "scans_qr": True,
+        "camera": companion.get("camera", False),          # redroid ships none by default
+        "scan_surface": companion.get("scan_surface", "guest"),
+        "has_radio": companion.get("has_radio", False),    # a guest without a modem
+    }
+    issues = mobile_coherence(probe, net or {}, desktop)
+    blocked = any(i[3] == "fail" for i in issues)
+    labels = []
+    if probe["scan_surface"] == "host" or not probe["camera"]:
+        labels.append("the qr was decoded on the host; the phone carried the app session only")
+    if not probe["has_radio"]:
+        labels.append("no carrier story: the guest is on the host's network, not a mobile network")
+    labels.append("android guest, pinned identity: it is not the owner's personal phone")
+    return issues, blocked, labels
 
 
 def companion_steps(info, serial=None):

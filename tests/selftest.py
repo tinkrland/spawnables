@@ -1419,6 +1419,34 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertTrue(any("test profiles only" in w for w in warnings))
 
+    def test_sim_lane_on_the_computer_vm(self):
+        from spawnables.sim import (validate_sim, guest_steps, sms_read_steps,
+                                    extract_otp, card_note)
+        # the dedicated computer vm can carry the modem lane
+        e, w = validate_sim({"lane": "modem-passthrough", "usb": "2c7c:0125"}, "linux")
+        self.assertEqual(e, [])
+        e, w = validate_sim({"lane": "remote-sim", "remsim_server": "bank:9999"}, "linux")
+        self.assertEqual(e, [])
+        # windows/macos have no lane, and it says so
+        e, _ = validate_sim({"lane": "modem-passthrough", "usb": "2c7c:0125"}, "windows")
+        self.assertTrue(any("not wired" in x for x in e))
+        # guest handling is modemmanager on the computer
+        steps = [s[1] for s in guest_steps({"lane": "modem-passthrough", "usb": "2c7c:0125"}, "linux")]
+        self.assertTrue(any("ModemManager" in s for s in steps))
+        # the otp arrives on the machine the agent drives
+        sms = [s[1] for s in sms_read_steps()]
+        self.assertTrue(any("--messaging-list-sms" in s for s in sms))
+        self.assertEqual(extract_otp("your code is 483920, do not share"), ["483920"])
+        self.assertEqual(extract_otp("order 1234567890 shipped"), [])  # not a code
+        self.assertIn("same machine the agent drives",
+                      card_note({"lane": "modem-passthrough", "usb": "2c7c:0125"}))
+        # the spec says the honest part out loud
+        spec = open("spec/esim-feasibility.md").read()
+        self.assertIn("radio", spec)
+        self.assertIn("no software replaces radio", spec)
+        self.assertIn("twofa without a phone at all", spec)
+        self.assertIn("open5gs", spec.lower())
+
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]
         for os_name in ("linux", "windows", "macos", "android"):

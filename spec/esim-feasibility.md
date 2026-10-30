@@ -32,3 +32,18 @@ so gemini's steps 2 and 3 are real and open source: a virtual reader (vpcd), and
 - no "software esim in redroid". the modem is missing; claiming otherwise is the mismatched-costume problem again.
 - no pooled sim/esim numbers. a leaked pool sim is worse than no sim (see the warm phone pool spec).
 - real esim profiles come from carriers that certify the device key material and the eUICC's EID. our job is picking the honest lane for the blip of the esim's life, not counterfeiting it.
+
+## appendix two: the dedicated computer vm (checked 2026-10-28)
+
+the better home for a number is not a phone nobody looks at. it is the computer the agent actually drives. the same lanes run there, with one thing clarified by tiers:
+
+| tier | socializable? | how |
+|---|---|---|
+| radio (rf to the carrier) | **no** | a real modem must exist somewhere: a usb lte stick, or an esim-capable m.2 module in an enclosure, passed to the guest with qemu `usb-host`. no software replaces radio. |
+| sim / euicc (the secure element) | **yes** | physical sim from a carrier, remote via osmo-remsim (the card lives in a bank elsewhere; only apdu traffic reaches the guest), or a test card via vpcd + lpac. this is the layer gemini's sketch was really about, and it is the one that can be software. |
+| guest handling | yes | ModemManager. `mmcli -m any --messaging-list-sms`, then `mmcli -s N` for the body. calls and data come from the same modem. |
+| the number | carrier-issued | a real msisdn needs a carrier to provision the sim/esim profile. private networking (Open5GS core + UERANSIM ran, both agpl-3.0 and active as of this check) gives the machine an msisdn on your own core and sms through your own smsc, but that number lives inside your network: it reaches the public pstn only through a carrier interconnect, which is a contract, not a config. |
+
+the unlock that matters most for agents: **twofa without a phone at all.** when the modem sits in the computer, the otp sms lands on the same machine the agent drives, so the code can be read and routed with `sim.extract_otp` (see [twofa-handoff.md](twofa-handoff.md)) instead of spinning a companion. the warm phone pool stays for the cases that genuinely need a phone: app installs, qr scans, app-only deep links.
+
+honest ceilings: "hardwareless modem" is not a thing, because rf cannot be emulated and no carrier will attach a phantom radio. a number costs a sim or esim plan and a modem. esim download needs a module that supports it *and* a carrier willing to issue a profile to an iot imei, which some do at data rates and some refuse. sms can lag, and some services send codes by app push instead, which no modem will ever receive.

@@ -1349,6 +1349,32 @@ class TestCatalogRoster(unittest.TestCase):
         far = dict(comp, timezone="europe/london")
         self.assertTrue(any(i[0] == "proximity" for i in scan_check(far, us, order)[0]))
 
+    def test_the_gate_is_actually_enforced_not_just_available(self):
+        import tempfile
+        from spawnables.warmpool import WarmPhonePool, PoolError
+        from spawnables.twofa import companion_order, scan_gate, TwoFAError
+        us = {"exit_geo": {"country": "US", "city": "New York"}}
+        # 1. a phone whose clock contradicts the network story is skipped, and
+        #    when it is the only one the lease refuses with the reason
+        pool = WarmPhonePool(tempfile.mkdtemp() + "/pool.json")
+        pool.add_phone("liar", timezone="asia/kolkata", locale="ja-jp")
+        with self.assertRaises(PoolError) as ctx:
+            pool.acquire("sid-a", net=us)
+        self.assertIn("timezone", str(ctx.exception))
+        # 2. a coherent lease carries its coherence record and its labels
+        pool.add_phone("honest", timezone="america/new_york", locale="en-us")
+        lease = pool.acquire("sid-b", net=us)
+        self.assertTrue(lease["labels"])                       # card can state what it is
+        self.assertTrue(any("decoded on the host" in l for l in lease["labels"]))
+        self.assertTrue(all(i[3] != "fail" for i in lease["coherence"]))
+        # 3. the gate raises rather than letting a bad companion through
+        order = type("O", (), {"name": "t", "timezone": "america/new_york",
+                               "locale": "en-us"})()
+        comp = companion_order(order)
+        scan_gate(comp, us, order)                             # honest one passes
+        with self.assertRaises(TwoFAError):
+            scan_gate(dict(comp, timezone="asia/kolkata", screen="720x1280"), us, order)
+
     def test_twofa_companion_is_ephemeral_android_and_valid(self):
         from spawnables.twofa import companion_order
         base = order()

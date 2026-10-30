@@ -144,6 +144,18 @@ def scan_check(companion, net=None, desktop=None):
     return issues, blocked, labels
 
 
+def scan_gate(companion, net=None, desktop=None):
+    """the enforcement point: raises when the phone cannot honestly carry the
+    scan, otherwise returns the labels the card may print. callers that skip
+    this are claiming a scan nobody verified."""
+    issues, blocked, labels = scan_check(companion, net, desktop)
+    if blocked:
+        raise TwoFAError(
+            "the companion cannot stand in for this scan: "
+            + "; ".join(i[0] + " (" + i[4] + ")" for i in issues if i[3] == "fail"))
+    return issues, labels
+
+
 def companion_steps(info, serial=None):
     """guest steps for the companion, per qr kind. totp needs no phone."""
     kind = info.get("kind")

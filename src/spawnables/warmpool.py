@@ -127,9 +127,16 @@ class WarmPhonePool:
             self._save()
         return freed
 
-    def acquire(self, agent_sid, purpose="twofa", ttl_seconds=1800, now=None):
+    def acquire(self, agent_sid, purpose="twofa", ttl_seconds=1800, now=None,
+                net=None):
         """lease one phone to one agent. returns the pinned identity and
-        the verb the control plane should run (resume)."""
+        the verb the control plane should run (resume).
+
+        the lease is also where the phone's fingerprint is checked against the
+        story it will tell: pinned identity stops linkability, coherence stops
+        the phone from contradicting its own network. a lease that cannot stand
+        up is refused here rather than discovered by a detection stack.
+        """
         if purpose not in PURPOSES:
             raise PurposeRefused(
                 f"the pool only serves {PURPOSES}; {purpose!r} belongs on a "
@@ -138,12 +145,24 @@ class WarmPhonePool:
             raise PoolError("a lease needs the agent's stable id, not a label")
         now = now or time.time()
         self.sweep(now)
+        refusals = []
         for p in self.phones:
             if p["state"] == "paused":
+                try:
+                    issues = self._coherence(p, purpose, net)
+                except PoolError as excuse:
+                    # one incoherent phone must not wedge the shelf: skip it,
+                    # remember why, and only refuse if nothing else can serve.
+                    refusals.append(str(excuse))
+                    continue
                 p["state"] = "leased"
                 p["lease"] = {"agent": agent_sid, "purpose": purpose,
                               "expires": now + ttl_seconds, "key": secrets.token_hex(6)}
                 self._save()
+                from .twofa import scan_check
+                comp = dict(p["manifest"], persona=p["identity"]["persona"],
+                            camera=False, scan_surface="host", has_radio=False)
+                _, _, labels = scan_check(comp, net, None)
                 return {
                     "phone_id": p["id"],
                     "name": p["name"],
@@ -152,9 +171,42 @@ class WarmPhonePool:
                     "expires": p["lease"]["expires"],
                     "lease_key": p["lease"]["key"],
                     "verb": "resume",
+                    "coherence": issues,       # (signal, expected, actual, severity, note)
+                    "labels": labels,          # what the card may claim about this phone
                 }
+        if refusals:
+            raise PoolError("no phone can serve this lease: " + "; ".join(refusals))
         raise PoolBusy("every phone is leased; the pool refuses to stack two "
                        "agents on one device (that is a credential mix, not sharing)")
+
+    def _coherence(self, phone, purpose, net):
+        """the phone must believe the story its network tells. refuses on fail,
+        records warns so the card shows the disagreement rather than hiding it."""
+        from .coherence import mobile_coherence
+        m = phone.get("manifest") or {}
+        ident = phone.get("identity") or {}
+        from .devctx import persona as _persona
+        try:
+            screen = _persona("android", ident.get("persona"))["screen"]
+        except Exception:
+            screen = None
+        probe = {
+            "timezone": m.get("timezone"),
+            "locale": m.get("locale"),
+            "persona": ident.get("persona") or "android",
+            "os": "android",
+            "screen": screen,
+            "scans_qr": purpose == "twofa",
+            "camera": False,          # redroid ships none; the host decodes
+            "scan_surface": "host",
+            "has_radio": False,       # a pooled phone has no modem
+        }
+        issues = mobile_coherence(probe, net or {}, None)
+        if any(i[3] == "fail" for i in issues):
+            raise PoolError(
+                "phone " + phone["id"] + " cannot stand up its story: "
+                + "; ".join(i[0] for i in issues if i[3] == "fail"))
+        return issues
 
     def release(self, phone_id, agent_sid=None, now=None):
         p = self._find(phone_id)

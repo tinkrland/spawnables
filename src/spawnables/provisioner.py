@@ -113,6 +113,8 @@ class Provisioner:
             return self.emitter.history
 
         self._coherence()
+        if os_name == "android":
+            self._mobile_coherence(img)
         self._locale(os_name)
         self._network(os_name)
         self._machinefp(os_name)
@@ -206,6 +208,44 @@ class Provisioner:
                 + "; ".join(i[0] for i in issues if i[3] == "fail"))
         em.emit("provision.coherence", "ok",
                 "timezone, language and exit geo agree")
+
+    def _mobile_coherence(self, img):
+        """a phone order gets the phone checks too, not just the machine ones.
+
+        the machine rule (clock, language, exit geo) is necessary but not
+        sufficient here: a phone also has to match its declared model's screen
+        and must never claim hardware it does not have. this is the same gate
+        the warm pool applies at lease time, run at provision time.
+        """
+        from .coherence import mobile_coherence
+        from .devctx import persona as _persona
+        net = net_normalize(self.order.network or {})
+        variant = (img.get("device") or {}).get("variant") or img.get("variant")
+        try:
+            screen = _persona("android", variant)["screen"]
+        except Exception:
+            screen = None
+        probe = {
+            "timezone": self.order.timezone,
+            "locale": self.order.locale,
+            "persona": variant or "android",
+            "os": "android",
+            "screen": screen,
+            "scans_qr": False,        # a provisioned phone is not mid-scan
+            "camera": bool((img.get("device") or {}).get("camera", False)),
+            "scan_surface": "host" if not (img.get("device") or {}).get("camera") else "guest",
+            "has_radio": bool((img.get("device") or {}).get("modem", False)),
+        }
+        issues = mobile_coherence(probe, net, None)
+        for signal, expected, actual, severity, note in issues:
+            self.emitter.emit("provision.mobile_coherence", severity,
+                              f"{signal}: expected {expected}, got {actual} - {note}")
+        if any(i[3] == "fail" for i in issues):
+            raise ProvisionError(
+                "phone coherence failed: "
+                + "; ".join(i[0] for i in issues if i[3] == "fail"))
+        self.emitter.emit("provision.mobile_coherence", "ok",
+                          "screen, camera surface and network claim are honest")
 
     def _network(self, os_name):
         net = net_normalize(self.order.network)

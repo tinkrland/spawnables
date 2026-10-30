@@ -56,3 +56,12 @@ the machine always had it: exit geo, clock and language must agree, or provision
 and one about the pair: if the phone and the desktop tell different clocks, that is flagged as a proximity signal - the classic account-takeover shape where a login in one country gets approved from another.
 
 `twofa.scan_check()` is the gate. it returns the issues, whether the flow is blocked, and the labels the card may claim. the honest default companion now describes itself accurately: `camera: false`, `scan_surface: host`, `has_radio: false`.
+
+## the gate is enforced, at both ends (2026-10-30)
+
+a check nobody calls is decoration. `scan_check` existed and nothing invoked it, so the rule now runs where phones are actually used:
+
+- **at provision**, for any android order: `provisioner._mobile_coherence()` runs the phone checks alongside the machine ones and raises on `fail`, emitting `provision.mobile_coherence` events so the log shows what was checked and what was merely warned.
+- **at lease**, in `warm_phone_pool.acquire()`: the pooled phone is measured against the story of the network it is being handed out on. a phone that cannot stand up its story is **skipped**, and its excuse is kept; the shelf only refuses when nothing coherent can serve. one bad phone must not wedge the pool, but it must never be leased either.
+- **at the flow**, `twofa.scan_gate()` raises instead of returning quietly, so a caller that wants to proceed has to either pass the gate or catch the error deliberately.
+- every lease now returns `coherence` (the signal list) and `labels` (what the card may claim about that phone) so honesty rides along with the device rather than living in a doc.

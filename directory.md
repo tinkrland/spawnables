@@ -12,6 +12,8 @@ the map. everything worth reading, linked.
 - [advanced controls](spec/advanced-controls.md): the section 03 network and privacy surface.
 - [device context](spec/device-context.md): the three fingerprints, personas per guest os, the positioning.
 - [esim feasibility](spec/esim-feasibility.md) ([sim.py](src/spawnables/sim.py)): real sims/esims; modem passthrough now, remote sim later, virtual euicc for tests only
+- [telecom hardware path](spec/telecom-hardware-path.md) ([rsp.py](src/spawnables/rsp.py)): remote sim provisioning stage by stage - the download needs no radio, the attach does; a virtual euicc stops at client-auth
+- [hardware carrier board](spec/hardware-carrier-board.md): custom pcb as a carrier board around a certified module, never a modem of our own
 - [twofa handoff](spec/twofa-handoff.md) ([companions](spec/warm-phone-pool.md), [warmpool.py](src/spawnables/warmpool.py)): desktop qr decoded locally, routed to a phone; the warm pool keeps paused phones with one pinned identity: the qr-scan lane, decoded locally ([twofa.py](src/spawnables/twofa.py)).
 - [schemas](spec/schemas/): json schema drafts for every object.
 

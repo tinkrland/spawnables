@@ -1720,6 +1720,42 @@ class TestCatalogRoster(unittest.TestCase):
         # the doc must not pretend a board replaces a carrier
         self.assertNotIn("free number", doc.lower())
 
+    def test_rsp_maps_every_stage_to_hardware_honestly(self):
+        from spawnables.rsp import (stage_requirements, provisioning_needs_radio,
+                                    activation_policy, soft_euicc_claims, mff2_parts,
+                                    hardware_path)
+        # the download is not a radio problem, the attach is
+        dl = stage_requirements("download")
+        self.assertFalse(dl["radio"])
+        self.assertIn("euicc", dl["needs"])
+        self.assertTrue(stage_requirements("attach")["radio"])
+        self.assertIn("GSMA chain", stage_requirements("client-auth")["gate"])
+        pf = provisioning_needs_radio()
+        self.assertFalse(pf["provisioning_needs_radio"])
+        self.assertTrue(pf["attaching_needs_radio"])
+        self.assertIn("pc/sc", pf["consequence"])
+        # the claims that must never be repeated
+        verdicts = {c["claim"]: c["verdict"] for c in soft_euicc_claims()}
+        self.assertEqual(verdicts["a software lpa is needed to speak esim provisioning"],
+                         "already exists")                      # lpac
+        self.assertEqual(verdicts["extract iccid/imsi/ki and put them in the cloud"],
+                         "refused by design")                   # ki never leaves the sm-dp+
+        # the imei is a product question: data-only has no number
+        pol = activation_policy()
+        self.assertFalse(pol["travel-data-reseller"]["imei_required"])
+        self.assertFalse(pol["travel-data-reseller"]["sms"])    # no msisdn, no otp
+        self.assertTrue(pol["contract-line"]["sms"])
+        self.assertIn("sometimes", pol["mvno-esim-flow"]["imei_required"])
+        # real silicon, verified: mff2 parts carry the eid
+        parts = {p["part"]: p for p in mff2_parts()}
+        self.assertEqual(parts["st4sim-200m"]["spec"][:6], "sgp.22")
+        self.assertIn("sgp.32", parts["st4sim-300m"]["spec"])
+        self.assertEqual(parts["st4sim-200m"]["footprint"], "mff2")
+        steps = " ".join(a + b for a, b in hardware_path())
+        self.assertIn("pc/sc reader", steps)                    # prove it on a desk first
+        self.assertIn("iso7816", steps)
+        self.assertIn("eim", steps)
+
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]
         for os_name in ("linux", "windows", "macos", "android"):

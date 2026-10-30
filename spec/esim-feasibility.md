@@ -48,14 +48,16 @@ the unlock that matters most for agents: **twofa without a phone at all.** when 
 
 honest ceilings: "hardwareless modem" is not a thing, because rf cannot be emulated and no carrier will attach a phantom radio. a number costs a sim or esim plan and a modem. esim download needs a module that supports it *and* a carrier willing to issue a profile to an iot imei, which some do at data rates and some refuse. sms can lag, and some services send codes by app push instead, which no modem will ever receive.
 
-## appendix three: the carrier companion line (checked 2026-10-30)
+## appendix three: the carrier companion line, voice only (checked 2026-10-30, corrected same day)
 
-the useful correction to the "no modem, no number" wall: you do not always need the sim inside the machine. carriers run their own companion services that carry a real number over data. the number is registered somewhere real (a physical phone, or a gateway), and the carrier's app on the guest becomes one more endpoint for that number.
+the useful correction to the "no modem, no number" wall: you do not always need the sim inside the phone guest. carriers run their own companion services (jio call, t-mobile digits) that route a number over the data layer to a logged-in app. in a container with no baseband, that is the only way calls work at all.
 
-- examples: jio call (jio numbers and jiofiber landlines), t-mobile digits, and the various carrier wifi-calling/texting apps. every one of them is the same shape: log in, and the number follows you over the internet.
-- what works: voice generally. incoming and outgoing calls over the carrier's own routing, no baseband, no euicc, no sms centre inside the vm.
-- what is uneven: sms. some carriers sync texts to companion devices, some only calls. bank and verification sms is frequently excluded on purpose, because carriers know exactly why you would want it. the app's own feature list is the truth, not the marketing page.
-- what blocks it in practice: google play services (many carrier apps refuse without it), a supported region and account, and device-attestation checks that dislike vm builds. when an app refuses, the card reports the refusal; we do not fake a device on a lane that is not a device claim.
-- the fit with the pool: a carrier-companion login is exactly the kind of session that must not look new every time, which is what the [warm phone pool](warm-phone-pool.md) exists for. one pinned phone identity, one companion login, resumed rather than re-provisioned.
+two hard rules, both learned the honest way:
 
-the honest label on the card: "carrier companion over data: a real number with no sim in the machine". it is not an esim, it is not the sim, and it is not voip in the sense of a number we invented: it is the carrier routing its own number to an app. if the goal is a number that holds up to a bank's sms challenge, the modem lane from appendix two is the one that does, because there the sim really is in the machine.
+1. **voice only.** calls ride the carrier ott. texts are not part of this lane and we do not pretend otherwise: verification sms is exactly what carriers keep off companion apps, and pretending gets a machine stuck at a login screen.
+2. **number first, on the durable desktop.** the sim lives in the linux vm (modem-passthrough or remote-sim lanes), which is the agent's permanent computer. the phone guest never holds the sim. when an app in the phone guest wants to verify the number, the sms arrives in `mmcli` on the desktop - the machine the agent already drives - and the agent types the code into the app over adb (`sim.enrollment_plan`). the phone guest borrows the identity; the desktop owns it.
+
+so the shape of a real setup is: durable desktop with the modem and the number (sms, otp, data, and if you want, calls via modemmanager), plus a phone guest that exists only for app installs and app-only flows, plus the optional carrier app for voice inside the guest.
+
+honest ceilings: carrier apps need play services and a supported region, and some refuse vm builds (the card reports the refusal, never hides it). companion voice quality depends on the carrier's ott path, and a carrier that does not offer a companion app is simply not covered by this lane. reminder of the older ceilings: no rf emulation anywhere, so a modem is physical, and a real carrier number always traces back to a carrier-issued sim or esim profile.
+

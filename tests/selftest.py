@@ -1443,6 +1443,10 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("same machine the agent drives",
                       card_note({"lane": "modem-passthrough", "usb": "2c7c:0125"}))
         # the spec says the honest part out loud
+        from spawnables.sim import enrollment_plan
+        plan = enrollment_plan("com.jio.join")
+        self.assertIn("mmcli", plan[0][1])                      # code read on the desktop
+        self.assertIn("adb shell input text", plan[-1][1])      # typed into the guest
         spec = open("spec/esim-feasibility.md").read()
         self.assertIn("radio", spec)
         self.assertIn("no software replaces radio", spec)
@@ -1457,7 +1461,8 @@ class TestCatalogRoster(unittest.TestCase):
             "android")
         self.assertEqual(errs, [])
         self.assertTrue(any("not a sim" in w for w in warns))       # the honest label
-        self.assertTrue(any("often excluded" in w for w in warns))  # bank otp reality
+        self.assertTrue(any("voice only" in w for w in warns))      # voice only, per the owner
+        self.assertTrue(any("verification sms belongs to the sim" in w for w in warns))
         errs, _ = validate_sim({"lane": "carrier-app"}, "android")
         self.assertTrue(any("package" in e for e in errs))
         self.assertTrue(any("number_host" in e for e in errs))
@@ -1470,10 +1475,16 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertNotIn("curl", joined)                        # never fetched from a mirror
         note = card_note({"lane": "carrier-app", "carrier_app": "com.jio.join",
                           "number_host": "phone"})
-        self.assertIn("no sim in the machine", note)
+        self.assertIn("voice only", note)
+        self.assertIn("desktop vm", note)  # number first, on the durable computer
+        from spawnables.sim import enrollment_plan
+        plan = enrollment_plan("com.jio.join")
+        self.assertIn("mmcli", plan[0][1])                      # code read on the desktop
+        self.assertIn("adb shell input text", plan[-1][1])      # typed into the guest
         spec = open("spec/esim-feasibility.md").read()
         self.assertIn("carrier companion line", spec)
-        self.assertIn("bank and verification sms is frequently excluded", spec)
+        self.assertIn("number first, on the durable desktop", spec)
+        self.assertIn("voice only", spec)
 
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]

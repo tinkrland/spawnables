@@ -14,12 +14,13 @@ dated research; this module is the honest lane selector.
   apdus to the guest over ip. needs a guest with a RIL/modem (cuttlefish
   lane), so it is a later phone lane, not a redroid one.
 - carrier-app: the carrier's own companion service (jio call, t-mobile
-  digits and friends). the number is registered on a physical phone or
-  gateway and the app on the guest carries its calls and texts over
-  data. NOT a sim and not an esim: no baseband, no euicc; the number
-  stays the carrier's and rides the data layer. voice generally works;
-  sms sync is carrier- and plan-specific and bank otp sms is often
-  excluded, so the card says exactly that instead of promising.
+  digits): VOICE ONLY. the number is registered elsewhere and calls ride
+  the data layer - which is the whole point, because the container has no
+  baseband. texts are not part of this lane: verification sms stays with
+  the sim, and the number-first rule is that the sim lives on the durable
+  desktop vm, not in the phone guest (enrollment plan below). apps may
+  need play services and a supported region and can refuse a vm build.
+
 - virtual-euicc-test: vpcd + lpac + osmo-smdpp, TEST PROFILES ONLY. it
   proves the esim flow (download, enable, switch) without a carrier, and
   it can never mint a real carrier number.
@@ -96,9 +97,9 @@ def validate_sim(section, os_name="android"):
         if (s.get("number_host") or "").lower() not in ("phone", "gateway"):
             errors.append("carrier-app needs number_host: phone or gateway - the number must live somewhere real")
         warnings.append(
-            "carrier-app is not a sim: the number stays with the carrier and rides the "
-            "data layer; voice usually works, sms sync is carrier/plan-specific, and "
-            "bank/verification sms is often excluded")
+            "carrier-app is voice only and is not a sim: calls ride the data layer, "
+            "texts are not part of this lane - verification sms belongs to the sim "
+            "on the desktop vm (number first, then enroll the phone app)")
         warnings.append(
             "carrier apps often need google play services and a supported region, and may "
             "refuse a vm build; the card reports the refusal instead of hiding it")
@@ -147,6 +148,22 @@ def guest_steps(section, os_name="android"):
     return []
 
 
+def enrollment_plan(pkg, desktop_slot="any"):
+    """number first, on the durable desktop, then enroll the phone app.
+
+    the phone guest has no modem and never will: the sim lives on the
+    linux desktop vm (modem-passthrough or remote-sim). so app enrollment
+    that texts a code is answered on the DESKTOP - the code lands in
+    mmcli on the machine the agent drives, and the agent types it into
+    the phone app over adb. no sim, no sms, and no fakery in the guest.
+    """
+    return [
+        ("sim.enroll.read", f"mmcli -m {desktop_slot} --messaging-list-sms"),
+        ("sim.enroll.extract", "sim.extract_otp(<message body>)  # read on the desktop"),
+        ("sim.enroll.type", f"adb shell input text <code>   # into {pkg}"),
+    ]
+
+
 def card_note(section):
     """the one honest line the card shows for this lane."""
     s = normalize(section)
@@ -160,8 +177,8 @@ def card_note(section):
     if lane == "remote-sim":
         return "remote sim (osmo-remsim bank): real apdus over ip, needs a RIL-capable guest"
     if lane == "carrier-app":
-        return ("carrier companion over data: a real number with no sim in the machine "
-                "(voice rides the carrier ott; sms only if the carrier syncs it)")
+        return ("carrier companion, voice only: calls ride the carrier ott over data, "
+                "no sim in the phone guest; texts stay with the sim on your desktop vm")
     if lane == "virtual-euicc-test":
         return "virtual eUICC: test profiles only, never a carrier number"
     return f"unknown sim lane: {lane}"

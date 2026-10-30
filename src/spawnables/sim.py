@@ -134,6 +134,8 @@ def guest_steps(section, os_name="android"):
         return [("sim.remsim", "apt-get update && apt-get install -y osmo-remsim-client"),
                 ("sim.remsim.connect", f"osmo-remsim-client --server-ip {s['remsim_server'].split(':')[0]} --server-port {s['remsim_server'].split(':')[-1]}")]
     if lane == "carrier-app":
+        if os_name != "android":
+            return []
         pkg = s["carrier_app"]
         return [("sim.carrier.install", f"adb install -r /tmp/spawnables-handoff/{pkg}.apk"),
                 ("sim.carrier.launch", f"adb shell monkey -p {pkg} -c android.intent.category.LAUNCHER 1"),
@@ -157,11 +159,6 @@ def card_note(section):
                 "the same machine the agent drives")
     if lane == "remote-sim":
         return "remote sim (osmo-remsim bank): real apdus over ip, needs a RIL-capable guest"
-    if lane == "carrier-app":
-        pkg = s["carrier_app"]
-        return [("sim.carrier.install", f"adb install -r /tmp/spawnables-handoff/{pkg}.apk"),
-                ("sim.carrier.launch", f"adb shell monkey -p {pkg} -c android.intent.category.LAUNCHER 1"),
-                ("sim.carrier.verify", f"adb shell pm list packages | grep -q {pkg}")]
     if lane == "carrier-app":
         return ("carrier companion over data: a real number with no sim in the machine "
                 "(voice rides the carrier ott; sms only if the carrier syncs it)")

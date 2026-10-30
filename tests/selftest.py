@@ -1573,7 +1573,11 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("lpac profile download", modem_steps)       # es9+ download path
         self.assertIn("mmcli -m any --messaging-list-sms", modem_steps)
         self.assertIn("mmcli -m any --voice-list-calls", modem_steps)
-        self.assertIn("ueransim", " ".join(c for _, c in telephony_plan("private-core")))
+        pc = " ".join(c for _, c in telephony_plan("private-core"))
+        self.assertIn("/opt/ueransim/build/nr-ue", pc)     # the path tool's binary
+        self.assertIn("path_tools: [ueransim]", pc)
+        self.assertEqual(sorted(CATALOG.path_tools["ueransim"]["installs"]), ["arch", "debian", "fedora"])  # linux only
+        self.assertIn("nr-ue", CATALOG.path_tools["ueransim"]["installs"]["debian"]["verify"])
 
     def test_agent_owns_its_number_and_can_catch_the_away_window(self):
         import tempfile

@@ -47,3 +47,15 @@ the better home for a number is not a phone nobody looks at. it is the computer 
 the unlock that matters most for agents: **twofa without a phone at all.** when the modem sits in the computer, the otp sms lands on the same machine the agent drives, so the code can be read and routed with `sim.extract_otp` (see [twofa-handoff.md](twofa-handoff.md)) instead of spinning a companion. the warm phone pool stays for the cases that genuinely need a phone: app installs, qr scans, app-only deep links.
 
 honest ceilings: "hardwareless modem" is not a thing, because rf cannot be emulated and no carrier will attach a phantom radio. a number costs a sim or esim plan and a modem. esim download needs a module that supports it *and* a carrier willing to issue a profile to an iot imei, which some do at data rates and some refuse. sms can lag, and some services send codes by app push instead, which no modem will ever receive.
+
+## appendix three: the carrier companion line (checked 2026-10-30)
+
+the useful correction to the "no modem, no number" wall: you do not always need the sim inside the machine. carriers run their own companion services that carry a real number over data. the number is registered somewhere real (a physical phone, or a gateway), and the carrier's app on the guest becomes one more endpoint for that number.
+
+- examples: jio call (jio numbers and jiofiber landlines), t-mobile digits, and the various carrier wifi-calling/texting apps. every one of them is the same shape: log in, and the number follows you over the internet.
+- what works: voice generally. incoming and outgoing calls over the carrier's own routing, no baseband, no euicc, no sms centre inside the vm.
+- what is uneven: sms. some carriers sync texts to companion devices, some only calls. bank and verification sms is frequently excluded on purpose, because carriers know exactly why you would want it. the app's own feature list is the truth, not the marketing page.
+- what blocks it in practice: google play services (many carrier apps refuse without it), a supported region and account, and device-attestation checks that dislike vm builds. when an app refuses, the card reports the refusal; we do not fake a device on a lane that is not a device claim.
+- the fit with the pool: a carrier-companion login is exactly the kind of session that must not look new every time, which is what the [warm phone pool](warm-phone-pool.md) exists for. one pinned phone identity, one companion login, resumed rather than re-provisioned.
+
+the honest label on the card: "carrier companion over data: a real number with no sim in the machine". it is not an esim, it is not the sim, and it is not voip in the sense of a number we invented: it is the carrier routing its own number to an app. if the goal is a number that holds up to a bank's sms challenge, the modem lane from appendix two is the one that does, because there the sim really is in the machine.

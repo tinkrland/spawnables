@@ -1382,7 +1382,7 @@ class TestCatalogRoster(unittest.TestCase):
 
     def test_sim_lanes_are_honest_about_what_exists(self):
         from spawnables.sim import LANES, normalize, validate_sim, host_directives, guest_steps, card_note
-        self.assertEqual(LANES, ("none", "modem-passthrough", "remote-sim", "virtual-euicc-test"))
+        self.assertEqual(LANES, ("none", "modem-passthrough", "remote-sim", "virtual-euicc-test", "carrier-app"))
         # default: data-only
         errs, warns = validate_sim({}, "android")
         self.assertEqual((errs, warns), ([], []))
@@ -1448,6 +1448,32 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("no software replaces radio", spec)
         self.assertIn("twofa without a phone at all", spec)
         self.assertIn("open5gs", spec.lower())
+
+    def test_carrier_companion_lane_is_not_an_esim(self):
+        from spawnables.sim import validate_sim, guest_steps, card_note, LANES
+        self.assertIn("carrier-app", LANES)
+        errs, warns = validate_sim(
+            {"lane": "carrier-app", "carrier_app": "com.jio.join", "number_host": "phone"},
+            "android")
+        self.assertEqual(errs, [])
+        self.assertTrue(any("not a sim" in w for w in warns))       # the honest label
+        self.assertTrue(any("often excluded" in w for w in warns))  # bank otp reality
+        errs, _ = validate_sim({"lane": "carrier-app"}, "android")
+        self.assertTrue(any("package" in e for e in errs))
+        self.assertTrue(any("number_host" in e for e in errs))
+        self.assertTrue(validate_sim(
+            {"lane": "carrier-app", "carrier_app": "com.jio.join",
+             "number_host": "phone"}, "linux")[0])  # android guests only
+        steps = guest_steps({"lane": "carrier-app", "carrier_app": "com.jio.join"}, "android")
+        joined = " ".join(c for _, c in steps)
+        self.assertIn("adb install", joined)                    # owner's own apk, handoff drop
+        self.assertNotIn("curl", joined)                        # never fetched from a mirror
+        note = card_note({"lane": "carrier-app", "carrier_app": "com.jio.join",
+                          "number_host": "phone"})
+        self.assertIn("no sim in the machine", note)
+        spec = open("spec/esim-feasibility.md").read()
+        self.assertIn("carrier companion line", spec)
+        self.assertIn("bank and verification sms is frequently excluded", spec)
 
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]

@@ -276,3 +276,79 @@ def blocks_provisioning(order, net):
     """true when any coherence issue is severe enough to stop the
     provision. knowingly shipping an incoherent machine is a bug."""
     return any(i[3] == "fail" for i in coherence_report(order, net))
+
+
+# -- the mobile side: the phone that scans must believe the same story --------
+
+def mobile_coherence(phone, net, desktop=None):
+    """coherence for a phone guest, the same discipline as a machine.
+
+    a qr flow is two devices proving they are one person: the desktop the
+    login starts on, and the phone that approves it. detection reads the
+    AGREEMENT between them, so the phone needs the same checks the machine
+    gets, plus three that only exist on the mobile side:
+
+    - screen vs persona. a pixel 8 rendering at 720p is an emulator tell
+      no amount of build.prop editing hides.
+    - camera surface. a guest that cannot open a camera did not scan
+      anything, whatever the card says.
+    - no radio story. a modem-less guest must not claim a mobile-network
+      exit: it is on the host's wifi and says so.
+
+    severity follows the machine rule: 'fail' stops the flow, 'warn'
+    proceeds and puts the disagreement on the card.
+    """
+    issues = []
+    net = net or {}
+    from .devctx import persona as _persona
+
+    tz = phone.get("timezone")
+    locale = phone.get("locale")
+    want_tz = expected_timezone(net)
+    # the order form is lowercase-everything; tzdata is not. compare canonically.
+    if want_tz and tz and tz_key(want_tz) != tz_key(tz):
+        issues.append(("timezone", want_tz, tz, "fail",
+                       "the phone must tell the exit story's clock, same as the machine"))
+
+    want_lang = COUNTRY_LANG.get(((net.get("exit_geo") or {}).get("country") or "").upper())
+    if want_lang and locale:
+        base = (locale or "").split("-")[0].lower()
+        if base and base != want_lang.split("-")[0]:
+            issues.append(("locale", want_lang, locale, "warn",
+                           "phone language disagrees with the exit country"))
+
+    variant = phone.get("persona") or phone.get("base_image") or "android"
+    try:
+        want_screen = _persona(phone.get("os", "android"), phone.get("variant") or (
+            variant if variant.startswith("android") else None)).get("screen")
+    except Exception:
+        want_screen = None
+    have_screen = phone.get("screen")
+    if want_screen and have_screen and want_screen != have_screen:
+        issues.append(("screen", want_screen, have_screen, "fail",
+                       "screen does not match the declared model: an emulator tell"))
+
+    if phone.get("scans_qr"):
+        surface = phone.get("scan_surface", "guest")
+        if surface == "guest" and not phone.get("camera", True):
+            issues.append(("camera", "a camera surface", "none", "fail",
+                           "a guest with no camera cannot scan: decode on the host and say so"))
+        elif surface == "host":
+            issues.append(("camera", "guest camera", "host decode", "warn",
+                           "the qr was decoded on the host: the phone carried the app session, not the scan"))
+
+    if phone.get("has_radio") is False and (net.get("exit_kind") == "mobile"):
+        issues.append(("network", "wifi (no modem in this guest)", "mobile exit claimed", "fail",
+                       "a modem-less guest must not claim a carrier exit"))
+
+    if desktop:
+        d_tz = getattr(desktop, "timezone", None) or (desktop.get("timezone") if isinstance(desktop, dict) else None)
+        if d_tz and tz and tz_key(d_tz) != tz_key(tz):
+            issues.append(("proximity", d_tz, tz, "warn",
+                           "phone and desktop tell different clocks: a classic takeover signal"))
+    return issues
+
+
+def mobile_blocks(phone, net, desktop=None):
+    """true when the phone cannot honestly stand in for the scan."""
+    return any(i[3] == "fail" for i in mobile_coherence(phone, net, desktop))

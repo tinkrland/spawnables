@@ -1315,9 +1315,39 @@ class TestCatalogRoster(unittest.TestCase):
                 imported.update(a.name.split(".")[0] for a in node.names)
             elif isinstance(node, ast.ImportFrom):
                 imported.add((node.module or "").split(".")[0])
-        self.assertLessEqual(imported, {"secrets", "urllib"})
+        # in-package modules are fine (coherence is local policy, no io); the rule
+        # that matters is that nothing here can open a socket to a vision api
+        self.assertLessEqual(imported, {"secrets", "urllib", "coherence"})
         zbar = CATALOG.path_tools["zbar"]
         self.assertEqual(zbar["installs"]["debian"]["verify"], "zbarimg --version")
+
+    def test_mobile_scan_gets_the_same_coherence_rule_as_a_machine(self):
+        from spawnables.coherence import mobile_coherence, mobile_blocks
+        from spawnables.twofa import companion_order, scan_check
+        us = {"exit_geo": {"country": "US", "city": "New York"}}
+        # the lying phone: wrong clock, wrong screen for its model, scanning with no camera
+        bad = {"timezone": "asia/kolkata", "locale": "en-us", "persona": "android",
+               "screen": "720x1280", "scans_qr": True, "camera": False,
+               "scan_surface": "guest", "has_radio": False}
+        signals = {i[0] for i in mobile_coherence(bad, us)}
+        self.assertEqual(signals, {"timezone", "screen", "camera"})
+        self.assertTrue(mobile_blocks(bad, us))
+        # a modem-less guest must never claim a carrier exit
+        claim = dict(bad, timezone="america/new_york", screen="1080x2400",
+                     camera=True, scan_surface="guest")
+        self.assertTrue(mobile_blocks(claim, dict(us, exit_kind="mobile")))
+        # the honest default companion: host decodes, guest carries the session
+        order = type("O", (), {"name": "t", "timezone": "america/new_york",
+                               "locale": "en-us"})()
+        comp = companion_order(order)
+        issues, blocked, labels = scan_check(comp, us, order)
+        self.assertFalse(blocked)
+        self.assertTrue(any("decoded on the host" in l for l in labels))
+        self.assertTrue(any("no carrier story" in l for l in labels))
+        self.assertTrue(any(i[0] == "camera" and i[3] == "warn" for i in issues))
+        # and a phone from another country approving a local login is flagged
+        far = dict(comp, timezone="europe/london")
+        self.assertTrue(any(i[0] == "proximity" for i in scan_check(far, us, order)[0]))
 
     def test_twofa_companion_is_ephemeral_android_and_valid(self):
         from spawnables.twofa import companion_order

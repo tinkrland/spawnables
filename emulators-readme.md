@@ -28,3 +28,12 @@ names, verbs, the event stream, pause/resume semantics, the card. the emulator l
 ## first work item, when this line opens
 
 an android fixture: one avd, cold-boot time measured, snapshot/restore verified, and a card that says "emulator, not a device" in the same font as everything else.
+
+## where this line sits: a mechanism, not a subject
+
+the owner corrected an earlier draft that treated this line and `eclectics` as rival answers. they are not:
+
+- **subject lanes** decide *which device classes* are served (phones, desktops, consoles, watches).
+- **this line is a mechanism** - *how* hardware gets faked inside a guest.
+
+so a console can be served by this mechanism (a machine pretending to be one) or natively by `eclectics` with the real device attached. the mechanism serves any subject lane that needs it, and it owes them two things: an honest performance number, and an honest answer to "is this thing an identity?" (it is not).

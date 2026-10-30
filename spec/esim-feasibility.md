@@ -61,3 +61,15 @@ so the shape of a real setup is: durable desktop with the modem and the number (
 
 honest ceilings: carrier apps need play services and a supported region, and some refuse vm builds (the card reports the refusal, never hides it). companion voice quality depends on the carrier's ott path, and a carrier that does not offer a companion app is simply not covered by this lane. reminder of the older ceilings: no rf emulation anywhere, so a modem is physical, and a real carrier number always traces back to a carrier-issued sim or esim profile.
 
+
+## appendix four: the vuicc lane, software uicc on the durable desktop (built 2026-10-30)
+
+the lane the owner wanted: a phone identity with no modem in the box, built as a real module ([vuicc.py](../src/spawnables/vuicc.py)), not a promise.
+
+only one of the four layers actually needs a chip. the radio does: no carrier attaches to a phantom radio, so nothing here makes calls over cellular. the uicc does not: a virtual card served over pc/sc (vpcd), driven by an lpa (lpac), fed by an sm-dp+ (osmo-smdpp, from osmocom's pysim) is a working sim shelf with a stable eid, profile download, enable, switch and delete. the guest and the number follow from who issued the profile.
+
+- test-profile: osmo-smdpp issues it locally. the whole esim flow runs end to end with no carrier and no hardware. no real number, and the card says exactly that.
+- private-mno: your own core (open5gs + ueransim) issues the msisdn, sms included through your own smsc. the machine really has a number, inside your own network. the public pstn is a carrier interconnect, a contract rather than a config.
+- carrier-mno: a real carrier number only when that carrier issues a profile to this eid, which means a gsma-issued eUICC certificate chain. a self-made soft card has none and carrier sm-dp+ servers reject it, so the order form refuses at config time instead of failing at 2am.
+
+the android workaround, stated plainly: the number lives on the linux vm first. the durable desktop hosts pcscd + vpcd + lpac and holds the eid and the profile shelf. a phone guest consumes the card later and only if it has a RIL - cuttlefish can, redroid cannot, and redroid is refused by name. the eid is minted once from a seed kept in the vault, the same discipline as the phone pool: the card comes back as itself.

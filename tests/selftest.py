@@ -1382,7 +1382,8 @@ class TestCatalogRoster(unittest.TestCase):
 
     def test_sim_lanes_are_honest_about_what_exists(self):
         from spawnables.sim import LANES, normalize, validate_sim, host_directives, guest_steps, card_note
-        self.assertEqual(LANES, ("none", "modem-passthrough", "remote-sim", "virtual-euicc-test", "carrier-app"))
+        self.assertEqual(LANES, ("none", "modem-passthrough", "remote-sim",
+                                 "virtual-euicc-test", "carrier-app", "vuicc"))
         # default: data-only
         errs, warns = validate_sim({}, "android")
         self.assertEqual((errs, warns), ([], []))
@@ -1485,6 +1486,50 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("carrier companion line", spec)
         self.assertIn("number first, on the durable desktop", spec)
         self.assertIn("voice only", spec)
+
+    def test_vuicc_is_a_software_uicc_with_honest_sources(self):
+        import tempfile
+        from spawnables.vuicc import VUICC, VUICCError, derive_eid, number_note
+        from spawnables.sim import validate_sim
+        with tempfile.TemporaryDirectory() as d:
+            v = VUICC(f"{d}/vuicc.json")
+            self.assertEqual(len(v.eid), 64)
+            # one active profile at a time, like a real card shelf
+            a = v.add_profile("test-profile", "dev-test")
+            b = v.add_profile("private-mno", "own-core", imsi="001010000000001")
+            v.enable(a["iccid"]); v.enable(b["iccid"])
+            self.assertEqual(v.active()["iccid"], b["iccid"])
+            self.assertEqual(v.get(a["iccid"])["state"], "disabled")
+            # an enabled profile cannot be deleted (real cards refuse too)
+            with self.assertRaises(VUICCError):
+                v.delete(b["iccid"])
+            v.disable(b["iccid"]); v.delete(b["iccid"])
+            self.assertEqual(len(v.profiles), 1)
+            # carrier-mno without a gsma cert chain is refused at config time
+            with self.assertRaises(VUICCError):
+                v.add_profile("carrier-mno", "real-number")
+            # eid is stable from its seed, and never stored raw
+            seed = "a" * 64
+            self.assertEqual(derive_eid(seed), derive_eid(seed))
+            self.assertNotIn(seed, open(f"{d}/vuicc.json").read())
+        # the note never oversells
+        self.assertIn("no real number", number_note("test-profile"))
+        self.assertIn("public pstn needs a carrier interconnect", number_note("private-mno"))
+        # stack is hardwareless: vpcd + lpac + osmo-smdpp, no modem
+        plan = " ".join(c for _, c in VUICC().stack_plan())
+        for needle in ("pcscd", "vpcd", "lpac", "osmo-smdpp"):
+            self.assertIn(needle, plan)
+        self.assertNotIn("modem", plan.lower())
+        # redroid is refused by name; the desktop hosts the card
+        self.assertIn("redroid has no RIL", VUICC().consumer_plan("android"))
+        self.assertIn("local", VUICC().consumer_plan("linux"))
+        # lane wiring: linux only, source rules enforced
+        self.assertEqual(validate_sim({"lane": "vuicc"}, "linux")[0], [])
+        self.assertTrue(any("durable linux vm" in e for e in validate_sim({"lane": "vuicc"}, "android")[0]))
+        self.assertTrue(any("cert_ref" in e for e in
+                            validate_sim({"lane": "vuicc", "number_source": "carrier-mno"}, "linux")[0]))
+        spec = open("spec/esim-feasibility.md").read()
+        self.assertIn("vuicc", spec.lower())
 
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]

@@ -34,7 +34,7 @@ card. spec/esim-feasibility.md, appendix two.
 """
 import re
 
-LANES = ("none", "modem-passthrough", "remote-sim", "virtual-euicc-test", "carrier-app")
+LANES = ("none", "modem-passthrough", "remote-sim", "virtual-euicc-test", "carrier-app", "vuicc")
 TEST_ONLY_LANES = ("virtual-euicc-test",)
 DEFAULTS = {"lane": "none", "usb": None, "remsim_server": None, "carrier_app": None, "number_host": None}
 USB_RE = re.compile(r"^[0-9a-f]{4}:[0-9a-f]{4}$")
@@ -103,6 +103,19 @@ def validate_sim(section, os_name="android"):
         warnings.append(
             "carrier apps often need google play services and a supported region, and may "
             "refuse a vm build; the card reports the refusal instead of hiding it")
+    if lane == "vuicc":
+        if os_name != "linux":
+            errors.append(
+                "vuicc is hosted on the durable linux vm first (spec/esim-feasibility.md, "
+                "appendix four); other guests consume it later over remsim and need a RIL")
+            return errors, warnings
+        if (s.get("number_source") or "test-profile") not in ("test-profile", "private-mno", "carrier-mno"):
+            errors.append("vuicc number_source must be test-profile, private-mno or carrier-mno")
+        if (s.get("number_source") or "test-profile") == "carrier-mno" and not s.get("cert_ref"):
+            errors.append("vuicc carrier-mno needs cert_ref: a gsma-issued eUICC chain, or the carrier sm-dp+ will reject the card")
+        warnings.append(
+            "vuicc is a software uicc: no modem in the box. test profiles prove the flow only; "
+            "a reachable number comes from a private mno (own core) or a carrier that issues to this eid")
     if lane in TEST_ONLY_LANES:
         warnings.append(
             "virtual-euicc-test is test profiles only: it exercises the esim flow, "

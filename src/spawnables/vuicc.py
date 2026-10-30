@@ -81,6 +81,114 @@ def number_note(source):
     }[source]
 
 
+# -- the agent owns the number ---------------------------------------------
+
+def number_identity(owner_agent, legal_subscriber=None, number_scope="dedicated"):
+    """whose number is it? the agent's, by construction.
+
+    owner_kind is pinned to "agent": the profile and the line are held by
+    the agent's stable id, not by a person who lets the agent borrow a
+    spare sim. scope is pinned to "dedicated" so an order can never quietly
+    reuse the owner's own personal line.
+
+    the honest boundary: technical ownership is the agent's (it holds the
+    card, the profile, the credentials). the carrier's SUBSCRIBER OF
+    RECORD must still be a legal person because of kyc law, so a real
+    carrier-mno order also carries legal_subscriber. private-mno needs no
+    subscriber at all: it is your core.
+    """
+    if not owner_agent:
+        raise VUICCError("a number needs the owning agent's stable id")
+    if number_scope != "dedicated":
+        raise VUICCError(
+            "number_scope must be 'dedicated': an agent's line is its own, "
+            "never the owner's personal number (portability of blame and of bills)")
+    return {"owner_kind": "agent", "owner_agent": owner_agent,
+            "number_scope": "dedicated", "legal_subscriber": legal_subscriber}
+
+
+# -- catching messages while the primary vm is paused ----------------------
+
+def away_capabilities(route="modem", keeper=True, carrier_voicemail=True):
+    """what survives a pause, honestly.
+
+    a paused guest is a detached subscriber: the radio is off, so nothing
+    lands IN the guest. what lands is either queued by the network or
+    caught by something that stayed awake:
+
+    - sms: the smsc store-and-forwards while the line is detached and
+      retries on reattach. carrier windows vary (usually a day or three),
+      so sms caught-while-away arrives in a burst on resume, not guaranteed.
+    - missed calls: the network only knows the subscriber was unreachable.
+      the durable record is the CARRIER's voicemail/records. if a telephony
+      keeper stays awake and holds the modem, it can log ring/incoming
+      events itself, which is the better answer.
+    - voicemail: carrier-provisioned boxes survive a pause by definition;
+      retrieval is an mmi/ivr call on resume. audio capture depends on the
+      modem exposing an audio path to the vm, which many usb sticks do not.
+    """
+    return {
+        "route": route,
+        "sms_while_paused": "store-and-forward at the smsc; delivery on reattach (carrier window, not guaranteed)",
+        "missed_calls": ("keeper log: ring/incoming events recorded while the guest slept"
+                         if keeper else "carrier voicemail/records only"),
+        "voicemail": ("carrier box, retrieved by mmi call on resume; audio path depends on the modem"
+                      if carrier_voicemail else "none - ask the carrier to provision voicemail"),
+        "keeper_required": True,
+    }
+
+
+def away_plan(voicemail_number="*99", keeper_dir="/var/lib/spawnables/keeper"):
+    """the keeper + drain: catch the away window, then hand it back.
+
+    the keeper is small on purpose: it is the only thing that stays awake
+    while the primary vm sleeps, bounded by the modem it holds. it writes
+    what arrived to a shared dir the guest reads on resume.
+    """
+    return [
+        ("away.keeper.init", "mkdir -p " + keeper_dir + " && chown modemmanager: " + keeper_dir),
+        ("away.keeper.modem", "mmcli -m any --enable   # the keeper's only job: stay attached"),
+        ("away.keeper.sms", "mmcli -m any --messaging-list-sms   # the shared dir gets a copy of every sms"),
+        ("away.keeper.calls", "mmcli -m any --voice-list-calls   # ring/incoming events for the missed-call log"),
+        ("away.drain.sms", "mmcli -m any --messaging-list-sms   # on resume: queued + keeper-stored messages"),
+        ("away.drain.read", "mmcli -s <n> --output-json"),
+        ("away.drain.voicemail", f"mmcli -m any --voice-create-call='number={voicemail_number}'"),
+        ("away.drain.otp", "sim.extract_otp(<message body>)   # the code that arrived while you slept"),
+    ]
+
+
+# -- the hypervisor attach (gemini's guide, fact-checked 2026-10-30) -------
+
+def hypervisor_attach_plan(ccid_port=35963):
+    """put a virtual card reader INSIDE the guest (qemu/kvm).
+
+    qemu ships usb-ccid plus ccid-card-passthru (hw/usb/ccid-card-passthru.c,
+    checked 2026-10-30): the guest enumerates a real ccid smart-card reader
+    and its apdus are forwarded over a host socket. the host side binds that
+    socket to a virtual card: vsmartcard's vpcd (or its usb ccid emulator),
+    with the card itself implemented by osmocom pySim / osmo-sim-auth, and
+    profiles issued by osmo-smdpp (all verified present 2026-10-30).
+
+    correction to the recipe's step 2: lpac has NO vpcd driver (checked:
+    no such driver in the repo), so 'the software vUICC core' is pySim's
+    world, and lpac is only for REAL cards over pcsc (esim.me, 5ber, estk).
+
+    and the ceiling, stated once: a card is not a network. the guest sees a
+    sim; calls and sms still need a modem or a software ue (ueransim) to
+    attach. injection is for the guests that HAVE a radio path.
+    """
+    return [
+        ("host.pcscd", "apt-get install -y pcscd pcsc-tools vsmartcard-vpcd"),
+        ("host.vpcd", f"vpcd --port {ccid_port}   # virtual card slot over tcp"),
+        ("host.card", "python3 pySim-shell.py --card=vpicc   # or osmo-sim-auth: the card itself"),
+        ("host.smdpp", "python3 osmo-smdpp.py   # profile server for test profiles"),
+        ("qemu.reader", (f"-chardev socket,id=ccid,host=127.0.0.1,port={ccid_port} "
+                         "-device usb-ccid,id=ccid0 "
+                         "-device ccid-card-passthru,chardev=ccid")),
+        ("guest.verify", "pcsc_scan   # 'card detected' + ATR = the guest believes a sim is plugged in"),
+    ]
+
+
 # -- ingestion: how a profile actually arrives (verified 2026-10-30) ----------
 
 ACTIVATION_RE = re.compile(r"^LPA:1\$([a-z0-9.\-]+)\$([A-Z0-9\-]{4,})$", re.IGNORECASE)
@@ -99,7 +207,8 @@ def parse_activation_code(code):
 
 
 def ingest(shelf, source, *, activation_code=None, package_path=None,
-           card_kind=None, cert_ref=None, nickname=None):
+           card_kind=None, cert_ref=None, nickname=None, owner_agent=None,
+           legal_subscriber=None):
     """put a profile on the shelf, whatever shape it came in.
 
     three real shapes:
@@ -113,9 +222,9 @@ def ingest(shelf, source, *, activation_code=None, package_path=None,
       the card so a lease or a move keeps the mapping.
     """
     if source == "test-profile":
-        return shelf.add_profile("test-profile", nickname or "test profile")
+        return shelf.add_profile("test-profile", nickname or "test profile", owner_agent=owner_agent)
     if source == "private-mno":
-        return shelf.add_profile("private-mno", nickname or "private mno profile")
+        return shelf.add_profile("private-mno", nickname or "private mno profile", owner_agent=owner_agent)
     if source == "carrier-mno":
         if not activation_code and not package_path and not card_kind:
             raise VUICCError("carrier-mno needs an activation code, a package file, or a card kind")
@@ -124,7 +233,8 @@ def ingest(shelf, source, *, activation_code=None, package_path=None,
         # the cert chain comes from the destination: a removable card carries
         # its own; our soft euicc has none unless the owner brought one, and
         # then add_profile refuses instead of pretending.
-        prof = shelf.add_profile("carrier-mno", nickname or "carrier profile",
+        prof = shelf.add_profile("carrier-mno", nickname or "carrier profile", owner_agent=owner_agent,
+                                 legal_subscriber=legal_subscriber,
                                  cert_ref="brought-card" if card_kind else cert_ref)
         if activation_code:
             parsed = parse_activation_code(activation_code)
@@ -161,7 +271,8 @@ class VUICC:
 
     # -- the profile shelf ------------------------------------------------
 
-    def add_profile(self, source, nickname, imsi=None, activation_code=None, cert_ref=None):
+    def add_profile(self, source, nickname, imsi=None, activation_code=None, cert_ref=None,
+                    owner_agent=None, legal_subscriber=None):
         if source not in SOURCES:
             raise VUICCError(f"number source {source!r} is not one of {SOURCES}")
         if source == "carrier-mno" and not cert_ref:
@@ -169,7 +280,14 @@ class VUICC:
                 "carrier-mno needs cert_ref: a gsma-issued eUICC certificate chain "
                 "in the vault. a self-made soft card has none and carrier sm-dp+ "
                 "servers will reject it - refusing now instead of failing at 2am")
+        identity = number_identity(owner_agent, legal_subscriber)
+        if source == "carrier-mno" and not identity["legal_subscriber"]:
+            raise VUICCError(
+                "carrier-mno also needs legal_subscriber: the agent owns the line in the "
+                "machine, but kyc makes some legal person the subscriber of record "
+                "(you, or an entity you control)")
         profile = {
+            "owner": identity,
             "iccid": _iccid(),
             "nickname": nickname,
             "source": source,

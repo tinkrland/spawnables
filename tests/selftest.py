@@ -1495,8 +1495,8 @@ class TestCatalogRoster(unittest.TestCase):
             v = VUICC(f"{d}/vuicc.json")
             self.assertEqual(len(v.eid), 64)
             # one active profile at a time, like a real card shelf
-            a = v.add_profile("test-profile", "dev-test")
-            b = v.add_profile("private-mno", "own-core", imsi="001010000000001")
+            a = v.add_profile("test-profile", "dev-test", owner_agent="sid-agent-1")
+            b = v.add_profile("private-mno", "own-core", imsi="001010000000001", owner_agent="sid-agent-1")
             v.enable(a["iccid"]); v.enable(b["iccid"])
             self.assertEqual(v.active()["iccid"], b["iccid"])
             self.assertEqual(v.get(a["iccid"])["state"], "disabled")
@@ -1507,7 +1507,7 @@ class TestCatalogRoster(unittest.TestCase):
             self.assertEqual(len(v.profiles), 1)
             # carrier-mno without a gsma cert chain is refused at config time
             with self.assertRaises(VUICCError):
-                v.add_profile("carrier-mno", "real-number")
+                v.add_profile("carrier-mno", "real-number", owner_agent="sid-agent-1")
             # eid is stable from its seed, and never stored raw
             seed = "a" * 64
             self.assertEqual(derive_eid(seed), derive_eid(seed))
@@ -1538,15 +1538,18 @@ class TestCatalogRoster(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             shelf = VUICC(f"{d}/uicc.json", eid_seed="test-seed")
             # 1) activation code, the shape carriers and esim shops mail out
-            prof = ingest(shelf, "carrier-mno", card_kind="esim.me",
+            prof = ingest(shelf, "carrier-mno", card_kind="esim.me", owner_agent="sid-agent-1",
+                       legal_subscriber="tinkr land llp",
                           activation_code="LPA:1$smdp.example.com$AB12-CD34")
             self.assertEqual(prof["smdp"], "smdp.example.com")
             self.assertEqual(prof["activation_code_ref"], "@@vault:activation@@")  # ref, never the code
             # 2) a downloaded package file (the "downloadable esim file" shape)
-            prof2 = ingest(shelf, "carrier-mno", card_kind="estk", package_path="/tmp/telco.esim")
+            prof2 = ingest(shelf, "carrier-mno", card_kind="estk", package_path="/tmp/telco.esim",
+                       owner_agent="sid-agent-1", legal_subscriber="tinkr land llp")
             self.assertTrue(prof2["package_ref"].startswith("@@vault:package-"))
             # 3) a removable euicc (esim.me / 5ber / estk) with the profile already on it
-            prof3 = ingest(shelf, "carrier-mno", card_kind="esim.me")
+            prof3 = ingest(shelf, "carrier-mno", card_kind="esim.me", owner_agent="sid-agent-1",
+                       legal_subscriber="tinkr land llp")
             self.assertEqual(prof3["card"], "esim.me")
             self.assertEqual(prof3["cert_ref"], "brought-card")  # the card is the cert
             with self.assertRaises(VUICCError):   # a soft card has no cert chain: refused
@@ -1571,6 +1574,48 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("mmcli -m any --messaging-list-sms", modem_steps)
         self.assertIn("mmcli -m any --voice-list-calls", modem_steps)
         self.assertIn("ueransim", " ".join(c for _, c in telephony_plan("private-core")))
+
+    def test_agent_owns_its_number_and_can_catch_the_away_window(self):
+        import tempfile
+        from spawnables.vuicc import (VUICC, VUICCError, number_identity,
+                                      away_capabilities, away_plan,
+                                      hypervisor_attach_plan)
+        # the number is the agent's, never the owner's personal line
+        with self.assertRaises(VUICCError):
+            number_identity(None)                       # a number needs an owner
+        with self.assertRaises(VUICCError):
+            number_identity("sid-1", number_scope="owner-personal")
+        ident = number_identity("sid-1")
+        self.assertEqual(ident["owner_kind"], "agent")
+        self.assertEqual(ident["number_scope"], "dedicated")
+        with tempfile.TemporaryDirectory() as d:
+            v = VUICC(f"{d}/v.json")
+            with self.assertRaises(VUICCError):
+                v.add_profile("test-profile", "no-owner")   # refused, owner required
+            prof = v.add_profile("private-mno", "own-core", owner_agent="sid-1")
+            self.assertEqual(prof["owner"]["owner_agent"], "sid-1")
+            # carrier-mno also demands a legal subscriber (kyc is real)
+            v2 = VUICC()
+            with self.assertRaises(VUICCError) as ctx:
+                v2.add_profile("carrier-mno", "x", cert_ref="brought-card", owner_agent="sid-1")
+            self.assertIn("legal_subscriber", str(ctx.exception))
+        # the away window: sms store-and-forwards, missed calls need a keeper
+        caps = away_capabilities(keeper=True)
+        self.assertIn("store-and-forward", caps["sms_while_paused"])
+        self.assertIn("keeper", caps["missed_calls"])
+        self.assertIn("mmi", caps["voicemail"])  # retrieved by dialling the box
+        drain = " ".join(c for _, c in away_plan())
+        self.assertIn("messaging-list-sms", drain)      # queued + stored messages
+        self.assertIn("voice-list-calls", drain)        # missed-call log
+        self.assertIn("*99", drain)                     # the voicemail box, dialled on resume
+        # the hypervisor attach: qemu gets a real ccid reader, host binds a card
+        hv = hypervisor_attach_plan()
+        joined = " ".join(c for _, c in hv)
+        self.assertIn("usb-ccid", joined)               # qemu hw/usb, verified
+        self.assertIn("ccid-card-passthru", joined)
+        self.assertIn("vpcd", joined)
+        self.assertIn("pcsc_scan", joined)              # guest-side proof
+        self.assertIn("a card is not a network", open("spec/esim-feasibility.md").read())
 
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]

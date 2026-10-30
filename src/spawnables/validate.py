@@ -7,7 +7,6 @@ everything so the api cannot be talked into a bad provision.
 
 import re
 
-from .sim import validate_sim
 from .netpriv import normalize as _net_normalize, validate_network as _net_validate
 
 USERNAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
@@ -62,10 +61,6 @@ def validate_order(order, catalog):
         if key in seen_grants:
             errors.append(f"grant for '{g.agent}': same {g.mode} grant listed twice")
         seen_grants.add(key)
-
-    sim_errors, sim_warnings = validate_sim(order.sim, os_name)
-    errors.extend(sim_errors)
-    warnings.extend(sim_warnings)
 
     if order.users and os_name in ("android", "ios"):
         warnings.append(f"{os_name} has no multi-user lane; users are skipped at provision")

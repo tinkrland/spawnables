@@ -1436,6 +1436,66 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertEqual(o.base_image, "redroid-15")
         self.assertEqual(o.grants[0].mode, "drive")
 
+    def test_cloud_connect_is_turnkey_and_names_what_aws_really_is(self):
+        import calendar
+        import time as _t
+        from spawnables.cloud import (connect_plan, create_steps, sigv4, PROVIDERS,
+                                      LOCAL_REQUIREMENTS, no_local_stack_note)
+        # the whole promise: every provider lane needs nothing on this host
+        for pid in PROVIDERS:
+            self.assertEqual(LOCAL_REQUIREMENTS[pid], ())
+            plan = connect_plan(pid, client_id="cid", project="proj")
+            self.assertFalse(plan["docker_needed"])
+            self.assertFalse(plan["verified"])        # honest until an account runs it
+            self.assertTrue(plan["honest"])
+        # azure is a real device code flow; gcp is loopback+pkce
+        az = connect_plan("azure", client_id="cid")
+        self.assertEqual(az["kind"], "device_code")
+        self.assertIn("management.azure.com", az["steps"][0]["body"])
+        gcp = connect_plan("gcp", client_id="cid", project="proj")
+        self.assertEqual(gcp["kind"], "pkce")
+        self.assertIn("code_challenge_method=S256", gcp["authorize_url"])
+        # the verifier stays local; only its challenge travels
+        self.assertIn("code_challenge=", gcp["authorize_url"])
+        self.assertNotIn(gcp["verifier"], gcp["authorize_url"])
+        # aws has no user oauth: federation template by default, sso-oidc if asked
+        aws = connect_plan("aws")
+        self.assertEqual(aws["kind"], "federation_template")
+        self.assertIn("SpawnablesRole", aws["template"]["Resources"])
+        self.assertIn("sts:ExternalId", str(aws["template"]))
+        self.assertEqual(connect_plan("aws", sso_start_url="https://x.awsapps.com/start")["kind"],
+                         "sso_device")
+        self.assertIn("no user oauth", connect_plan("aws")["honest"])
+        # the signer matches botocore byte for byte (a bad signer looks like a perm bug)
+        at = _t.gmtime(calendar.timegm((2026, 10, 30, 12, 0, 0, 0, 0, 0)))
+        ours = sigv4("GET", "https://ec2.us-east-1.amazonaws.com/?Action=DescribeInstances"
+                            "&Version=2016-11-15", "us-east-1", "ec2", "AKIDEXAMPLE",
+                     "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY", at=at)["authorization"]
+        self.assertIn("SignedHeaders=host;x-amz-date", ours)
+        try:
+            from botocore.auth import SigV4Auth
+            from botocore.awsrequest import AWSRequest
+            from botocore.credentials import Credentials
+            import datetime
+            import botocore.auth as ba
+            req = AWSRequest(method="GET",
+                             url="https://ec2.us-east-1.amazonaws.com/?Action=DescribeInstances"
+                                 "&Version=2016-11-15", data=b"")
+            ba.get_current_datetime = lambda: datetime.datetime(2026, 10, 30, 12, 0, 0)
+            SigV4Auth(Credentials("AKIDEXAMPLE",
+                                  "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY"),
+                      "ec2", "us-east-1").add_auth(req)
+            self.assertEqual(ours, req.headers["Authorization"])
+        except ImportError:
+            pass   # no botocore on this host; the shape assertions above still hold
+        # a dry machine plan carries the exact calls and no credential
+        steps = create_steps("gcp", name="m1", region="us-central1-a",
+                             size="e2-standard-2", ssh_public_key="ssh-ed25519 AAAA x",
+                             project="proj", token=None)
+        self.assertEqual(steps[0]["method"], "POST")
+        self.assertNotIn("authorization", steps[0]["headers"])
+        self.assertIn("no docker", no_local_stack_note())
+
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]
         for os_name in ("linux", "windows", "macos", "android"):

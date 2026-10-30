@@ -13,6 +13,13 @@ dated research; this module is the honest lane selector.
 - remote-sim: osmo-remsim banks a real sim elsewhere and serves its
   apdus to the guest over ip. needs a guest with a RIL/modem (cuttlefish
   lane), so it is a later phone lane, not a redroid one.
+- carrier-app: the carrier's own companion service (jio call, t-mobile
+  digits and friends). the number is registered on a physical phone or
+  gateway and the app on the guest carries its calls and texts over
+  data. NOT a sim and not an esim: no baseband, no euicc; the number
+  stays the carrier's and rides the data layer. voice generally works;
+  sms sync is carrier- and plan-specific and bank otp sms is often
+  excluded, so the card says exactly that instead of promising.
 - virtual-euicc-test: vpcd + lpac + osmo-smdpp, TEST PROFILES ONLY. it
   proves the esim flow (download, enable, switch) without a carrier, and
   it can never mint a real carrier number.
@@ -26,11 +33,12 @@ card. spec/esim-feasibility.md, appendix two.
 """
 import re
 
-LANES = ("none", "modem-passthrough", "remote-sim", "virtual-euicc-test")
+LANES = ("none", "modem-passthrough", "remote-sim", "virtual-euicc-test", "carrier-app")
 TEST_ONLY_LANES = ("virtual-euicc-test",)
-DEFAULTS = {"lane": "none", "usb": None, "remsim_server": None}
+DEFAULTS = {"lane": "none", "usb": None, "remsim_server": None, "carrier_app": None, "number_host": None}
 USB_RE = re.compile(r"^[0-9a-f]{4}:[0-9a-f]{4}$")
 SERVER_RE = re.compile(r"^(tcp://)?[a-z0-9.\-]+:\d{1,5}$")
+PKG_RE = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z0-9_]+){2,}$")
 
 
 class SimError(Exception):
@@ -76,6 +84,24 @@ def validate_sim(section, os_name="android"):
         warnings.append(
             "remote-sim needs a guest with a modem/RIL to consume the apdus; "
             "redroid cannot (cuttlefish lane only, see spec/esim-feasibility.md)")
+    if lane == "carrier-app":
+        if os_name != "android":
+            errors.append(
+                "carrier-app runs on android phone guests (adb sideload); "
+                f"{os_name} has no phone-app lane (spec/esim-feasibility.md)")
+            return errors, warnings
+        pkg = (s.get("carrier_app") or "").lower()
+        if not PKG_RE.match(pkg):
+            errors.append("carrier-app needs carrier_app as the app package (e.g. com.jio.join)")
+        if (s.get("number_host") or "").lower() not in ("phone", "gateway"):
+            errors.append("carrier-app needs number_host: phone or gateway - the number must live somewhere real")
+        warnings.append(
+            "carrier-app is not a sim: the number stays with the carrier and rides the "
+            "data layer; voice usually works, sms sync is carrier/plan-specific, and "
+            "bank/verification sms is often excluded")
+        warnings.append(
+            "carrier apps often need google play services and a supported region, and may "
+            "refuse a vm build; the card reports the refusal instead of hiding it")
     if lane in TEST_ONLY_LANES:
         warnings.append(
             "virtual-euicc-test is test profiles only: it exercises the esim flow, "
@@ -107,6 +133,11 @@ def guest_steps(section, os_name="android"):
     if lane == "remote-sim":
         return [("sim.remsim", "apt-get update && apt-get install -y osmo-remsim-client"),
                 ("sim.remsim.connect", f"osmo-remsim-client --server-ip {s['remsim_server'].split(':')[0]} --server-port {s['remsim_server'].split(':')[-1]}")]
+    if lane == "carrier-app":
+        pkg = s["carrier_app"]
+        return [("sim.carrier.install", f"adb install -r /tmp/spawnables-handoff/{pkg}.apk"),
+                ("sim.carrier.launch", f"adb shell monkey -p {pkg} -c android.intent.category.LAUNCHER 1"),
+                ("sim.carrier.verify", f"adb shell pm list packages | grep -q {pkg}")]
     if lane == "virtual-euicc-test":
         return [("sim.vpcd", "apt-get update && apt-get install -y pcscd vsmartcard-vpcd lpac"),
                 ("sim.vpcd.start", "vpcd --port 35963 &"),
@@ -126,6 +157,14 @@ def card_note(section):
                 "the same machine the agent drives")
     if lane == "remote-sim":
         return "remote sim (osmo-remsim bank): real apdus over ip, needs a RIL-capable guest"
+    if lane == "carrier-app":
+        pkg = s["carrier_app"]
+        return [("sim.carrier.install", f"adb install -r /tmp/spawnables-handoff/{pkg}.apk"),
+                ("sim.carrier.launch", f"adb shell monkey -p {pkg} -c android.intent.category.LAUNCHER 1"),
+                ("sim.carrier.verify", f"adb shell pm list packages | grep -q {pkg}")]
+    if lane == "carrier-app":
+        return ("carrier companion over data: a real number with no sim in the machine "
+                "(voice rides the carrier ott; sms only if the carrier syncs it)")
     if lane == "virtual-euicc-test":
         return "virtual eUICC: test profiles only, never a carrier number"
     return f"unknown sim lane: {lane}"

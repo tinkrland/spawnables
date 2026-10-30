@@ -16,6 +16,13 @@ dated research; this module is the honest lane selector.
 - virtual-euicc-test: vpcd + lpac + osmo-smdpp, TEST PROFILES ONLY. it
   proves the esim flow (download, enable, switch) without a carrier, and
   it can never mint a real carrier number.
+
+the same lanes work on the dedicated computer vm (linux), which is the
+better home for a number than a phone nobody looks at: the modem hands
+the guest sms through ModemManager, so an otp lands in mmcli on the very
+machine the agent drives. the radio is still real (rf cannot be
+emulated); the sim can be physical, remote (osmo-remsim bank), or a test
+card. spec/esim-feasibility.md, appendix two.
 """
 import re
 
@@ -47,9 +54,14 @@ def validate_sim(section, os_name="android"):
         return errors, warnings
     if lane == "none":
         return errors, warnings
-    if os_name != "android":
+    if os_name == "linux":
+        pass  # the dedicated computer vm: same lanes, modem-manager guest
+    elif os_name == "android":
+        pass
+    else:
         errors.append(
-            f"sim lane {lane!r} is android-only; {os_name} has no sim slot to hand it to")
+            f"sim lane {lane!r} is not wired for {os_name}; "
+            "the lanes run on linux (computer vm) and android (phone guests)")
         return errors, warnings
     if lane == "modem-passthrough":
         usb = (s.get("usb") or "").lower()
@@ -86,7 +98,7 @@ def guest_steps(section, os_name="android"):
     lane = s["lane"]
     if lane in ("none",):
         return []
-    if os_name != "android":
+    if os_name not in ("android", "linux"):
         return []
     if lane == "modem-passthrough":
         # the modem appears as usb; nothing to install for sms, but a
@@ -109,9 +121,37 @@ def card_note(section):
     if lane == "none":
         return "no sim: data-only phone"
     if lane == "modem-passthrough":
-        return "real modem passthrough: sim/esim through the modem, sms over the network, never voip"
+        return ("real modem passthrough: sim/esim through the modem, sms over the "
+                "network, never voip; on the computer vm the otp lands in mmcli on "
+                "the same machine the agent drives")
     if lane == "remote-sim":
         return "remote sim (osmo-remsim bank): real apdus over ip, needs a RIL-capable guest"
     if lane == "virtual-euicc-test":
         return "virtual eUICC: test profiles only, never a carrier number"
     return f"unknown sim lane: {lane}"
+
+
+def sms_read_steps():
+    """read sms on the computer vm: the otp arrives on the machine itself."""
+    return [("sim.sms.list", "mmcli -m any --messaging-list-sms"),
+            ("sim.sms.read", "mmcli -s 0 --output-json")]
+
+
+OTP_RE = None
+
+
+def extract_otp(body):
+    """pull candidate one-time codes out of an sms body.
+
+    conservative: 4-8 digits, not part of a longer number, de-duplicated
+    in order of appearance. more than one candidate stays a list; the
+    caller picks, and the card never guesses silently.
+    """
+    import re as _re
+    seen, out = set(), []
+    for m in _re.finditer(r"(?<![\d-])(\d{4,8})(?![\d-])", body or ""):
+        code = m.group(1)
+        if code not in seen:
+            seen.add(code)
+            out.append(code)
+    return out

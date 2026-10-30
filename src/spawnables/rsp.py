@@ -111,7 +111,14 @@ def provisioning_needs_radio():
 
 
 def activation_policy():
-    """who asks for an imei, and what the profile can actually do."""
+    """who asks for an imei, and what the profile can actually do.
+
+    owner's read, 2026-10-30, and the data agrees: the esim reseller market is
+    mostly travel data. cheap, no imei, no number, no sms. so the resellers are
+    not a lane for us at all - what we need is a line a service will send an otp
+    to, and that means a carrier or mvno contract line, or a plain prepaid sim in
+    a modem, which skips esim entirely.
+    """
     return {
         "contract-line": {
             "examples": "tello, mint (mvno on a national ran)",
@@ -132,8 +139,10 @@ def activation_policy():
             "imei_required": False,
             "phone_number": False,
             "sms": False,
-            "note": ("an activation string any compliant euicc can load. great for data, "
-                     "useless for otp sms: no msisdn to send to"),
+            "use": "skip",
+            "note": ("an activation string any compliant euicc can load. the whole "
+                     "reseller market is data-first travel esims, so this is not a "
+                     "number: no msisdn, no otp, no voice. skip it and stop pricing it"),
         },
     }
 

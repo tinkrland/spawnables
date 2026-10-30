@@ -50,7 +50,7 @@ what the provider sells decides whether an imei is asked for. it is not a capabi
 | mvno esim flow (us mobile reported) | sometimes waived | yes | yes |
 | travel data reseller (airalo, nomad, holafly) | no | **no** | **no** |
 
-the last row is the trap in the "no imei at scale" idea: an activation string any euicc can load, with no msisdn to send an otp to. data without a number is cheap and easy; a number is what costs an imei and, if the agent sends, a 10dlc registration.
+the last row is the trap in the "no imei at scale" idea, and the owner's read of the market settles it: the esim reseller space is mostly travel data. cheap, no imei, and no msisdn to send an otp to. so resellers are **not a lane**, and pricing them is wasted work. a number, which is the only thing we actually need, comes from a carrier or mvno contract line with a real imei, or from a plain prepaid sim in a modem, which skips esim altogether and is the cheapest honest route to working sms.
 
 ## where the research actually still is
 

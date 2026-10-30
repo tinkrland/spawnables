@@ -39,6 +39,10 @@ the same board repeated 4 or 8 times behind one usb hub is a modem farm in one b
 - it cannot dodge a2p 10dlc, stir/shaken attestation or e911 registration. those follow the number, not the board.
 - it cannot replace vowifi for the cases where a carrier refuses to provision a non-phone imei: the module's tac is what it is.
 
+## fab: jlcpcb
+
+the owner's house is jlcpcb, and two of its constraints shape the design more than any preference: assembly parts come from the lcsc catalogue, so a board cannot depend on an mff2 chip it does not sell, and the cheap tier is 4 layers at 5/5 mil. that gives two revisions: **rev a** socketed and all-lcsc, with a nano-sim socket and a removable euicc to prove the whole chain; **rev b** the same board with the mff2 footprint populated, by hand or by a turnkey assembler. details, part strategy and the things jlc will not do for you: [jlcpcb-fab.md](jlcpcb-fab.md).
+
 ## ballpark
 
 4-layer board, ~60x100 mm, module on an m.2 socket or soldered lga, mff2 + nano-sim mux, rp2040 keeper, two u.fl ports: component cost lands in the 25 to 60 usd range per unit at small volume, plus assembly. prototypes from a turnkey house are a few hundred dollars for the first three. the expensive part is not the pcb: it is the antennas and the certification discipline, both of which are cheaper when the module's reference design is followed exactly.

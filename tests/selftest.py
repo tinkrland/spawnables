@@ -1756,6 +1756,26 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("iso7816", steps)
         self.assertIn("eim", steps)
 
+    def test_resellers_are_not_a_lane_and_jlc_shapes_the_board(self):
+        from spawnables.rsp import activation_policy
+        pol = activation_policy()
+        # the reseller market is travel data: no number, so it is skipped by name
+        self.assertEqual(pol["travel-data-reseller"]["use"], "skip")
+        self.assertFalse(pol["travel-data-reseller"]["phone_number"])
+        self.assertIn("travel", pol["travel-data-reseller"]["note"])
+        self.assertTrue(pol["contract-line"]["sms"])       # a number still means a contract line
+        # and the board is designed for the owner's fab house, not adapted after the fact
+        doc = open("spec/jlcpcb-fab.md").read().lower()
+        self.assertIn("lcsc", doc)                          # assembly parts come from the catalogue
+        self.assertIn("rev a", doc)                         # socketed, all-lcsc, no mff2
+        self.assertIn("rev b", doc)                         # mff2 populated
+        self.assertIn("dnp", doc)                           # leave the footprint, hand-place later
+        self.assertIn("antenna", doc)                       # the thing jlc will not tune
+        self.assertIn("prepaid sim", doc)                   # proves the point without esim at all
+        board = open("spec/hardware-carrier-board.md").read()
+        self.assertIn("jlcpcb", board.lower())
+        self.assertIn("jlcpcb-fab.md", board)
+
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]
         for os_name in ("linux", "windows", "macos", "android"):

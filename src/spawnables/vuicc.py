@@ -211,7 +211,7 @@ def parse_activation_code(code):
 
 def ingest(shelf, source, *, activation_code=None, package_path=None,
            card_kind=None, cert_ref=None, nickname=None, owner_agent=None,
-           legal_subscriber=None):
+           legal_subscriber=None, imei=None):
     """put a profile on the shelf, whatever shape it came in.
 
     three real shapes:
@@ -246,6 +246,18 @@ def ingest(shelf, source, *, activation_code=None, package_path=None,
             prof["package_ref"] = f"@@vault:package-{prof['iccid']}@@"
         if card_kind:
             prof["card"] = card_kind
+        if source == "carrier-mno":
+            # tello/mint/us mobile validate the device at checkout, so the
+            # order carries the modem's own imei (a vault ref), never a
+            # borrowed or invented one.
+            from .imei import parse_imei
+            if not imei:
+                raise VUICCError(
+                    "carrier-mno needs the modem's imei: capture it with "
+                    "imei.capture_steps() and store it in the vault")
+            ident = parse_imei(imei)          # refuses non modem-own sources
+            prof["imei_ref"] = "@@vault:imei@@"
+            prof["tac"] = ident["tac"]        # the tac is all the card may show
         shelf._save()
         return prof
     raise VUICCError(f"cannot ingest source {source!r}")

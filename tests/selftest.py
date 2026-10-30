@@ -1539,23 +1539,26 @@ class TestCatalogRoster(unittest.TestCase):
             shelf = VUICC(f"{d}/uicc.json", eid_seed="test-seed")
             # 1) activation code, the shape carriers and esim shops mail out
             prof = ingest(shelf, "carrier-mno", card_kind="esim.me", owner_agent="sid-agent-1",
-                       legal_subscriber="tinkr land llp",
+                       legal_subscriber="tinkr land llp", imei="356938035643809",
                           activation_code="LPA:1$smdp.example.com$AB12-CD34")
             self.assertEqual(prof["smdp"], "smdp.example.com")
             self.assertEqual(prof["activation_code_ref"], "@@vault:activation@@")  # ref, never the code
             # 2) a downloaded package file (the "downloadable esim file" shape)
             prof2 = ingest(shelf, "carrier-mno", card_kind="estk", package_path="/tmp/telco.esim",
-                       owner_agent="sid-agent-1", legal_subscriber="tinkr land llp")
+                       owner_agent="sid-agent-1", legal_subscriber="tinkr land llp",
+                       imei="356938035643809")
             self.assertTrue(prof2["package_ref"].startswith("@@vault:package-"))
             # 3) a removable euicc (esim.me / 5ber / estk) with the profile already on it
             prof3 = ingest(shelf, "carrier-mno", card_kind="esim.me", owner_agent="sid-agent-1",
-                       legal_subscriber="tinkr land llp")
+                       legal_subscriber="tinkr land llp", imei="356938035643809")
             self.assertEqual(prof3["card"], "esim.me")
             self.assertEqual(prof3["cert_ref"], "brought-card")  # the card is the cert
             with self.assertRaises(VUICCError):   # a soft card has no cert chain: refused
-                ingest(shelf, "carrier-mno", activation_code="LPA:1$smdp.example.com$AB12-CD34")
+                ingest(shelf, "carrier-mno", activation_code="LPA:1$smdp.example.com$AB12-CD34",
+                          owner_agent="sid-agent-1", legal_subscriber="x llc", imei="356938035643809")
             with self.assertRaises(VUICCError):   # unknown card is refused, not guessed
-                ingest(shelf, "carrier-mno", card_kind="mystery-stick")
+                ingest(shelf, "carrier-mno", card_kind="mystery-stick",
+                          owner_agent="sid-agent-1", legal_subscriber="x llc", imei="356938035643809")
             with self.assertRaises(VUICCError):   # bad activation code is refused early
                 parse_activation_code("LPA:2$nope")
             # one active profile, real-card rules
@@ -1635,6 +1638,30 @@ class TestCatalogRoster(unittest.TestCase):
         from spawnables.vuicc import away_plan
         vm = [c for label, c in away_plan() if label == "away.drain.voicemail"][0]
         self.assertIn("*86", vm)                             # us-first code in the drain plan
+
+    def test_imei_is_the_modems_own_and_tello_needs_one(self):
+        from spawnables.imei import (parse_imei, ImeiError, capture_steps,
+                                     activation_requirements, luhn_ok)
+        good = parse_imei("356938035643809")
+        self.assertEqual(good["tac"], "35693803")          # the tac is all a card may show
+        self.assertTrue(luhn_ok("356938035643809"))
+        with self.assertRaises(ImeiError):
+            parse_imei("355674080092189")                  # fails luhn: not a real device
+        with self.assertRaises(ImeiError):
+            parse_imei("3569380356438")                    # too short
+        # the rule that matters: never a borrowed or invented identity
+        for bad in ("spoofed", "borrowed", "generated", "phone-of-a-friend"):
+            with self.assertRaises(ImeiError):
+                parse_imei("356938035643809", source=bad)
+        steps = " ".join(c for _, c in capture_steps())
+        self.assertIn("AT+CGSN", steps)                    # the modem reports its own
+        self.assertIn("vault", steps)                      # value sealed, ref in the order
+        errs, notes = activation_requirements()
+        self.assertTrue(any("imei" in e for e in errs))     # no imei, no activation
+        self.assertTrue(any("removable card" in e for e in errs))  # soft eid is not accepted
+        self.assertTrue(any("tac" in n for n in notes))     # accepted != compatible
+        errs2, _ = activation_requirements(imei_ref="@@vault:imei@@", card="esim.me")
+        self.assertEqual(errs2, [])
 
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]

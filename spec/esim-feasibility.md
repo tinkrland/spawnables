@@ -48,6 +48,21 @@ the unlock that matters most for agents: **twofa without a phone at all.** when 
 
 honest ceilings: "hardwareless modem" is not a thing, because rf cannot be emulated and no carrier will attach a phantom radio. a number costs a sim or esim plan and a modem. esim download needs a module that supports it *and* a carrier willing to issue a profile to an iot imei, which some do at data rates and some refuse. sms can lag, and some services send codes by app push instead, which no modem will ever receive.
 
+## the two identities: eid vs imei, and the tello question (checked 2026-10-30)
+
+a carrier that sells an esim at retail (tello, mint, us mobile) asks for an **imei** at checkout, and this is not a formality.
+
+- the **eid** belongs to the eUICC. a removable card (esim.me, 5ber, estk) brings a genuine eid plus the certification chain a carrier's sm-dp+ will accept. our **virtual euicc has a made-up eid**: perfect against osmo-smdpp test profiles, useless at a carrier, which is why `carrier-mno` refuses without a real card.
+- the **imei** belongs to the radio. it is the modem's own serial, reported by the hardware over `at+cgsn`. a vm has no imei for the same reason it has no transmitter.
+
+so: **we did not have one, and one cannot be manufactured.** what we can do, and now do ([imei.py](../src/spawnables/imei.py)):
+
+- capture it from the modem at provisioning (`mmcli -m any --command='AT+CGSN'`), seal the value in the vault, keep only a reference and the first eight digits (the tac) on the card.
+- refuse every other source in code: spoofed, borrowed, generated. cloning a device identity is fraud, and a line registered to somebody else's handset is a liability we would inherit.
+- flag the part a carrier decides: an accepted imei is not a compatibility promise, because carriers validate the tac against their device list and some reject iot modules outright. buying a phone-class modem is the cheapest way to avoid that argument.
+
+one small terminological note: **esn** is the cdma-era equivalent and only mattered on legacy verizon/sprint networks; on gsm/lte/nr the form always wants an imei, which is why tello's says imei.
+
 ## market: us first (owner call 2026-10-30)
 
 the market is the united states first. that changes four things and the code carries them (`regions.py`): where profiles come from (carrier sm-dp+ servers want an eid+imei pair and a plan; mvnos and resellers like us mobile, tello, mint and airalo sell activation codes and qr payloads, which are the exact shapes `sim.ingest` takes; removable euiccs load over pc/sc and then into a modem), what compliance rides on the number (sms at any volume is a2p and needs 10dlc brand+campaign registration; calls need stir/shaken attestation or they are labelled spam or blocked; 911 reachability needs a registered e911 address; the carrier's subscriber of record is a legal person under kyc, while the agent owns the sim), which companion apps exist (t-mobile digits, at&t numbersync, verizon number share), and which code dials the voicemail box on resume (verizon `*86`, at&t `*98`, t-mobile `1`), with a note on the card that boxes move and the code is confirmed at provisioning rather than trusted.

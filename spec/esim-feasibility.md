@@ -139,3 +139,18 @@ so: the keeper is the honest mechanism, and `vuicc.away_plan()` is its runnable 
 - **the ceiling nobody's recipe says: a card is not a network.** injecting the card makes the guest *see a sim*. it does not create a radio: calls and sms still need a modem or a software ue (ueransim) to attach to something. injection is for guests that already have a radio path, and for exercising es10 flows inside the guest.
 
 `vuicc.hypervisor_attach_plan()` is the runnable version of all three steps.
+
+## appendix seven: is there a software cellular modem? (checked 2026-10-30)
+
+short answer: **no**, and not for lack of effort.
+
+attaching to a public carrier network needs a transmitter on licensed spectrum, and the certification (fcc, ptcrb, gcf) rides the radio module rather than the code. no container, hypervisor trick or clever driver puts a signal in the air. `sim.software_modem_reality()` states it in data so no card improvises it.
+
+what does exist, and where each one stops:
+
+- **protocol stacks without radio**: srsran, openairinterface, ueransim. they speak 4g and 5g, but to a simulated or private network over sockets or a zmq link. attach them to a real network and you are back to an sdr, which is hardware.
+- **vowifi: the closest thing to software cellular on a public network, and the real answer to the question.** the access network is wi-fi (a vm already has one) and the sim/esim credentials authenticate over ims, so the carrier sees its own registration and bills its own number. the gate is carrier-side, not technical: wifi calling is approved per device model and imei, and linux has no ims client. in practice that means an android guest running the carrier's own wifi calling (device-gated), or the carrier companion app (voice only).
+- **modem-as-a-service**: the radio exists, just not in your box. that is hardware in somebody else's rack, and the number belongs to their account.
+- **the router workaround is still hardware**: an esim.me card in a travel router moves the radio, it does not remove it.
+
+so the non-hardware, non-router ladder, best first: vowifi through a carrier that approves the device; a carrier companion app for voice; a private core with a software ue for a number that only exists inside your network. everything else has a chip in it somewhere.

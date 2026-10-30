@@ -221,3 +221,38 @@ def extract_otp(body):
             seen.add(code)
             out.append(code)
     return out
+
+
+# -- does a software cellular modem exist? (answer, 2026-10-30) --------------
+
+def software_modem_reality():
+    """the answer, in data, so no card has to improvise it.
+
+    a software *modem* that attaches to a public carrier network does not
+    exist and cannot: attach needs a transmitter on licensed spectrum, and
+    spectrum is regulated hardware (fcc ptcrb/gcf certification rides the
+    module, not the code).
+
+    what does exist, in three tiers:
+    - protocol stacks without radio: srsran, openairinterface, ueransim.
+      they speak 4g/5g to a *simulated or private* network over sockets or
+      a zmq link. real radio attaches need an sdr (which is hardware).
+    - vowifi: the closest thing to software cellular on a public network.
+      the access network is wi-fi (a vm already has one), and the sim/
+      esim credentials authenticate over ims, so the carrier sees its own
+      registration. the gate is carrier-side: wi-fi calling is approved
+      per device model/imei, and linux has no ims client - in practice it
+      means an android guest with the carrier's wifi calling (device-gated)
+      or the carrier's companion app (voice-only, see carrier-app).
+    - modem-as-a-service: the radio exists, just not in your box. that is
+      hardware again, in someone else's rack, and the number belongs to
+      their account, not yours.
+    """
+    return {
+        "software_modem_for_public_networks": False,
+        "why": "attach needs a transmitter on licensed spectrum; certification rides the module, not the code",
+        "protocol_stacks_without_radio": ["srsran", "openairinterface", "ueransim"],
+        "closest_software_path": "vowifi (ims over the vm's own network; carrier device-gated, linux has no ims client)",
+        "private_only_path": "open5gs + ueransim: a real attach, inside your own network",
+        "router_workaround_is_still_hardware": "an esim.me card in a travel router moves the radio, it does not remove it",
+    }

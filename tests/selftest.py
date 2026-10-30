@@ -1685,6 +1685,16 @@ class TestCatalogRoster(unittest.TestCase):
         from spawnables.regions import compliance_notes
         self.assertTrue(any("esn" in n or "cdma" in n for n in compliance_notes()))
 
+    def test_no_software_cellular_modem_exists_and_vowifi_is_the_closest(self):
+        from spawnables.sim import software_modem_reality
+        r = software_modem_reality()
+        self.assertFalse(r["software_modem_for_public_networks"])
+        self.assertIn("transmitter", r["why"])
+        self.assertIn("ueransim", r["protocol_stacks_without_radio"])   # protocol, not radio
+        self.assertIn("vowifi", r["closest_software_path"])             # ims over the vm's network
+        self.assertIn("device-gated", r["closest_software_path"])       # the real gate
+        self.assertIn("does not remove it", r["router_workaround_is_still_hardware"])
+
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]
         for os_name in ("linux", "windows", "macos", "android"):

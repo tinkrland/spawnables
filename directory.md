@@ -11,6 +11,7 @@ the map. everything worth reading, linked.
 - [multi-user machines](spec/multi-user.md): several os accounts on one machine, shared-computer style.
 - [advanced controls](spec/advanced-controls.md): the section 03 network and privacy surface.
 - [device context](spec/device-context.md): the three fingerprints, personas per guest os, the positioning.
+- [twofa handoff](spec/twofa-handoff.md): the qr-scan lane, decoded locally ([twofa.py](src/spawnables/twofa.py)).
 - [schemas](spec/schemas/): json schema drafts for every object.
 
 ## the control plane

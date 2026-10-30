@@ -237,7 +237,7 @@ class TestCatalog(unittest.TestCase):
         self.assertGreaterEqual(len(CATALOG.base_images), 8)
         self.assertGreaterEqual(len(CATALOG.recipes), 9)
         self.assertEqual(len(CATALOG.rices), 2)
-        self.assertEqual(len(CATALOG.path_tools), 3)
+        self.assertEqual(len(CATALOG.path_tools), 4)  # + zbar for the twofa lane
 
     def test_availability_matrix(self):
         r = CATALOG.recipes["netflix"]
@@ -1271,6 +1271,65 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("runs in the browser", gui)             # where it exists
         self.assertIn("http://127.0.0.1:8600", gui)           # open and go
         self.assertIn("no external fonts", gui)
+
+    def test_twofa_totp_secret_never_reaches_the_card(self):
+        from spawnables.twofa import extract_totp, classify
+        uri = ("otpauth://totp/github:me?secret=abcd1234&issuer=GitHub"
+               "&algorithm=sha1&digits=6&period=30")
+        public, secret = extract_totp(uri)
+        self.assertEqual(secret, "abcd1234")
+        self.assertNotIn("secret", public)                 # card never carries the seed
+        self.assertEqual(public["secret_ref"], "@@vault:totp-github@@")
+        self.assertEqual(public["algorithm"], "SHA1")
+        self.assertEqual(public["digits"], 6)
+        self.assertEqual(classify(uri)["kind"], "totp")
+
+    def test_twofa_routing_is_honest_per_kind(self):
+        from spawnables.twofa import classify, companion_steps, TwoFAError
+        url = classify("https://example.com/login?t=abc")
+        self.assertEqual(url["kind"], "approve-url")
+        steps = companion_steps(url)
+        self.assertEqual(len(steps), 1)
+        self.assertIn("android.intent.action.VIEW", steps[0][1])
+        self.assertIn("adb", steps[0][1])
+        # webauthn hybrid: refused, never faked
+        fido = classify("fido:/eyJ0eXAiOi")
+        self.assertEqual(fido["kind"], "unsupported")
+        self.assertIn("cannot", fido["reason"])
+        with self.assertRaises(TwoFAError):
+            companion_steps(fido)
+        # totp needs no phone at all
+        self.assertEqual(companion_steps({"kind": "totp"}), [])
+        self.assertEqual(classify("hello world")["kind"], "unknown")
+
+    def test_twofa_decodes_locally_never_through_a_cloud(self):
+        import ast
+        import spawnables.twofa as t
+        cmd = t.decode_command("/tmp/qr-shot.png")
+        self.assertIn("zbarimg", cmd)      # local binary in the guest
+        # rigorous: the lane imports nothing that can reach the network
+        tree = ast.parse(open("src/spawnables/twofa.py").read())
+        imported = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported.update(a.name.split(".")[0] for a in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                imported.add((node.module or "").split(".")[0])
+        self.assertLessEqual(imported, {"secrets", "urllib"})
+        zbar = CATALOG.path_tools["zbar"]
+        self.assertEqual(zbar["installs"]["debian"]["verify"], "zbarimg --version")
+
+    def test_twofa_companion_is_ephemeral_android_and_valid(self):
+        from spawnables.twofa import companion_order
+        base = order()
+        comp = companion_order(base, agent="ignored-label")
+        self.assertEqual(comp["base_image"], "redroid-15")   # android lane
+        self.assertNotEqual(comp["id"], base.id)             # its own identity
+        self.assertEqual(comp["grants"][0]["mode"], "drive") # owner agent drives it
+        o = MachineOrder.from_dict(comp)
+        errors, _ = validate_order(o, CATALOG)
+        self.assertEqual(errors, [])
+        self.assertIn("companion", comp["name"])
 
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]

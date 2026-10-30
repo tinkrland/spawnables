@@ -38,6 +38,7 @@ nothing upgrades status without the thing that status requires.
 | `guest.cpu_model` | the pinned cpu model - the field that stops a qemu upgrade from breaking windows 7 |
 | `guest.disk_bus` | `virtio`, `sata`, `ide`, `usb`, `scsi` |
 | `guest.clock` | `host`, `frozen`, `declared` - the clock story the guest's software is allowed to believe |
+| `oss_paths` | the open-source toolchain that would actually carry the target: `osx-kvm`/`quickemu`/`utm` for macos, `libimobiledevice`/`palera1n` for apple devices (tools, not vms), `qemu`/`virt-manager`/`virtio-win` for windows, `quickemu`/`mmdebstrap`/archives for linux, `redroid`/`waydroid` for android. required for `planned`, empty for `refused` |
 | `media.source` | `owner-supplied-iso`, `owner-supplied-image`, `public-download`, `public-image`, `device-farm` |
 | `media.shipped` | always false. we ship nothing |
 | `activation.kind` | `owner-key`, `oem`, `none`, `not-applicable` |
@@ -53,7 +54,7 @@ python3 tools/validate_legacy.py     # prints every target with its status and b
 python3 tests/selftest.py            # 14 tests: the schema, the honesty rules, and the facts
 ```
 
-the validator also forbids credential-shaped keys anywhere in a manifest, because a legacy lane that starts carrying product keys and firmware has stopped being a lane and become a liability.
+the validator also refuses a `planned` target that cannot name an oss path: if nothing open-source would carry it, the honest status is refused, not planned. and it forbids credential-shaped keys anywhere in a manifest, because a legacy lane that starts carrying product keys and firmware has stopped being a lane and become a liability.
 
 ## what these manifests are not
 

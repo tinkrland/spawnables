@@ -116,6 +116,34 @@ class TestLegacyTree(unittest.TestCase):
         for m in targets().values():
             self.assertIn(m["guest"]["clock"], {"host", "frozen", "declared"}, m["path"])
 
+    def test_planned_targets_name_the_oss_path_that_would_carry_them(self):
+        for m in targets().values():
+            if m["status"] != "planned":
+                continue
+            self.assertTrue(m["oss_paths"], m["path"])
+            for path in m["oss_paths"]:
+                self.assertIsInstance(path, str)
+                self.assertTrue(path.strip(), m["path"])
+
+    def test_macos_names_the_toolchains_that_really_work(self):
+        for name in ("10.14-mojave", "10.13-high-sierra"):
+            blob = " ".join(targets()[name]["oss_paths"]).lower()
+            self.assertTrue("osx-kvm" in blob or "quickemu" in blob, name)
+
+    def test_ios_targets_name_device_tools_not_vms(self):
+        for m in targets().values():
+            if m["family"] not in {"ios", "ipados"}:
+                continue
+            blob = " ".join(m["oss_paths"]).lower()
+            self.assertIn("libimobiledevice", blob)
+            self.assertNotIn("quickemu", blob)
+            self.assertNotIn("osx-kvm", blob)
+
+    def test_refused_target_names_no_path_at_all(self):
+        m = targets()["windows-phone-8.1"]
+        self.assertEqual(m["oss_paths"], [])
+        self.assertEqual(m["status"], "refused")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

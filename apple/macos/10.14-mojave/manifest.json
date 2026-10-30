@@ -15,6 +15,12 @@
     "clock": "host",
     "notes": "requires apple hardware for a legitimate guest; bespoke machine definition with smc"
   },
+  "oss_paths": [
+    "osx-kvm",
+    "quickemu",
+    "utm",
+    "docker-osx (same qemu path, containerised)"
+  ],
   "media": {
     "source": "owner-supplied-image",
     "shipped": false,

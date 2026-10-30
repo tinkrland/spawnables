@@ -15,6 +15,11 @@
     "clock": "host",
     "notes": ""
   },
+  "oss_paths": [
+    "quickemu",
+    "mmdebstrap (against archive.debian.org)",
+    "virt-manager"
+  ],
   "media": {
     "source": "public-download",
     "shipped": false,

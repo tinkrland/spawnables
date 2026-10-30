@@ -15,6 +15,10 @@
     "clock": "declared",
     "notes": "real ipad in a device farm; nothing is emulated here"
   },
+  "oss_paths": [
+    "libimobiledevice (device tools, not a vm)",
+    "palera1n (checkm8 ipads only)"
+  ],
   "media": {
     "source": "device-farm",
     "shipped": false,

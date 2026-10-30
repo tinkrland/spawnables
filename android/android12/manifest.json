@@ -15,6 +15,10 @@
     "clock": "host",
     "notes": "api 31; container-backed guest via an adapter, not a qemu machine"
   },
+  "oss_paths": [
+    "redroid (12 line)",
+    "waydroid"
+  ],
   "media": {
     "source": "public-image",
     "shipped": false,

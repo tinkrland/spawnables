@@ -21,7 +21,7 @@ BRIDGES = {"native-automation", "file-in-out", "gui-automation",
 ACTIVATIONS = {"none", "owner-key", "oem", "not-applicable"}
 CLOCKS = {"host", "frozen", "declared"}
 REQUIRED = ["target", "path", "family", "vendor", "release_name", "arch", "status",
-            "guest", "media", "activation", "network", "bridges", "constraints"]
+            "guest", "oss_paths", "media", "activation", "network", "bridges", "constraints"]
 # a legacy lane must never carry credentials, keys or media
 FORBIDDEN_KEYS = {"product_key", "license_key", "serial_number", "rom", "roms",
                   "keys", "decryption_key", "ipsw", "iso_url"}
@@ -85,6 +85,12 @@ def check_one(path):
             errs.append(f"{rel}: refused without a refusal_reason")
         if m["bridges"]:
             errs.append(f"{rel}: refused but still advertises bridges")
+    if not isinstance(m.get("oss_paths"), list):
+        errs.append(f"{rel}: oss_paths must be a list of open-source paths")
+    if m["status"] == "planned" and not m.get("oss_paths"):
+        errs.append(f"{rel}: planned without naming an oss path - what would carry it?")
+    if m["status"] == "refused" and m.get("oss_paths"):
+        errs.append(f"{rel}: refused but names oss paths it says do not exist")
     if m["status"] == "planned" and len(m["constraints"]) < 2:
         errs.append(f"{rel}: planned with fewer than two constraints (that is optimism, not a plan)")
     if m["status"] == "built" and not m.get("evidence"):

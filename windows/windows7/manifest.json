@@ -15,6 +15,11 @@
     "clock": "declared",
     "notes": ""
   },
+  "oss_paths": [
+    "qemu",
+    "virt-manager",
+    "virtio-win (w7 drivers, slipstreamed into media)"
+  ],
   "media": {
     "source": "owner-supplied-iso",
     "shipped": false,
@@ -35,7 +40,7 @@
     "protocol-emulation"
   ],
   "constraints": [
-    "no virtio drivers in box: use sata/ide emulation or slipstream the drivers into the install media",
+    "no virtio drivers in the media: virtio-win still carries w7 drivers, so slipstream them or fall back to sata/ide emulation (verify the build still ships the w7 folder)",
     "unpatched 7 cannot speak tls 1.2: any https the bridge needs must terminate on the guest's host",
     "modern qemu cpu models fail to boot this kernel: qemu64 or haswell-no-tsx must be pinned in the manifest",
     "activation servers for 7 are degraded: activate once, snapshot immediately, never re-activate",

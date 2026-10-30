@@ -20,6 +20,8 @@ linux/debian/10-buster  linux/ubuntu/18.04-bionic  linux/centos/7
 android/android9  android/android11  android/android12
 ```
 
+each manifest also names the **open-source toolchain that would carry it** - `osx-kvm` or `quickemu` for the macos targets, `libimobiledevice`/`palera1n` for the apple devices (device tools, not vms), `virtio-win` slipstreamed for windows 7, `quickemu` and the distro's archive for the linux targets, `redroid` and `waydroid` for android. a planned target that cannot name one is not planned; it is refused.
+
 sixteen targets, and the count is not the point: every one of them is **planned** or **refused**, never quietly "supported". plan means the constraints are named; refused means there is no honest path and the reason is written down. built is reserved for a target with a guest, a bridge, fixtures and evidence.
 
 ## what a legacy spawnable actually is

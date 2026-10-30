@@ -15,6 +15,10 @@
     "clock": "declared",
     "notes": ""
   },
+  "oss_paths": [
+    "qemu",
+    "virt-manager"
+  ],
   "media": {
     "source": "owner-supplied-iso",
     "shipped": false,

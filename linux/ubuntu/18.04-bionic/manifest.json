@@ -15,6 +15,11 @@
     "clock": "host",
     "notes": ""
   },
+  "oss_paths": [
+    "quickemu",
+    "ubuntu cloud-image archive",
+    "virt-manager"
+  ],
   "media": {
     "source": "public-download",
     "shipped": false,

@@ -15,6 +15,10 @@
     "clock": "host",
     "notes": "api 28; container-backed guest via an adapter, not a qemu machine"
   },
+  "oss_paths": [
+    "redroid (9 line)",
+    "android-x86 / bliss os images"
+  ],
   "media": {
     "source": "public-image",
     "shipped": false,

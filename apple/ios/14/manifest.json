@@ -15,6 +15,10 @@
     "clock": "declared",
     "notes": "delivered as a real device in a device farm, not as an emulated guest; firmware and ipsw are owner-supplied and never shipped"
   },
+  "oss_paths": [
+    "libimobiledevice (device tools, not a vm)",
+    "palera1n (checkm8 devices only)"
+  ],
   "media": {
     "source": "device-farm",
     "shipped": false,

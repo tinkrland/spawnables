@@ -52,7 +52,7 @@ every bridge declares: inputs, outputs, verbs, determinism class, and what happe
 - **virtio does not exist for these systems.** windows 7 and xp have no virtio drivers by default: use sata/ide emulation or slipstream the drivers into the install image. guest additions/agents are ancient versions and half of them no longer download.
 - **no modern tls.** xp and unpatched 7 cannot speak tls 1.2. any https call a bridge needs must terminate on the guest's host and hand the guest plain http or a local file. this is a fact about the guest, not a preference, and it goes on the card.
 - **cpu models break old kernels.** windows 7 on a modern qemu cpu model is a known boot failure; older cpu models (qemu64, haswell-no-tsx) are the usual fix. verify per guest rather than assuming, and pin the model in the manifest so a "just upgrade qemu" reflex does not silently break the lane.
-- **macos 10.x is the awkward one** - slow without apple hardware, and apple's licence restricts virtualising their os. it belongs here only when the owner's own hardware and media make it legitimate.
+- **macos 10.x is the awkward one** - slow without apple hardware, and apple's licence restricts virtualising their os. the code stays; the terms live in the manifest's `disclaimer`, and compliance on use is the user's.
 - **32-bit xp** - ide only, smb1, and a filesystem that predates every modern assumption. expect to spend the time on file transfer, not on the app.
 
 ## the rules this line inherits, unchanged

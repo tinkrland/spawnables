@@ -154,3 +154,15 @@ what does exist, and where each one stops:
 - **the router workaround is still hardware**: an esim.me card in a travel router moves the radio, it does not remove it.
 
 so the non-hardware, non-router ladder, best first: vowifi through a carrier that approves the device; a carrier companion app for voice; a private core with a software ue for a number that only exists inside your network. everything else has a chip in it somewhere.
+
+## appendix eight: does the modem have to run 24/7? (checked 2026-10-30)
+
+no for catching up, yes for being *reachable*. `sim.duty_cycle()` carries the split:
+
+- **live calls need an attached modem.** a registered modem gets paged; a detached one gets voicemail or "unreachable". the network only notices a silent modem after periodic-tracking timers expire (tens of minutes), so a short pause is invisible, but an overnight one is not.
+- **sms does not need it.** the smsc queues while the line is away and delivers on reattach, inside the carrier's window (usually a day or three).
+- **voicemail is never yours.** the box lives at the carrier and survives any downtime of any machine you own.
+- **the cost of 24/7 is small and belongs to the keeper, not the vm.** a usb lte stick sits at roughly 0.5-2 w while attached and a few watts busy. the keeper holds the radio on the host so the guest can sleep, and can wake the guest when a message lands.
+- **the private-core route needs no modem at all** - its always-on piece is a container, which is the cheap kind of always-on.
+
+and the software lte question again, for the record: no software stack attaches to a public network (appendix seven). everything that pretends otherwise has a transmitter in it somewhere, or is not touching the public network at all.

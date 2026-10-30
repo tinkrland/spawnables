@@ -1695,6 +1695,19 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("device-gated", r["closest_software_path"])       # the real gate
         self.assertIn("does not remove it", r["router_workaround_is_still_hardware"])
 
+    def test_modem_need_not_run_24_7_but_must_be_attached_to_be_reachable(self):
+        from spawnables.sim import duty_cycle
+        d = duty_cycle("modem")
+        self.assertIn("attached", d["live_calls"])          # paging needs a registered modem
+        self.assertIn("smsc", d["live_sms"])                # sms queues while you are away
+        self.assertIn("carrier", d["voicemail"])            # never our box
+        self.assertIn("tens of minutes", d["detach_lag"])   # short pauses are invisible
+        self.assertIn("w", d["power"])                      # honest order-of-magnitude
+        self.assertIn("keeper", d["cheap_24_7"])            # guest sleeps, line lives
+        pc = duty_cycle("private-core")
+        self.assertIn("container", pc["live_calls"])        # no radio at all on that route
+        self.assertIn("24_7_needed", pc)
+
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]
         for os_name in ("linux", "windows", "macos", "android"):

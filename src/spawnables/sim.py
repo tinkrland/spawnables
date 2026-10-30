@@ -256,3 +256,36 @@ def software_modem_reality():
         "private_only_path": "open5gs + ueransim: a real attach, inside your own network",
         "router_workaround_is_still_hardware": "an esim.me card in a travel router moves the radio, it does not remove it",
     }
+
+
+# -- does the modem have to run 24/7? (answer, 2026-10-30) -------------------
+
+def duty_cycle(route="modem"):
+    """what has to stay up, for what, and roughly what it costs.
+
+    the honest split: nothing about *catching up* needs a radio running
+    around the clock, but *being reachable* does. live calls page a
+    registered modem; a detached one is unreachable and the network routes
+    the call to voicemail (or says unreachable). sms is not like that: the
+    smsc queues while you are away. voicemail never runs in your box at all.
+    """
+    if route == "private-core":
+        return {
+            "live_calls": "always on, and it is a container (open5gs + ueransim), not a radio",
+            "live_sms": "same container; sms lands in your own smsc",
+            "power": "cpu only, no transmitter",
+            "24_7_needed": "one always-on process, which is the cheap kind of always-on",
+        }
+    if route == "modem":
+        return {
+            "live_calls": "modem attached: powered and registered. detached = voicemail or 'unreachable'",
+            "live_sms": "attached, or queued at the smsc (carrier window, usually a day or three)",
+            "voicemail": "never yours: it lives at the carrier and survives any downtime",
+            "detach_lag": ("networks only notice a silent modem once periodic-tracking timers "
+                           "expire (tens of minutes), so a short pause is invisible"),
+            "power": "usb lte stick: ~0.5-2 w idle while attached, a few watts busy",
+            "cheap_24_7": ("the keeper holds the modem on the host, so the guest can sleep "
+                           "without the line noticing; wake on sms when it matters"),
+            "software_lte_alternative": "none that attaches to a public network (see software_modem_reality)",
+        }
+    raise ValueError(f"unknown route: {route!r} (modem | private-core)")

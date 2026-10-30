@@ -237,7 +237,7 @@ class TestCatalog(unittest.TestCase):
         self.assertGreaterEqual(len(CATALOG.base_images), 8)
         self.assertGreaterEqual(len(CATALOG.recipes), 9)
         self.assertEqual(len(CATALOG.rices), 2)
-        self.assertEqual(len(CATALOG.path_tools), 4)  # + zbar for the twofa lane
+        self.assertEqual(len(CATALOG.path_tools), 5)  # + zbar (twofa), ueransim (software ue)
 
     def test_availability_matrix(self):
         r = CATALOG.recipes["netflix"]

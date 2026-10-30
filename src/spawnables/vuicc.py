@@ -413,7 +413,7 @@ def telephony_plan(route, activation_ref="@@vault:activation@@"):
         ]
     return common + [
         ("telephony.core", "apt-get install -y open5gs && systemctl enable --now open5gs-*"),
-        ("telephony.ue", "ueransim nr-ue -c /etc/ueransim/ue.yaml  # usim keys from the shelf profile"),
+        ("telephony.ue", "/opt/ueransim/build/nr-ue -c /etc/ueransim/ue.yaml  # path_tools: [ueransim]; usim keys from the shelf profile"),
         ("telephony.smsc", "# smpp smsc wired to open5gs sms-over-nas; sms lands in the ue"),
         ("telephony.calls", "# ims (kamailio + rtpengine) for voice inside the core"),
         ("telephony.verify", "ip -br addr  # the ue gets an address from your own core"),

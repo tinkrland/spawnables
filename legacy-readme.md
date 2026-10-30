@@ -15,14 +15,16 @@ the targets live as one directory per legacy system, each with a manifest that s
 ```
 windows/windows7  windows/windowsxp  windows/windows81  windows/windows-phone-8.1 (refused)
 apple/macos/10.14-mojave  apple/macos/10.13-high-sierra
-apple/ios/12  apple/ios/14   apple/ipados/13  apple/ipados/15
+apple/ios/3  apple/ios/12  apple/ios/14   apple/ipados/13  apple/ipados/15
 linux/debian/10-buster  linux/ubuntu/18.04-bionic  linux/centos/7
 android/android9  android/android11  android/android12
 ```
 
 each manifest also names the **open-source toolchain that would carry it** - `osx-kvm` or `quickemu` for the macos targets, `libimobiledevice`/`palera1n` for the apple devices (device tools, not vms), `virtio-win` slipstreamed for windows 7, `quickemu` and the distro's archive for the linux targets, `redroid` and `waydroid` for android. a planned target that cannot name one is not planned; it is refused.
 
-sixteen targets, and the count is not the point: every one of them is **planned** or **refused**, never quietly "supported". plan means the constraints are named; refused means there is no honest path and the reason is written down. built is reserved for a target with a guest, a bridge, fixtures and evidence.
+a word on apple, since the licence question comes up: the macos targets **keep their code, toolchain and bridges**, and carry a `disclaimer` naming apple's restriction to apple hardware and the user's responsibility to comply on use. we do not refuse the work and we do not pretend the terms away.
+
+seventeen targets, and the count is not the point: every one of them is **planned** or **refused**, never quietly "supported". plan means the constraints are named; refused means there is no honest path and the reason is written down. built is reserved for a target with a guest, a bridge, fixtures and evidence.
 
 ## what a legacy spawnable actually is
 

@@ -1,0 +1,48 @@
+{
+  "target": "3",
+  "path": "apple/ios/3",
+  "family": "ios",
+  "vendor": "apple",
+  "release_name": "iphone os 3.1 (s5l89xx era)",
+  "arch": "armv6",
+  "status": "planned",
+  "guest": {
+    "provision": "ephemeral",
+    "machine": "qemu (s5l89xx port)",
+    "cpu_model": "arm1176 (s5l8900)",
+    "firmware": "owner-supplied ipsw",
+    "disk_bus": "usb",
+    "clock": "frozen",
+    "notes": "this is the one legacy ios target with a genuine oss emulation path, because the hardware is an arm1176 soc that hobbyists have already ported"
+  },
+  "oss_paths": [
+    "nvsio/qemu-ios (gpl2, qemu s5l89xx port, forks of DJHartley/QEMU-s5l89xx-port)",
+    "iemu (cmw's original effort, historical, abandoned)"
+  ],
+  "media": {
+    "source": "owner-supplied-image",
+    "shipped": false,
+    "note": "iphone os 3 ipsw is apple's: owner-supplied, never shipped, never mirrored"
+  },
+  "activation": {
+    "kind": "none",
+    "note": "no activation server dependency at this vintage"
+  },
+  "network": {
+    "default": "deny",
+    "allowed_hosts": [],
+    "waiver": null
+  },
+  "bridges": [
+    "file-in-out",
+    "protocol-emulation"
+  ],
+  "constraints": [
+    "the port is a fork of an abandoned qemu tree: expect to build an old toolchain before it runs at all",
+    "armv6 only and no store: applications arrive as packages the owner already has, not as downloads",
+    "expect kernel and partial userspace rather than a finished springboard: verify what actually renders before claiming a screen",
+    "clock is frozen by design: the era's software has no idea what year it is, and a jumped clock changes behaviour",
+    "no attestation and no account services at this vintage, so anything that needs them is out of scope"
+  ],
+  "refusal_reason": null
+}

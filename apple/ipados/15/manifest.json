@@ -16,8 +16,10 @@
     "notes": "real ipad in a device farm; nothing is emulated here"
   },
   "oss_paths": [
+    "nvsio/qemu-ios (gpl qemu s5l89xx port: iphone 2g/3g, ipod touch 1g/2g era only)",
+    "jprx/darwin-vm (mit, a14-a19: boots a debuggable darwin root shell, no springboard, no apps)",
     "libimobiledevice (device tools, not a vm)",
-    "palera1n (checkm8 ipads only)"
+    "palera1n (checkm8 devices only)"
   ],
   "media": {
     "source": "device-farm",
@@ -38,10 +40,12 @@
     "file-in-out"
   ],
   "constraints": [
+    "oss emulation of apple systems does exist and is named in oss_paths, but it is kernel-and-shell grade or ancient-hardware grade: no oss path boots this version with springboard and real apps, which is the whole reason the target exists",
+    "apps resolve only through the owner's purchase history for this version, so the device farm stays the only lane that can actually run the abandoned app",
+    "firmware and ipsw are apple's and are owner-supplied: we ship none of it, and darwin-vm's own setup script assumes you fetch apple's files yourself",
+    "attestation is real on a leased device, which is the one advantage a device farm has over any emulator",
     "no legitimate emulation lane: a physical device, leased one at a time",
-    "apps resolve only through the owner's purchase history for that ipados version",
-    "ipad-only applications are the reason this lane exists: they have no desktop equivalent",
-    "old enough to matter for abandoned apps, new enough that most store downloads still resolve"
+    "ipad-only applications are the reason this lane exists: they have no desktop equivalent"
   ],
   "refusal_reason": null
 }

@@ -8,7 +8,7 @@ every legacy target is one directory with one `manifest.json`. the directory pat
 windows/windows7/                 windows/windowsxp/
 windows/windows81/                windows/windows-phone-8.1/      (refused)
 apple/macos/10.14-mojave/         apple/macos/10.13-high-sierra/
-apple/ios/12/                     apple/ios/14/
+apple/ios/3/                      apple/ios/12/                     apple/ios/14/
 apple/ipados/13/                  apple/ipados/15/
 linux/debian/10-buster/           linux/ubuntu/18.04-bionic/      linux/centos/7/
 android/android9/                 android/android11/              android/android12/
@@ -38,7 +38,8 @@ nothing upgrades status without the thing that status requires.
 | `guest.cpu_model` | the pinned cpu model - the field that stops a qemu upgrade from breaking windows 7 |
 | `guest.disk_bus` | `virtio`, `sata`, `ide`, `usb`, `scsi` |
 | `guest.clock` | `host`, `frozen`, `declared` - the clock story the guest's software is allowed to believe |
-| `oss_paths` | the open-source toolchain that would actually carry the target: `osx-kvm`/`quickemu`/`utm` for macos, `libimobiledevice`/`palera1n` for apple devices (tools, not vms), `qemu`/`virt-manager`/`virtio-win` for windows, `quickemu`/`mmdebstrap`/archives for linux, `redroid`/`waydroid` for android. required for `planned`, empty for `refused` |
+| `oss_paths` | the open-source toolchain that would actually carry the target: `osx-kvm`/`quickemu`/`utm` for macos, `nvsio/qemu-ios` for the s5l89xx era and `jprx/darwin-vm` for a14-a19 shells, `libimobiledevice`/`palera1n` for leased apple devices (tools, not vms), `qemu`/`virt-manager`/`virtio-win` for windows, `quickemu`/`mmdebstrap`/archives for linux, `redroid`/`waydroid` for android. required for `planned`, empty for `refused` |
+| `disclaimer` | the terms the target's vendor imposes, stated once and not argued with. required for macos: apple's licence restricts macos guests to apple hardware, we keep the code, and compliance on use is the user's responsibility |
 | `media.source` | `owner-supplied-iso`, `owner-supplied-image`, `public-download`, `public-image`, `device-farm` |
 | `media.shipped` | always false. we ship nothing |
 | `activation.kind` | `owner-key`, `oem`, `none`, `not-applicable` |

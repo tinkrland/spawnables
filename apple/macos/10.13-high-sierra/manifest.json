@@ -21,6 +21,7 @@
     "utm",
     "docker-osx (same qemu path, containerised)"
   ],
+  "disclaimer": "apple's software licence restricts virtualising macos guests to apple hardware. we keep the toolchain, the manifest and the bridges because the work is real and useful on apple hardware; complying with apple's terms when you use it is the user's responsibility, not something this project enforces or pretends away",
   "media": {
     "source": "owner-supplied-image",
     "shipped": false,
@@ -40,8 +41,8 @@
     "file-in-out"
   ],
   "constraints": [
-    "apple's licence restricts virtualising macOS to apple hardware: on anything else this entry stays refused",
-    "no metal: gpu-accelerated apps will refuse to run, and software rendering is the only fallback",
+    "apple's licence restricts macos guests to apple hardware: the disclaimer field carries the terms, not a refusal",
+    "no metal: gpu-accelerated apps refuse to run and software rendering is the only fallback",
     "needs ovmf plus smc emulation and apple boot quirks, so the machine definition is bespoke, not a stock q35",
     "icloud and licence activation may flag a virtual machine: assume local-only apps as the supported workload",
     "runs 32-bit applications without the mojave warning: pick this when the tool is 32-bit only"

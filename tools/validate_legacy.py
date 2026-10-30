@@ -87,6 +87,11 @@ def check_one(path):
             errs.append(f"{rel}: refused but still advertises bridges")
     if not isinstance(m.get("oss_paths"), list):
         errs.append(f"{rel}: oss_paths must be a list of open-source paths")
+    if m["family"] == "macos":
+        d = (m.get("disclaimer") or "").lower()
+        for needle in ("licence", "apple hardware", "user"):
+            if needle not in d:
+                errs.append(f"{rel}: macos targets need a disclaimer naming {needle!r}")
     if m["status"] == "planned" and not m.get("oss_paths"):
         errs.append(f"{rel}: planned without naming an oss path - what would carry it?")
     if m["status"] == "refused" and m.get("oss_paths"):

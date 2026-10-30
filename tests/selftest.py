@@ -79,13 +79,16 @@ class TestLegacyTree(unittest.TestCase):
         self.assertIn("smb1", blob)
         self.assertIn("never credentialed", blob)
 
-    def test_apple_targets_admit_the_licence_and_the_missing_gpu(self):
+    def test_macos_admits_the_missing_gpu(self):
         for m in targets().values():
-            if m["vendor"] != "apple":
+            if m["family"] != "macos":
                 continue
             blob = " ".join(m["constraints"]).lower()
-            self.assertTrue("licence" in blob or "emulation" in blob or "device" in blob, m["path"])
-        self.assertEqual(targets()["10.14-mojave"]["activation"]["kind"], "none")
+            self.assertIn("metal", blob, m["path"])
+            self.assertEqual(m["activation"]["kind"], "none")
+
+    def device_lane(self, m):
+        return m["family"] in {"ios", "ipados"} and m["guest"]["machine"] == "device-farm"
 
     def test_linux_targets_use_archived_public_media(self):
         for m in targets().values():
@@ -103,10 +106,10 @@ class TestLegacyTree(unittest.TestCase):
             self.assertIn("attestation", blob)
             self.assertEqual(m["guest"]["provision"], "ephemeral")
 
-    def test_ios_and_ipados_are_devices_not_emulators(self):
-        for m in targets().values():
-            if m["family"] not in {"ios", "ipados"}:
-                continue
+    def test_device_farm_lanes_are_devices_not_emulators(self):
+        lanes = [m for m in targets().values() if self.device_lane(m)]
+        self.assertEqual(len(lanes), 4, "ios 12/14 and ipados 13/15 stay device lanes")
+        for m in lanes:
             self.assertEqual(m["media"]["source"], "device-farm")
             self.assertEqual(m["guest"]["machine"], "device-farm")
             self.assertEqual(m["guest"]["cpu_model"], "none")
@@ -130,14 +133,49 @@ class TestLegacyTree(unittest.TestCase):
             blob = " ".join(targets()[name]["oss_paths"]).lower()
             self.assertTrue("osx-kvm" in blob or "quickemu" in blob, name)
 
-    def test_ios_targets_name_device_tools_not_vms(self):
+    def test_device_lanes_name_device_tools_and_never_a_hypervisor(self):
         for m in targets().values():
-            if m["family"] not in {"ios", "ipados"}:
+            if not self.device_lane(m):
                 continue
             blob = " ".join(m["oss_paths"]).lower()
             self.assertIn("libimobiledevice", blob)
             self.assertNotIn("quickemu", blob)
             self.assertNotIn("osx-kvm", blob)
+
+    def test_macos_keeps_the_code_and_carries_the_terms_as_a_disclaimer(self):
+        for m in targets().values():
+            if m["family"] != "macos":
+                continue
+            d = m["disclaimer"].lower()
+            self.assertIn("licence", d)
+            self.assertIn("apple hardware", d)
+            self.assertIn("user's responsibility", d)
+            # the toolchain stays usable: the entry is not refused
+            self.assertEqual(m["status"], "planned")
+            blob = " ".join(m["oss_paths"]).lower()
+            self.assertIn("osx-kvm", blob)
+
+    def test_ios_names_the_oss_emulation_that_really_exists(self):
+        for m in targets().values():
+            if m["family"] not in {"ios", "ipados"}:
+                continue
+            blob = " ".join(m["oss_paths"]).lower()
+            self.assertTrue("qemu-ios" in blob or "darwin-vm" in blob, m["path"])
+            cons = " ".join(m["constraints"]).lower()
+            if self.device_lane(m):
+                # honest: the oss projects exist, but none of them runs the abandoned app
+                self.assertIn("no oss path boots this version with springboard", cons)
+            else:
+                # ios 3 is the one target where oss emulation is the actual lane
+                self.assertIn("springboard", cons)
+
+    def test_the_s5l89xx_target_is_the_one_with_a_real_emulation_path(self):
+        m = targets()["3"]
+        self.assertEqual(m["family"], "ios")
+        blob = " ".join(m["oss_paths"]).lower()
+        self.assertIn("qemu-ios", blob)
+        self.assertIn("arm1176", m["guest"]["cpu_model"].lower())
+        self.assertFalse(m["media"]["shipped"])
 
     def test_refused_target_names_no_path_at_all(self):
         m = targets()["windows-phone-8.1"]

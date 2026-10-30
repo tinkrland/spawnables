@@ -1331,6 +1331,55 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertIn("companion", comp["name"])
 
+    def test_warm_phone_pool_identity_pinned_across_leases(self):
+        import tempfile
+        from spawnables.warmpool import WarmPhonePool
+        with tempfile.TemporaryDirectory() as d:
+            pool = WarmPhonePool(f"{d}/pool.json")
+            ph = pool.add_phone(agent="agent1")
+            first = dict(ph["identity"])
+            self.assertEqual(first["persona"], "android")
+            self.assertTrue(first["mac"])  # persona-vendor oui, not virtio
+            l1 = pool.acquire("sid-agent1")
+            self.assertEqual(l1["verb"], "resume")  # pre-warmed: resume, not boot
+            self.assertEqual(l1["identity"], first)
+            pool.release(l1["phone_id"], "sid-agent1")
+            # a fresh pool object from disk: identity never re-rolled
+            pool2 = WarmPhonePool(f"{d}/pool.json")
+            l2 = pool2.acquire("sid-agent1")
+            self.assertEqual(l2["identity"], first)  # same phone, not a new one
+            self.assertEqual(l2["phone_id"], ph["id"])
+
+    def test_warm_phone_pool_one_agent_per_phone_and_sweep(self):
+        from spawnables.warmpool import WarmPhonePool, PoolBusy
+        pool = WarmPhonePool()
+        pool.add_phone()
+        pool.acquire("sid-a", ttl_seconds=60, now=1000)
+        with self.assertRaises(PoolBusy):
+            pool.acquire("sid-b", now=1001)  # no stacking agents on one device
+        # the lease expires: b gets it, and the sweep paused it first
+        lease = pool.acquire("sid-b", now=1061)
+        self.assertEqual(lease["verb"], "resume")
+        self.assertEqual(pool.snapshot()[0]["held_by"], "sid-b")
+        # only the holder returns it
+        with self.assertRaises(Exception):
+            pool.release(lease["phone_id"], "sid-c")
+        pool.release(lease["phone_id"], "sid-b")
+
+    def test_warm_phone_pool_purpose_and_manifest(self):
+        from spawnables.warmpool import WarmPhonePool, PurposeRefused, phone_order
+        pool = WarmPhonePool()
+        pool.add_phone(agent="agent1")
+        with self.assertRaises(PurposeRefused):
+            pool.acquire("sid-a", purpose="general")  # never a shared general computer
+        self.assertEqual(pool.acquire("sid-a", purpose="phone-apps")["verb"], "resume")
+        # the pooled manifest is a real order: redroid-15, small, agent-driven
+        o = MachineOrder.from_dict(phone_order("warm-phone-1", agent="agent1"))
+        errors, _ = validate_order(o, CATALOG)
+        self.assertEqual(errors, [])
+        self.assertEqual(o.base_image, "redroid-15")
+        self.assertEqual(o.grants[0].mode, "drive")
+
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]
         for os_name in ("linux", "windows", "macos", "android"):

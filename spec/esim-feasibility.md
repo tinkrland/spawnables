@@ -55,14 +55,14 @@ the useful correction to the "no modem, no number" wall: you do not always need 
 two hard rules, both learned the honest way:
 
 1. **voice only.** calls ride the carrier ott. texts are not part of this lane and we do not pretend otherwise: verification sms is exactly what carriers keep off companion apps, and pretending gets a machine stuck at a login screen.
-2. **number first, on the durable desktop.** the sim lives in the linux vm (modem-passthrough or remote-sim lanes), which is the agent's permanent computer. the phone guest never holds the sim. when an app in the phone guest wants to verify the number, the sms arrives in `mmcli` on the desktop - the machine the agent already drives - and the agent types the code into the app over adb (`sim.enrollment_plan`). the phone guest borrows the identity; the desktop owns it.
+2. **number first, on the agent's primary linux vm.** the sim lives in the primary linux vm (modem-passthrough or remote-sim lanes): the durable machine the agent drives, not a secondary desktop. the phone guest never holds the sim. when an app in the phone guest wants to verify the number, the sms arrives in `mmcli` on the primary vm and the agent types the code into the app over adb (`sim.enrollment_plan`). the phone guest borrows the identity; the primary vm owns it.
 
-so the shape of a real setup is: durable desktop with the modem and the number (sms, otp, data, and if you want, calls via modemmanager), plus a phone guest that exists only for app installs and app-only flows, plus the optional carrier app for voice inside the guest.
+so the shape of a real setup is: the agent's primary linux vm with the modem and the number (sms, otp, data, and if you want, calls via modemmanager), plus a phone guest that exists only for app installs and app-only flows, plus the optional carrier app for voice inside the guest.
 
 honest ceilings: carrier apps need play services and a supported region, and some refuse vm builds (the card reports the refusal, never hides it). companion voice quality depends on the carrier's ott path, and a carrier that does not offer a companion app is simply not covered by this lane. reminder of the older ceilings: no rf emulation anywhere, so a modem is physical, and a real carrier number always traces back to a carrier-issued sim or esim profile.
 
 
-## appendix four: the vuicc lane, software uicc on the durable desktop (built 2026-10-30)
+## appendix four: the vuicc lane, software uicc on the primary linux vm (built 2026-10-30)
 
 the lane the owner wanted: a phone identity with no modem in the box, built as a real module ([vuicc.py](../src/spawnables/vuicc.py)), not a promise.
 
@@ -72,4 +72,4 @@ only one of the four layers actually needs a chip. the radio does: no carrier at
 - private-mno: your own core (open5gs + ueransim) issues the msisdn, sms included through your own smsc. the machine really has a number, inside your own network. the public pstn is a carrier interconnect, a contract rather than a config.
 - carrier-mno: a real carrier number only when that carrier issues a profile to this eid, which means a gsma-issued eUICC certificate chain. a self-made soft card has none and carrier sm-dp+ servers reject it, so the order form refuses at config time instead of failing at 2am.
 
-the android workaround, stated plainly: the number lives on the linux vm first. the durable desktop hosts pcscd + vpcd + lpac and holds the eid and the profile shelf. a phone guest consumes the card later and only if it has a RIL - cuttlefish can, redroid cannot, and redroid is refused by name. the eid is minted once from a seed kept in the vault, the same discipline as the phone pool: the card comes back as itself.
+the android workaround, stated plainly: the number lives on the agent's primary linux vm first. that vm hosts pcscd + vpcd + lpac and holds the eid and the profile shelf. a phone guest consumes the card later and only if it has a RIL - cuttlefish can, redroid cannot, and redroid is refused by name. the eid is minted once from a seed kept in the vault, the same discipline as the phone pool: the card comes back as itself.

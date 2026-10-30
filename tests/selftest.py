@@ -1477,14 +1477,14 @@ class TestCatalogRoster(unittest.TestCase):
         note = card_note({"lane": "carrier-app", "carrier_app": "com.jio.join",
                           "number_host": "phone"})
         self.assertIn("voice only", note)
-        self.assertIn("desktop vm", note)  # number first, on the durable computer
+        self.assertIn("primary linux vm", note)  # number first, on the agent's own machine
         from spawnables.sim import enrollment_plan
         plan = enrollment_plan("com.jio.join")
         self.assertIn("mmcli", plan[0][1])                      # code read on the desktop
         self.assertIn("adb shell input text", plan[-1][1])      # typed into the guest
         spec = open("spec/esim-feasibility.md").read()
         self.assertIn("carrier companion line", spec)
-        self.assertIn("number first, on the durable desktop", spec)
+        self.assertIn("number first, on the agent's primary linux vm", spec)
         self.assertIn("voice only", spec)
 
     def test_vuicc_is_a_software_uicc_with_honest_sources(self):
@@ -1525,7 +1525,7 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("local", VUICC().consumer_plan("linux"))
         # lane wiring: linux only, source rules enforced
         self.assertEqual(validate_sim({"lane": "vuicc"}, "linux")[0], [])
-        self.assertTrue(any("durable linux vm" in e for e in validate_sim({"lane": "vuicc"}, "android")[0]))
+        self.assertTrue(any("primary linux vm" in e for e in validate_sim({"lane": "vuicc"}, "android")[0]))
         self.assertTrue(any("cert_ref" in e for e in
                             validate_sim({"lane": "vuicc", "number_source": "carrier-mno"}, "linux")[0]))
         spec = open("spec/esim-feasibility.md").read()

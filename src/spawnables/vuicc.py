@@ -1,4 +1,4 @@
-"""vuicc: a virtual uicc (software sim/esim) hosted on the durable desktop.
+"""vuicc: a virtual uicc (software sim/esim) hosted on the primary linux vm.
 
 the lane the owner actually wants: a phone identity with NO physical modem
 in the box. it works because only two of the four layers need a chip:
@@ -25,7 +25,7 @@ sources, and exactly what each one buys:
   chain. a self-made soft card has none, and carrier sm-dp+ servers
   reject it. we refuse at config time instead of failing at 2am.
 
-the android workaround: the number lives on the LINUX vm first (this
+the android workaround: the number lives on the agent's PRIMARY linux vm first (this
 module is hosted there: pcscd + vpcd + lpac). a phone guest consumes it
 later, and only if it has a RIL (cuttlefish) - redroid has none, so it is
 refused by name rather than quietly unsupported.

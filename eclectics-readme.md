@@ -32,14 +32,28 @@ every entry states both, with a status: **built**, **planned**, or **refused** -
 
 **consoles - native: case by case. virtualised: yes, later, and this is the interesting half.**
 natively, a modern console is mostly network services (remote play) or nothing, and a modded one speaking ssh has stopped being eclectic: at that point it is an ordinary guest. devkit access is a licensing conversation, not a feature.
-virtually, the emulator is the mechanism and the game is the subject. **a switch-only idle game is the pilot**, chosen deliberately because it is the friendliest possible console workload: no twitch input, no timing-critical rendering, tolerant of latency, and it mostly cares about *time* rather than frames.
+virtually, the emulator is the mechanism and **the software is the subject**. a switch-only idle game is the example - not because we want to play it, but because it is *only reachable there*: its save format, its economy numbers, its event timing, its updates. the point is to reach the code and the data, not to watch the frames.
 
-## what virtualising a console honestly requires
+## what the virtualised half is actually for: software under test
 
-- **keys and firmware are the owner's, never ours.** the harness ships no decryption keys and no roms. emulator projects themselves have survived legal challenge; distributing keys and game images has not, and two of the best-known switch emulators were taken down in 2024. the lane ships the harness, the owner supplies what they own.
-- **performance is the cost.** console emulation wants cpu single-thread speed and a real gpu. in the cloud lane that means llvmpipe is a non-starter and gpu-bearing shapes cost real money. the card must show the measured frame rate before it claims the game runs.
-- **an idle game is a clock problem, not a graphics problem.** offline progress, save persistence, and time that passes while nothing renders. which means our existing coherence rules extend here in a way nobody expected: **a guest whose clock jumps forward on resume will hand the player free progress, and a guest whose clock jumps backward corrupts a save.** paused guests must resume with a clock story that the save file believes. that is the same discipline as the phone pool, applied to a game's notion of time.
-- **save state is the guest's snapshot**, not a special feature: pause/resume and burn already exist, so a console entry inherits snapshotting instead of inventing it.
+the owner's clarification, because an earlier draft drifted into "can we play it": **this is testing the software and its data, not running a game.** an idle game is a convenient example precisely because it is the *least* engine-ish workload there is - almost all of its behaviour is state that sits in a file, changes on a timer, and can be read afterwards.
+
+so the verbs a virtualised entry exposes look like a test harness, not a stream:
+
+- **seed** a save or a config, from a fixture we control.
+- **advance** it deterministically: run the software for N in-game ticks, or let real time pass with the clock story declared.
+- **read the result**: save file, log, exported data, a debug surface if the software has one.
+- **diff** against expectation, and across versions when the software updates.
+- **snapshot and reproduce**: the same seed plus the same ticks must produce the same numbers, or the entry is not a fixture, it is a rumour.
+
+that is what "testing something in that game" means here, and it is the same shape as the legacy line's bridge: seed in, result out, fixtures prove it.
+
+## what this changes about honesty
+
+- **we need accuracy, not a frame rate.** a slow emulator that is *truthful* about memory, file formats and timing is worth more than a fast one that is subtly wrong, because a wrong number becomes a wrong test result. speed only matters for how long a job takes, not for whether the answer is right.
+- **a graphics context is still usually required**, even headless, because most console emulators initialise a gpu backend whether or not anyone is watching. but that is a hard requirement on *having* one, not a claim about how many frames it draws. the card says which, and does not advertise smoothness.
+- **where a title genuinely needs a real gpu to behave correctly, the entry stays planned or refused** instead of quietly becoming "playable". the failure mode we are avoiding is the classic one: an emulator that renders beautifully and computes the wrong number.
+- **clock coherence stops being a caveat and becomes a test.** offline progress in an idle game is literally a function of elapsed time, so a guest whose clock jumps on resume produces a fake answer, and a backward jump produces a corrupted save. the phone pool's coherence discipline is now a *measurement instrument* here, not a safety rule.
 
 ## the constraint that shapes the native half
 
@@ -54,10 +68,11 @@ virtually, the emulator is the mechanism and the game is the subject. **a switch
 ## first work items
 
 1. **native:** an ipod classic end to end - pass the device in, list what is on it, add one track, verify on the device's own screen, eject without corruption.
-2. **virtualised, later:** a switch-only idle game as the console pilot - measure the frame rate honestly, prove that save state survives pause/resume, and prove that the clock story is coherent across a long sleep. if the idle game cannot survive a sleep, no console workload can.
+2. **virtualised, later:** a console-only idle game as the software-under-test pilot - seed a fixture save, advance N ticks with a declared clock story, read the resulting file, and diff it against an expected value. prove the same seed gives the same numbers twice, and that save state survives pause/resume across a long sleep. if a tick loop cannot be made deterministic, no console workload can be trusted.
 
 ## open questions for the owner
 
 - which devices are actually on your desk, in what order?
 - for the virtualised half: does the owner supply firmware and keys, or is the entry refused until they do?
 - do we support a vendor app's exports (backups, health data) as a bridge for devices we cannot reach, like the watch?
+- for software under test: is the deliverable a saved file we hand back, or a loop we keep running under supervision?

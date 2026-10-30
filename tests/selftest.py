@@ -1400,9 +1400,11 @@ class TestCatalogRoster(unittest.TestCase):
         errs, warns = validate_sim({"lane": "virtual-euicc-test"}, "android")
         self.assertEqual(errs, [])
         self.assertTrue(any("never a real carrier number" in w for w in warns))
-        # non-android guests have no sim slot to hand a lane to
+        # linux (the computer vm) may carry the modem lanes; windows/macos cannot
         errs, _ = validate_sim({"lane": "modem-passthrough", "usb": "2c7c:0125"}, "linux")
-        self.assertTrue(any("android-only" in e for e in errs))
+        self.assertEqual(errs, [])
+        errs, _ = validate_sim({"lane": "modem-passthrough", "usb": "2c7c:0125"}, "windows")
+        self.assertTrue(any("not wired" in e for e in errs))
         # the flow steps exist and stay local
         steps = guest_steps({"lane": "virtual-euicc-test"}, "android")
         joined = " ".join(c for _, c in steps)

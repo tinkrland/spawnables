@@ -1,0 +1,31 @@
+{
+  "id": "ueransim",
+  "installs": {
+    "debian": {
+      "steps": [
+        "apt update && apt install -y cmake make g++ git libsctp-dev",
+        "git clone --depth 1 https://github.com/aligungr/UERANSIM /opt/ueransim",
+        "cmake -S /opt/ueransim -B /opt/ueransim/build && cmake --build /opt/ueransim/build -j\"$(nproc)\""
+      ],
+      "verify": "/opt/ueransim/build/nr-ue --version"
+    },
+    "fedora": {
+      "steps": [
+        "dnf install -y cmake make gcc-c++ git lksctp-tools-devel",
+        "git clone --depth 1 https://github.com/aligungr/UERANSIM /opt/ueransim",
+        "cmake -S /opt/ueransim -B /opt/ueransim/build && cmake --build /opt/ueransim/build -j\"$(nproc)\""
+      ],
+      "verify": "/opt/ueransim/build/nr-ue --version"
+    },
+    "arch": {
+      "steps": [
+        "pacman -S --noconfirm cmake make gcc git lksctp-tools",
+        "git clone --depth 1 https://github.com/aligungr/UERANSIM /opt/ueransim",
+        "cmake -S /opt/ueransim -B /opt/ueransim/build && cmake --build /opt/ueransim/build -j\"$(nproc)\""
+      ],
+      "verify": "/opt/ueransim/build/nr-ue --version"
+    }
+  },
+  "notes": "the software ue for the vuicc private-core route (spec/esim-feasibility.md appendix five): nr-ue + nr-gnb against your own open5gs core, usim keys taken from the shelf profile - no radio, no modem, linux only",
+  "disk_mb_est": 900
+}

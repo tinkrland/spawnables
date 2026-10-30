@@ -1531,6 +1531,47 @@ class TestCatalogRoster(unittest.TestCase):
         spec = open("spec/esim-feasibility.md").read()
         self.assertIn("vuicc", spec.lower())
 
+    def test_vuicc_takes_esim_me_style_profiles_and_delivers_calls_sms(self):
+        import tempfile
+        from spawnables.vuicc import (VUICC, VUICCError, ingest, parse_activation_code,
+                                      telephony_capabilities, telephony_plan)
+        with tempfile.TemporaryDirectory() as d:
+            shelf = VUICC(f"{d}/uicc.json", eid_seed="test-seed")
+            # 1) activation code, the shape carriers and esim shops mail out
+            prof = ingest(shelf, "carrier-mno", card_kind="esim.me",
+                          activation_code="LPA:1$smdp.example.com$AB12-CD34")
+            self.assertEqual(prof["smdp"], "smdp.example.com")
+            self.assertEqual(prof["activation_code_ref"], "@@vault:activation@@")  # ref, never the code
+            # 2) a downloaded package file (the "downloadable esim file" shape)
+            prof2 = ingest(shelf, "carrier-mno", card_kind="estk", package_path="/tmp/telco.esim")
+            self.assertTrue(prof2["package_ref"].startswith("@@vault:package-"))
+            # 3) a removable euicc (esim.me / 5ber / estk) with the profile already on it
+            prof3 = ingest(shelf, "carrier-mno", card_kind="esim.me")
+            self.assertEqual(prof3["card"], "esim.me")
+            self.assertEqual(prof3["cert_ref"], "brought-card")  # the card is the cert
+            with self.assertRaises(VUICCError):   # a soft card has no cert chain: refused
+                ingest(shelf, "carrier-mno", activation_code="LPA:1$smdp.example.com$AB12-CD34")
+            with self.assertRaises(VUICCError):   # unknown card is refused, not guessed
+                ingest(shelf, "carrier-mno", card_kind="mystery-stick")
+            with self.assertRaises(VUICCError):   # bad activation code is refused early
+                parse_activation_code("LPA:2$nope")
+            # one active profile, real-card rules
+            shelf.enable(prof["iccid"])
+            shelf.enable(prof2["iccid"])
+            self.assertEqual([x["iccid"] for x in shelf.profiles if x["state"] == "enabled"], [prof2["iccid"]])
+        # calls + sms, honestly split across the two routes
+        mod = telephony_capabilities("modem")
+        self.assertTrue(mod["calls"] and mod["sms"] and mod["public_network"])
+        self.assertIn("no mature linux rcs client", mod["rcs"])   # rcs truth, not theatre
+        core = telephony_capabilities("private-core")
+        self.assertTrue(core["calls"] and core["sms"])
+        self.assertFalse(core["public_network"])                  # own core only, stated
+        modem_steps = " ".join(c for _, c in telephony_plan("modem"))
+        self.assertIn("lpac profile download", modem_steps)       # es9+ download path
+        self.assertIn("mmcli -m any --messaging-list-sms", modem_steps)
+        self.assertIn("mmcli -m any --voice-list-calls", modem_steps)
+        self.assertIn("ueransim", " ".join(c for _, c in telephony_plan("private-core")))
+
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]
         for os_name in ("linux", "windows", "macos", "android"):

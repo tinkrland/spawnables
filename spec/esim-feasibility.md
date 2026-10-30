@@ -73,3 +73,21 @@ only one of the four layers actually needs a chip. the radio does: no carrier at
 - carrier-mno: a real carrier number only when that carrier issues a profile to this eid, which means a gsma-issued eUICC certificate chain. a self-made soft card has none and carrier sm-dp+ servers reject it, so the order form refuses at config time instead of failing at 2am.
 
 the android workaround, stated plainly: the number lives on the agent's primary linux vm first. that vm hosts pcscd + vpcd + lpac and holds the eid and the profile shelf. a phone guest consumes the card later and only if it has a RIL - cuttlefish can, redroid cannot, and redroid is refused by name. the eid is minted once from a seed kept in the vault, the same discipline as the phone pool: the card comes back as itself.
+
+## appendix five: calls + rcs/sms on the primary linux vm (checked 2026-10-30)
+
+scope: the primary linux vm only. ephemeral phones, windows and macos are out of scope here.
+
+two routes, and the difference matters more than any feature list:
+
+**route a, modem (public network).** the vm gets a usb modem and a card slot. the profile arrives in one of three real shapes, all of which `vuicc.ingest` accepts:
+- an activation code (`LPA:1$smdp.host$MATCHING-ID`), the form carriers and esim shops mail out; lpac pulls the profile over es9+;
+- a downloaded profile package file (the "downloadable esim file" shape); bytes go to the vault, installation is lpac's job;
+- a removable euicc (esim.me, 5ber, estk) with the profile already on it, driven over pcsc by lpac.
+
+that card goes in the modem's slot (or the module is esim-capable and takes the download directly), the modem announces itself to ModemManager, and then: `mmcli -m any --messaging-list-sms` reads texts, `mmcli -m any --voice-list-calls` tracks calls, `mmcli -m any --enable` brings the radio up. this is a real carrier number on the public network: calls yes, sms yes, data yes.
+- **rcs is the honest no.** rcs is ims + a carrier-side service + a client that speaks it, and there is no mature linux rcs client. google messages is android-only. the capability table says this plainly instead of shipping a promise.
+
+**route b, private core (no hardware at all).** open5gs + ueransim (a software ue, no radio) + an smsc, with the usim keys taken from the profile on the shelf. the vm attaches to your own core, gets an address, sends and receives sms through your smsc, and takes voice from your own ims. no modem, nothing to plug in. the ceiling, stated once: this number lives inside your network. reaching the public pstn from it is a carrier interconnect, a contract rather than a command.
+
+so: public calls and sms need a modem and a card, and that is a 20 to 40 dollar part. hardwareless gets you a full working core with calls and sms that never leaves your own network. either way the card says which one you are on, and neither route claims rcs on linux.

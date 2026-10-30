@@ -1380,6 +1380,45 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertEqual(o.base_image, "redroid-15")
         self.assertEqual(o.grants[0].mode, "drive")
 
+    def test_sim_lanes_are_honest_about_what_exists(self):
+        from spawnables.sim import LANES, normalize, validate_sim, host_directives, guest_steps, card_note
+        self.assertEqual(LANES, ("none", "modem-passthrough", "remote-sim", "virtual-euicc-test"))
+        # default: data-only
+        errs, warns = validate_sim({}, "android")
+        self.assertEqual((errs, warns), ([], []))
+        # modem passthrough needs a real usb id
+        errs, _ = validate_sim({"lane": "modem-passthrough"}, "android")
+        self.assertTrue(any("vendor:product" in e for e in errs))
+        errs, _ = validate_sim({"lane": "modem-passthrough", "usb": "2c7c:0125"}, "android")
+        self.assertEqual(errs, [])
+        self.assertIn("usb-host,vendorid=0x2c7c", host_directives({"lane": "modem-passthrough", "usb": "2c7c:0125"})["qemu_usb"][0])
+        # remote sim needs the bankd and warns redroid cannot consume it
+        errs, warns = validate_sim({"lane": "remote-sim", "remsim_server": "bank.example:9000"}, "android")
+        self.assertEqual(errs, [])
+        self.assertTrue(any("redroid cannot" in w for w in warns))
+        # virtual euicc is test profiles only, and says so
+        errs, warns = validate_sim({"lane": "virtual-euicc-test"}, "android")
+        self.assertEqual(errs, [])
+        self.assertTrue(any("never a real carrier number" in w for w in warns))
+        # non-android guests have no sim slot to hand a lane to
+        errs, _ = validate_sim({"lane": "modem-passthrough", "usb": "2c7c:0125"}, "linux")
+        self.assertTrue(any("android-only" in e for e in errs))
+        # the flow steps exist and stay local
+        steps = guest_steps({"lane": "virtual-euicc-test"}, "android")
+        joined = " ".join(c for _, c in steps)
+        self.assertIn("vpcd", joined)
+        self.assertIn("osmo-remsim-client", " ".join(c for _, c in guest_steps({"lane": "remote-sim", "remsim_server": "b:9000"}, "android")))
+        self.assertIn("never voip", card_note({"lane": "modem-passthrough", "usb": "2c7c:0125"}))
+
+    def test_sim_lane_reaches_order_validation(self):
+        o = order(base_image="redroid-15", sim={"lane": "modem-passthrough"})
+        errors, _ = validate_order(o, CATALOG)
+        self.assertTrue(any("vendor:product" in e for e in errors))
+        o2 = order(base_image="redroid-15", sim={"lane": "virtual-euicc-test"})
+        errors, warnings = validate_order(o2, CATALOG)
+        self.assertEqual(errors, [])
+        self.assertTrue(any("test profiles only" in w for w in warnings))
+
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]
         for os_name in ("linux", "windows", "macos", "android"):

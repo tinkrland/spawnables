@@ -1663,6 +1663,28 @@ class TestCatalogRoster(unittest.TestCase):
         errs2, _ = activation_requirements(imei_ref="@@vault:imei@@", card="esim.me")
         self.assertEqual(errs2, [])
 
+    def test_imei_esn_meid_are_told_apart_and_only_imei_activates(self):
+        from spawnables.imei import (parse_device_id, parse_imei, capture_steps,
+                                     activation_requirements, ImeiError)
+        self.assertEqual(parse_device_id("356938035643809")["kind"], "imei")
+        meid = parse_device_id("A1000045D2F3C7")
+        self.assertEqual(meid["kind"], "meid-hex")
+        self.assertEqual(meid["manufacturer"], "A1000045")
+        self.assertEqual(parse_device_id("0f3a2b1c")["kind"], "esn-hex")
+        self.assertEqual(parse_device_id("8001a2b3")["kind"], "pesn")   # derived from a meid
+        self.assertEqual(parse_device_id("12345678901")["kind"], "esn-dec")
+        # tello's field takes imei/esn; the esim still only binds to an imei
+        with self.assertRaises(ImeiError):
+            parse_imei("0f3a2b1c")
+        errors, _ = activation_requirements(imei_ref="@@vault:imei@@", card="esim.me",
+                                            device_kind="esn-hex")
+        self.assertTrue(any("binds to the imei" in e for e in errors))
+        cmd = " ".join(c for _, c in capture_steps())
+        self.assertIn("AT+CGSN", cmd)
+        self.assertIn("AT+GSN", cmd)          # cdma-era modules only
+        from spawnables.regions import compliance_notes
+        self.assertTrue(any("esn" in n or "cdma" in n for n in compliance_notes()))
+
     def test_apps_obsidian_and_notion(self):
         obsidian = CATALOG.recipes["obsidian"]
         for os_name in ("linux", "windows", "macos", "android"):

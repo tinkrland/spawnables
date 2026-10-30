@@ -48,7 +48,7 @@ the unlock that matters most for agents: **twofa without a phone at all.** when 
 
 honest ceilings: "hardwareless modem" is not a thing, because rf cannot be emulated and no carrier will attach a phantom radio. a number costs a sim or esim plan and a modem. esim download needs a module that supports it *and* a carrier willing to issue a profile to an iot imei, which some do at data rates and some refuse. sms can lag, and some services send codes by app push instead, which no modem will ever receive.
 
-## the two identities: eid vs imei, and the tello question (checked 2026-10-30)
+## eid, imei, and the imei/esn field (checked 2026-10-30)
 
 a carrier that sells an esim at retail (tello, mint, us mobile) asks for an **imei** at checkout, and this is not a formality.
 
@@ -62,6 +62,12 @@ so: **we did not have one, and one cannot be manufactured.** what we can do, and
 - flag the part a carrier decides: an accepted imei is not a compatibility promise, because carriers validate the tac against their device list and some reject iot modules outright. buying a phone-class modem is the cheapest way to avoid that argument.
 
 one small terminological note: **esn** is the cdma-era equivalent and only mattered on legacy verizon/sprint networks; on gsm/lte/nr the form always wants an imei, which is why tello's says imei.
+
+### why tello's field says "imei/esn"
+
+mvno ordering platforms still carry the cdma-era field and accept either id, mostly to run a device and blacklist check. accepting a value is not the same as the network using it: an esim on t-mobile's ran binds to the card's **eid** and the device's **imei**, so a form that takes an esn will take one and then fail to deliver a profile. verizon switched cdma off at the end of 2022 and sprint's was gone earlier, so an esn-only device cannot register on a us network at all; the esn now exists as a form field and as history (an 8-hex `80..` pesn is merely a meid derived back into esn shape).
+
+the code agrees with that reading: [`imei.py`](../src/spawnables/imei.py) recognises imei (15 digits, luhn, tac = first 8), meid (14 hex or 18 decimal with luhn), esn (11 decimal or 8 hex) and pesn, records whichever the modem reports over `AT+CGSN` / `AT+GSN`, and refuses to let anything but an imei activate a carrier esim. an esn or meid is evidence, never a credential.
 
 ## market: us first (owner call 2026-10-30)
 

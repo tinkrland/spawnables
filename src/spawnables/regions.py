@@ -50,6 +50,7 @@ REGION_PROFILES = {
             "a2p_10dlc": True,
             "stir_shaken": True,
             "e911_address": True,
+        "device_id_forms": True,
             "kyc_legal_subscriber": True,
         },
         "emergency": "911",
@@ -83,6 +84,10 @@ def compliance_notes(code="us"):
     notes = []
     if c.get("a2p_10dlc"):
         notes.append("sms at any volume is a2p: 10dlc brand+campaign registration follows the number")
+    if c.get("device_id_forms"):
+        notes.append(
+            "device id: forms still say imei/esn, but us cdma was retired at the end of "
+            "2022 - an esn or meid is a form field now, and an esim binds to the imei")
     if c.get("stir_shaken"):
         notes.append("calls need stir/shaken attestation or they get labelled spam or blocked")
     if c.get("e911_address"):

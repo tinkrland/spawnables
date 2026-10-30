@@ -16,7 +16,7 @@ android's esim path is: app -> `EuiccManager` / LPA -> telephony (RIL) -> the eU
 | [osmocom/pysim](https://github.com/osmocom/pysim) | sim/usim/euicc tooling, and `osmo-smdpp.py`: a runnable SM-DP+ with `smdpp-data`, i.e. a self-hostable profile server | GPL-2.0, active |
 | [osmocom/osmo-remsim](https://github.com/osmocom/osmo-remsim) | remote sim over ip: a sim bank elsewhere serves apdus to a guest over the network | GPL-2.0, active |
 | [frankmorgner/vsmartcard](https://github.com/frankmorgner/vsmartcard) | vpcd: a virtual pc/sc reader over tcp, so a software card can look like hardware to software | gpl, active |
-| [estkme-group/lpac](https://github.com/estkme-group/lpac) | a c LPA that drives eUICCs (real, or virtual ones behind vpcd) to fetch and enable profiles | AGPL-3.0, active |
+| [estkme-group/lpac](https://github.com/estkme-group/lpac) | a c LPA that drives eUICCs to fetch and enable profiles. **real cards only** (pcsc): checked 2026-10-30, lpac has no vpcd driver, so virtual cards are pysim's route | AGPL-3.0, active |
 
 so gemini's steps 2 and 3 are real and open source: a virtual reader (vpcd), and a private SM-DP+ (osmo-smdpp). step 1 (a modem to hang them on) is the part that does not exist for redroid.
 
@@ -66,7 +66,7 @@ honest ceilings: carrier apps need play services and a supported region, and som
 
 the lane the owner wanted: a phone identity with no modem in the box, built as a real module ([vuicc.py](../src/spawnables/vuicc.py)), not a promise.
 
-only one of the four layers actually needs a chip. the radio does: no carrier attaches to a phantom radio, so nothing here makes calls over cellular. the uicc does not: a virtual card served over pc/sc (vpcd), driven by an lpa (lpac), fed by an sm-dp+ (osmo-smdpp, from osmocom's pysim) is a working sim shelf with a stable eid, profile download, enable, switch and delete. the guest and the number follow from who issued the profile.
+only one of the four layers actually needs a chip. the radio does: no carrier attaches to a phantom radio, so nothing here makes calls over cellular. the uicc does not: a virtual card served over pc/sc (vpcd), driven by osmocom's tools (pysim / osmo-sim-auth), fed by an sm-dp+ (osmo-smdpp, from the same repo) is a working sim shelf with a stable eid, profile download, enable, switch and delete. the guest and the number follow from who issued the profile.
 
 - test-profile: osmo-smdpp issues it locally. the whole esim flow runs end to end with no carrier and no hardware. no real number, and the card says exactly that.
 - private-mno: your own core (open5gs + ueransim) issues the msisdn, sms included through your own smsc. the machine really has a number, inside your own network. the public pstn is a carrier interconnect, a contract rather than a config.
@@ -91,3 +91,26 @@ that card goes in the modem's slot (or the module is esim-capable and takes the 
 **route b, private core (no hardware at all).** open5gs + ueransim (a software ue, no radio) + an smsc, with the usim keys taken from the profile on the shelf. the vm attaches to your own core, gets an address, sends and receives sms through your smsc, and takes voice from your own ims. no modem, nothing to plug in. the ceiling, stated once: this number lives inside your network. reaching the public pstn from it is a carrier interconnect, a contract rather than a command.
 
 so: public calls and sms need a modem and a card, and that is a 20 to 40 dollar part. hardwareless gets you a full working core with calls and sms that never leaves your own network. either way the card says which one you are on, and neither route claims rcs on linux.
+
+
+## appendix six: away catch-up, agent-owned numbers, and the hypervisor attach (checked 2026-10-30)
+
+**can the vm catch messages while the agent's machine sleeps?** partly, and the split matters.
+
+a paused guest is a detached subscriber: the radio is off, so nothing lands *in the guest* while it sleeps. what still works:
+
+- **sms: yes, by store-and-forward.** the carrier's smsc queues messages for a detached line and retries on reattach, so caught-while-away sms arrives in a burst on resume. the window is the carrier's (usually a day or three) and is not guaranteed. messages the modem stored on the card/me survive a pause as well.
+- **missed calls: only with a keeper.** the network just knows the subscriber was unreachable. the durable record is the carrier's own voicemail/records. the better answer is a **telephony keeper**: a small host-side process that holds the modem awake while the primary vm sleeps and writes ring/incoming events and every sms to a shared dir the guest drains on resume.
+- **voicemail: yes, if the carrier box exists.** voicemail lives on the carrier by definition; on resume the agent dials the box (mmi, e.g. `*99`) and retrieves. audio capture depends on the modem exposing an audio path to the vm, which many usb sticks do not: retrieval of a transcript often means the carrier's visual voicemail, not our audio pipeline.
+
+so: the keeper is the honest mechanism, and `vuicc.away_plan()` is its runnable shape. the card says "store-and-forward" and "keeper log", never "we record your calls".
+
+**whose number is it?** the agent's. profiles carry `owner_kind: agent` with the agent's stable id, and `number_scope: dedicated`, which refuses to quietly reuse the owner's personal line (bills and blame both follow the line). the boundary that stays honest: the agent owns the card, the profile and the credentials *in the machine*, but kyc law means a carrier line has a legal subscriber of record, so `carrier-mno` also carries `legal_subscriber`. `private-mno` needs none: your core, your rules.
+
+**the hypervisor attach (the recipe with steps 1-3), fact-checked:**
+- **step 1, virtual smart card on the host: real.** [vsmartcard](https://github.com/frankmorgner/vsmartcard) ships vpcd (a virtual pc/sc reader over tcp) and a usb ccid emulator.
+- **step 2, the software card: real, but not where the recipe points.** the card side is osmocom's world (pysim / osmo-sim-auth) with profiles from osmo-smdpp. lpac does **not** drive virtual cards: it has no vpcd driver (checked), it is for real cards over pcsc.
+- **step 3, into qemu/kvm: real.** qemu ships `usb-ccid` and `ccid-card-passthru` (hw/usb/ccid-card-passthru.c, checked 2026-10-30): `-device usb-ccid -device ccid-card-passthru,chardev=<socket>` gives the guest a genuine ccid reader whose apdus are forwarded to the host, and `pcsc_scan` in the guest reports "card detected" with an atr.
+- **the ceiling nobody's recipe says: a card is not a network.** injecting the card makes the guest *see a sim*. it does not create a radio: calls and sms still need a modem or a software ue (ueransim) to attach to something. injection is for guests that already have a radio path, and for exercising es10 flows inside the guest.
+
+`vuicc.hypervisor_attach_plan()` is the runnable version of all three steps.

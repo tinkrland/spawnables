@@ -12,6 +12,7 @@ the map. everything worth reading, linked.
 - [advanced controls](spec/advanced-controls.md): the section 03 network and privacy surface.
 - [device context](spec/device-context.md): the three fingerprints, personas per guest os, the positioning.
 - [twofa handoff](spec/twofa-handoff.md) ([companions](spec/warm-phone-pool.md), [warmpool.py](src/spawnables/warmpool.py)): desktop qr decoded locally, routed to a phone; the warm pool keeps paused phones with one pinned identity: the qr-scan lane, decoded locally ([twofa.py](src/spawnables/twofa.py)).
+- [connect with cloud](spec/cloud-connect.md) ([cloud.py](src/spawnables/cloud.py)): turnkey machines from a click - provider hypervisor, real oauth on azure and gcp, role federation on aws because aws has no user oauth, and no docker, qemu or disk images on this host.
 - [schemas](spec/schemas/): json schema drafts for every object.
 
 ## the control plane

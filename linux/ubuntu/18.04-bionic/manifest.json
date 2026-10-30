@@ -1,0 +1,43 @@
+{
+  "target": "18.04-bionic",
+  "path": "linux/ubuntu/18.04-bionic",
+  "family": "linux",
+  "vendor": "ubuntu",
+  "release_name": "ubuntu 18.04 bionic",
+  "arch": "x86_64",
+  "status": "planned",
+  "guest": {
+    "provision": "full-computer",
+    "machine": "q35",
+    "cpu_model": "host",
+    "firmware": "seabios",
+    "disk_bus": "virtio",
+    "clock": "host",
+    "notes": ""
+  },
+  "media": {
+    "source": "public-download",
+    "shipped": false,
+    "note": "publishes its own archived media; nothing is shipped by us"
+  },
+  "activation": {
+    "kind": "not-applicable",
+    "note": ""
+  },
+  "network": {
+    "default": "deny",
+    "allowed_hosts": [],
+    "waiver": null
+  },
+  "bridges": [
+    "native-automation",
+    "file-in-out"
+  ],
+  "constraints": [
+    "free updates ended 2023-05: archive.ubuntu.com still serves the release, esm does not help a guest",
+    "python 3.6 and openssl 1.1: the reason an abandoned python tool lives here",
+    "old kernel supports virtio cleanly, so this is the least painful legacy linux target",
+    "quarantined by default: no vault refs, no connectors, one destination host"
+  ],
+  "refusal_reason": null
+}

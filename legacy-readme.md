@@ -8,6 +8,20 @@ software went out of business. software stopped being maintained. software that 
 
 the temptation is to say "unsupported". that is not an answer to the job. **legacy spawnables exist so the agent meets the software where it actually is, not where we wish it were.** the gap between "this program still does the thing" and "an agent can use it" is the product.
 
+## the tree
+
+the targets live as one directory per legacy system, each with a manifest that states how the guest runs, where its media comes from, what activation needs, which bridges exist, and what will go wrong. `schema.md` documents every field; `tools/validate_legacy.py` enforces it and `tests/selftest.py` guards it.
+
+```
+windows/windows7  windows/windowsxp  windows/windows81  windows/windows-phone-8.1 (refused)
+apple/macos/10.14-mojave  apple/macos/10.13-high-sierra
+apple/ios/12  apple/ios/14   apple/ipados/13  apple/ipados/15
+linux/debian/10-buster  linux/ubuntu/18.04-bionic  linux/centos/7
+android/android9  android/android11  android/android12
+```
+
+sixteen targets, and the count is not the point: every one of them is **planned** or **refused**, never quietly "supported". plan means the constraints are named; refused means there is no honest path and the reason is written down. built is reserved for a target with a guest, a bridge, fixtures and evidence.
+
 ## what a legacy spawnable actually is
 
 three parts, and only the first one is the easy part:

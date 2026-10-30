@@ -1,0 +1,46 @@
+{
+  "target": "windows7",
+  "path": "windows/windows7",
+  "family": "windows",
+  "vendor": "microsoft",
+  "release_name": "windows 7 sp1",
+  "arch": "x86_64",
+  "status": "planned",
+  "guest": {
+    "provision": "full-computer",
+    "machine": "q35",
+    "cpu_model": "qemu64",
+    "firmware": "seabios",
+    "disk_bus": "sata",
+    "clock": "declared",
+    "notes": ""
+  },
+  "media": {
+    "source": "owner-supplied-iso",
+    "shipped": false,
+    "note": "owner-supplied iso; microsoft withdrawal of downloads makes owner media the only reliable path"
+  },
+  "activation": {
+    "kind": "owner-key",
+    "note": "owner-supplied product key or volume media; activation is not repeatable, so activated installs are kept as snapshots"
+  },
+  "network": {
+    "default": "deny",
+    "allowed_hosts": [],
+    "waiver": null
+  },
+  "bridges": [
+    "file-in-out",
+    "gui-automation",
+    "protocol-emulation"
+  ],
+  "constraints": [
+    "no virtio drivers in box: use sata/ide emulation or slipstream the drivers into the install media",
+    "unpatched 7 cannot speak tls 1.2: any https the bridge needs must terminate on the guest's host",
+    "modern qemu cpu models fail to boot this kernel: qemu64 or haswell-no-tsx must be pinned in the manifest",
+    "activation servers for 7 are degraded: activate once, snapshot immediately, never re-activate",
+    "guest additions/agent builds are ancient and most download links are dead",
+    "end of support 2020-01: never credentialed, never a pool identity"
+  ],
+  "refusal_reason": null
+}

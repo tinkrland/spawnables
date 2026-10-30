@@ -1,0 +1,43 @@
+{
+  "target": "10-buster",
+  "path": "linux/debian/10-buster",
+  "family": "linux",
+  "vendor": "debian",
+  "release_name": "debian 10 buster",
+  "arch": "x86_64",
+  "status": "planned",
+  "guest": {
+    "provision": "full-computer",
+    "machine": "q35",
+    "cpu_model": "host",
+    "firmware": "seabios",
+    "disk_bus": "virtio",
+    "clock": "host",
+    "notes": ""
+  },
+  "media": {
+    "source": "public-download",
+    "shipped": false,
+    "note": "publishes its own archived media; nothing is shipped by us"
+  },
+  "activation": {
+    "kind": "not-applicable",
+    "note": ""
+  },
+  "network": {
+    "default": "deny",
+    "allowed_hosts": [],
+    "waiver": null
+  },
+  "bridges": [
+    "native-automation",
+    "file-in-out"
+  ],
+  "constraints": [
+    "apt against archive.debian.org only: buster moved to the archive and mainline security updates stopped in 2024",
+    "old glibc and openssl 1.1: tls 1.0/1.1 peers may still exist, modern peers may refuse",
+    "cheapest first build in this whole line: the media is free, legal and archived",
+    "quarantined by default: no vault refs, no connectors, one destination host"
+  ],
+  "refusal_reason": null
+}

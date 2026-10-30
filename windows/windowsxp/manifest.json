@@ -1,0 +1,45 @@
+{
+  "target": "windowsxp",
+  "path": "windows/windowsxp",
+  "family": "windows",
+  "vendor": "microsoft",
+  "release_name": "windows xp sp3",
+  "arch": "i686",
+  "status": "planned",
+  "guest": {
+    "provision": "ephemeral",
+    "machine": "pc",
+    "cpu_model": "qemu32",
+    "firmware": "seabios",
+    "disk_bus": "ide",
+    "clock": "declared",
+    "notes": ""
+  },
+  "media": {
+    "source": "owner-supplied-iso",
+    "shipped": false,
+    "note": ""
+  },
+  "activation": {
+    "kind": "owner-key",
+    "note": "owner-supplied key; phone activation is the only remaining path and is not repeatable"
+  },
+  "network": {
+    "default": "deny",
+    "allowed_hosts": [],
+    "waiver": null
+  },
+  "bridges": [
+    "file-in-out",
+    "protocol-emulation"
+  ],
+  "constraints": [
+    "ide disk only, no ahci/sata, no virtio: the disk bus is a hard constraint, not a preference",
+    "no tls 1.2 and no modern cipher suites: every https call terminates on the host, plain http or files only",
+    "smb1 only: file transfer must not rely on a modern share",
+    "32-bit address space under 4gb: no large fixtures in memory",
+    "no security updates since 2014-04: ephemeral by default and never credentialed",
+    "usb passthrough is fragile on pc/i440fx: prefer file-in-out over device bridges"
+  ],
+  "refusal_reason": null
+}

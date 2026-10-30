@@ -1,0 +1,39 @@
+{
+  "target": "windows-phone-8.1",
+  "path": "windows/windows-phone-8.1",
+  "family": "windows",
+  "vendor": "microsoft",
+  "release_name": "windows phone 8.1",
+  "arch": "arm32",
+  "status": "refused",
+  "guest": {
+    "provision": "ephemeral",
+    "machine": "none",
+    "cpu_model": "none",
+    "firmware": "none",
+    "disk_bus": "usb",
+    "clock": "declared",
+    "notes": ""
+  },
+  "media": {
+    "source": "owner-supplied-image",
+    "shipped": false,
+    "note": ""
+  },
+  "activation": {
+    "kind": "owner-key",
+    "note": ""
+  },
+  "network": {
+    "default": "deny",
+    "allowed_hosts": [],
+    "waiver": null
+  },
+  "bridges": [],
+  "constraints": [
+    "no public firmware or emulation route exists",
+    "store shut down, so no way to reinstall applications",
+    "any device-farm path would be a hardware lane, not a legacy guest"
+  ],
+  "refusal_reason": "arm32 phone platform with no legitimate emulation path, a dead store, and no owner-media route: there is nothing here we can honestly deliver, so the entry is refused rather than planned forever"
+}

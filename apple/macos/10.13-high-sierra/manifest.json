@@ -1,0 +1,44 @@
+{
+  "target": "10.13-high-sierra",
+  "path": "apple/macos/10.13-high-sierra",
+  "family": "macos",
+  "vendor": "apple",
+  "release_name": "macos 10.13 high sierra",
+  "arch": "x86_64",
+  "status": "planned",
+  "guest": {
+    "provision": "full-computer",
+    "machine": "q35",
+    "cpu_model": "haswell",
+    "firmware": "ovmf",
+    "disk_bus": "virtio",
+    "clock": "host",
+    "notes": "requires apple hardware for a legitimate guest; bespoke machine definition with smc"
+  },
+  "media": {
+    "source": "owner-supplied-image",
+    "shipped": false,
+    "note": ""
+  },
+  "activation": {
+    "kind": "none",
+    "note": ""
+  },
+  "network": {
+    "default": "deny",
+    "allowed_hosts": [],
+    "waiver": null
+  },
+  "bridges": [
+    "native-automation",
+    "file-in-out"
+  ],
+  "constraints": [
+    "apple's licence restricts virtualising macOS to apple hardware: on anything else this entry stays refused",
+    "no metal: gpu-accelerated apps will refuse to run, and software rendering is the only fallback",
+    "needs ovmf plus smc emulation and apple boot quirks, so the machine definition is bespoke, not a stock q35",
+    "icloud and licence activation may flag a virtual machine: assume local-only apps as the supported workload",
+    "runs 32-bit applications without the mojave warning: pick this when the tool is 32-bit only"
+  ],
+  "refusal_reason": null
+}

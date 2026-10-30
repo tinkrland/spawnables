@@ -1,0 +1,44 @@
+{
+  "target": "android9",
+  "path": "android/android9",
+  "family": "android",
+  "vendor": "google",
+  "release_name": "android 9",
+  "arch": "x86_64",
+  "status": "planned",
+  "guest": {
+    "provision": "ephemeral",
+    "machine": "q35",
+    "cpu_model": "host",
+    "firmware": "none",
+    "disk_bus": "virtio",
+    "clock": "host",
+    "notes": "api 28; container-backed guest via an adapter, not a qemu machine"
+  },
+  "media": {
+    "source": "public-image",
+    "shipped": false,
+    "note": ""
+  },
+  "activation": {
+    "kind": "none",
+    "note": ""
+  },
+  "network": {
+    "default": "deny",
+    "allowed_hosts": [],
+    "waiver": null
+  },
+  "bridges": [
+    "native-automation",
+    "file-in-out"
+  ],
+  "constraints": [
+    "no modem and no ril: no sim, no sms, no calls, no esim claims - the honest-labeling rule applies here hard",
+    "attestation fails by construction: this is a testing lane, never a pool identity",
+    "no google play services unless gapps are baked in, so store-signed apps may refuse to run",
+    "gpu is software rendered unless a host gpu is available: fine for data work, useless for anything visual",
+    "redroid 9 line; the deepest abandoned-app tail, and the most likely to still install old apks"
+  ],
+  "refusal_reason": null
+}

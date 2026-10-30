@@ -1,0 +1,43 @@
+{
+  "target": "7",
+  "path": "linux/centos/7",
+  "family": "linux",
+  "vendor": "centos",
+  "release_name": "centos 7",
+  "arch": "x86_64",
+  "status": "planned",
+  "guest": {
+    "provision": "full-computer",
+    "machine": "q35",
+    "cpu_model": "host",
+    "firmware": "seabios",
+    "disk_bus": "virtio",
+    "clock": "host",
+    "notes": ""
+  },
+  "media": {
+    "source": "public-download",
+    "shipped": false,
+    "note": "publishes its own archived media; nothing is shipped by us"
+  },
+  "activation": {
+    "kind": "not-applicable",
+    "note": ""
+  },
+  "network": {
+    "default": "deny",
+    "allowed_hosts": [],
+    "waiver": null
+  },
+  "bridges": [
+    "native-automation",
+    "file-in-out"
+  ],
+  "constraints": [
+    "end of life 2024-06: vault.centos.org mirrors only",
+    "kernel 3.10 and systemd 219: some modern packages simply will not install",
+    "common home for enterprise software that never shipped a newer build",
+    "quarantined by default: no vault refs, no connectors, one destination host"
+  ],
+  "refusal_reason": null
+}

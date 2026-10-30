@@ -1,0 +1,43 @@
+{
+  "target": "15",
+  "path": "apple/ipados/15",
+  "family": "ipados",
+  "vendor": "apple",
+  "release_name": "ipados 15",
+  "arch": "aarch64",
+  "status": "planned",
+  "guest": {
+    "provision": "ephemeral",
+    "machine": "device-farm",
+    "cpu_model": "none",
+    "firmware": "none",
+    "disk_bus": "usb",
+    "clock": "declared",
+    "notes": "real ipad in a device farm; nothing is emulated here"
+  },
+  "media": {
+    "source": "device-farm",
+    "shipped": false,
+    "note": ""
+  },
+  "activation": {
+    "kind": "none",
+    "note": ""
+  },
+  "network": {
+    "default": "deny",
+    "allowed_hosts": [],
+    "waiver": null
+  },
+  "bridges": [
+    "native-automation",
+    "file-in-out"
+  ],
+  "constraints": [
+    "no legitimate emulation lane: a physical device, leased one at a time",
+    "apps resolve only through the owner's purchase history for that ipados version",
+    "ipad-only applications are the reason this lane exists: they have no desktop equivalent",
+    "old enough to matter for abandoned apps, new enough that most store downloads still resolve"
+  ],
+  "refusal_reason": null
+}

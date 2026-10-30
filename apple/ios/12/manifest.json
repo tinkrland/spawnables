@@ -1,0 +1,44 @@
+{
+  "target": "12",
+  "path": "apple/ios/12",
+  "family": "ios",
+  "vendor": "apple",
+  "release_name": "ios 12",
+  "arch": "aarch64",
+  "status": "planned",
+  "guest": {
+    "provision": "ephemeral",
+    "machine": "device-farm",
+    "cpu_model": "none",
+    "firmware": "none",
+    "disk_bus": "usb",
+    "clock": "declared",
+    "notes": "delivered as a real device in a device farm, not as an emulated guest; firmware and ipsw are owner-supplied and never shipped"
+  },
+  "media": {
+    "source": "device-farm",
+    "shipped": false,
+    "note": ""
+  },
+  "activation": {
+    "kind": "none",
+    "note": ""
+  },
+  "network": {
+    "default": "deny",
+    "allowed_hosts": [],
+    "waiver": null
+  },
+  "bridges": [
+    "native-automation",
+    "file-in-out"
+  ],
+  "constraints": [
+    "there is no legitimate ios emulation lane: this entry is a physical device, reached like the eclectics native half",
+    "apps must come from the owner's purchase history, so availability is whatever apple still serves for that version",
+    "no usb-free path: the device must be attached, one at a time",
+    "attestation is real here, which is the one advantage over an emulator: this is a genuine device",
+    "oldest ios with a broad abandoned-app tail; iphone-only apps still install from purchase history"
+  ],
+  "refusal_reason": null
+}

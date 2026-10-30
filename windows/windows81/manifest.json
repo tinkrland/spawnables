@@ -1,0 +1,43 @@
+{
+  "target": "windows81",
+  "path": "windows/windows81",
+  "family": "windows",
+  "vendor": "microsoft",
+  "release_name": "windows 8.1",
+  "arch": "x86_64",
+  "status": "planned",
+  "guest": {
+    "provision": "full-computer",
+    "machine": "q35",
+    "cpu_model": "qemu64",
+    "firmware": "seabios",
+    "disk_bus": "sata",
+    "clock": "declared",
+    "notes": ""
+  },
+  "media": {
+    "source": "owner-supplied-iso",
+    "shipped": false,
+    "note": ""
+  },
+  "activation": {
+    "kind": "owner-key",
+    "note": ""
+  },
+  "network": {
+    "default": "deny",
+    "allowed_hosts": [],
+    "waiver": null
+  },
+  "bridges": [
+    "file-in-out",
+    "gui-automation"
+  ],
+  "constraints": [
+    "end of support 2023-01: no updates, therefore never credentialed",
+    "no virtio by default and the last guest additions for 8.1 are old",
+    "store and many bundled apps are dead: assume the legacy application is installed from owner media",
+    "activation after end of support is unreliable: snapshot an activated install immediately"
+  ],
+  "refusal_reason": null
+}

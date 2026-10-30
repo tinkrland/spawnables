@@ -1,0 +1,31 @@
+{
+  "id": "zbar",
+  "installs": {
+    "debian": {
+      "steps": [
+        "apt update && apt install -y zbar-tools"
+      ],
+      "verify": "zbarimg --version"
+    },
+    "fedora": {
+      "steps": [
+        "dnf install -y zbar"
+      ],
+      "verify": "zbarimg --version"
+    },
+    "arch": {
+      "steps": [
+        "pacman -S --noconfirm zbar"
+      ],
+      "verify": "zbarimg --version"
+    },
+    "macos": {
+      "steps": [
+        "brew install zbar"
+      ],
+      "verify": "zbarimg --version"
+    }
+  },
+  "notes": "local qr decode for the twofa handoff lane (spec/twofa-handoff.md): the screenshot is decoded in the guest, never through a cloud vision api",
+  "disk_mb_est": 20
+}

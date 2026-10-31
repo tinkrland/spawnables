@@ -8,7 +8,7 @@ import argparse
 import json
 import sys
 
-from heyphony import inbox, providers, sip
+from heyphony import getters, inbox, providers, sip
 
 SETUP = {
     "what_this_is": "one number that rings a process: a sip did, a provider, a client on the host.",
@@ -26,6 +26,8 @@ SETUP = {
         "sms": {"carrier": "provider webhook, never sip", "gate": ["HEYPHONY_SMS_TOKEN"], "state": "designed"},
     },
     "decided": sip.host_client(),
+    "get": {"what": "rails the number itself unlocks, installed by the package that holds it",
+            "commands": ["heyphony get signal"], "why": "signal wants a phone or an sms, and this is the package with both"},
     "rules": ["unset credentials close a lane", "the sip secret lives on the host, never in a burnable guest",
               "a did stays voip: refused for otp, refused for bulk outbound"],
 }
@@ -70,6 +72,15 @@ def cmd_serve(args):
     catcher.serve(port=args.port, token=args.token)
 
 
+def cmd_get(args):
+    """the one command an agent runs once it has a number: heyphony get signal."""
+    if args.list or not args.name:
+        _out({"getters": {n: r["state"] for n, r in getters.available().items()},
+              "usage": "heyphony get <name> [--path link-device|register-number] [--run]"})
+        return
+    _out(getters.run(args.name, path=args.path, dry=not args.run))
+
+
 def cmd_doctor(args):
     _out({"host_client": sip.host_client(), "rc_present": sip.rc_path().is_file(),
           "inbox": inbox.count(),
@@ -95,6 +106,12 @@ def build_parser():
     i.set_defaults(func=cmd_inbox)
     w = sub.add_parser("serve"); w.add_argument("--port", type=int, default=8099)
     w.add_argument("--token"); w.set_defaults(func=cmd_serve)
+    g = sub.add_parser("get", help="open a rail that needs the number this host already holds")
+    g.add_argument("name", nargs="?")
+    g.add_argument("--path", default="link-device", choices=["link-device", "register-number"])
+    g.add_argument("--run", action="store_true", help="actually execute the install steps")
+    g.add_argument("--list", action="store_true")
+    g.set_defaults(func=cmd_get)
     d = sub.add_parser("doctor"); d.set_defaults(func=cmd_doctor)
     return p
 

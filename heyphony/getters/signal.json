@@ -1,0 +1,67 @@
+{
+  "name": "signal",
+  "why": "signal needs one thing: a phone that already owns the number, or a number that can receive an sms. heyphony is provisioned with a number, so it is the package that can hand one over. everywhere else in the branch this lane is only a spec.",
+  "needs": {
+    "provisioned_did": false,
+    "docker": true,
+    "human_qr_scan": true
+  },
+  "paths": {
+    "link-device": {
+      "what": "attach as a secondary device to a phone that already owns the number",
+      "needs_number": false,
+      "needs_sms": false,
+      "why_preferred": "no signup, no sms, and signal's own registration risk checks never run"
+    },
+    "register-number": {
+      "what": "register a number we hold as its own signal identity",
+      "needs_number": true,
+      "needs_sms": true,
+      "gate_env": "HEYPHONY_SIP_DID",
+      "why_risky": "a voip did may be refused by signal's risk checks, which is the same verdict telephony already records for otp use"
+    }
+  },
+  "install": [
+    {
+      "about": "the unofficial bridge, as a container so a host needs no jre",
+      "cmd": "docker run -d --name signal-api --restart=always -p 8080:8080 -v $HOME/.local/share/signal-api:/home/.local/share/signal-cli -e 'MODE=native' bbernhard/signal-cli-rest-api",
+      "source": "verified from the image's own readme, nov 2026: MODE=native, /v1/qrcodelink, /v2/send"
+    }
+  ],
+  "link": [
+    {
+      "about": "render the qr and scan it from the phone that owns the number",
+      "cmd": "open http://localhost:8080/v1/qrcodelink?device_name=signal-api",
+      "human": true,
+      "note": "settings > linked devices > plus. the scan is the one act that cannot be automated, and should not be"
+    }
+  ],
+  "register": [
+    {
+      "about": "register the number heyphony holds, if signal accepts it",
+      "cmd": "curl -s -X POST $SIGNAL_CLI_URL/v1/register/$HEYPHONY_SIP_DID",
+      "may_refuse": "a voip did is the shape signal's risk checks dislike. expect a refusal, do not promise a pass"
+    }
+  ],
+  "env": {
+    "SIGNAL_CLI_URL": "http://127.0.0.1:8080"
+  },
+  "verify": [
+    {
+      "about": "the api answers and names the signal-cli version it runs",
+      "cmd": "curl -s $SIGNAL_CLI_URL/v1/about"
+    },
+    {
+      "about": "one message from a phone in the linked device's own chat list",
+      "cmd": "curl -s $SIGNAL_CLI_URL/v1/receive/<number>",
+      "human": false
+    }
+  ],
+  "refused": {
+    "bot-api": "signal has no bot or app api. a getter that claims one is selling you a wrapper",
+    "bulk": "signal treats automation-heavy accounts as spam, so this rail is for people who talk to the agent",
+    "scraping-the-desktop-app": "driving the signal desktop binary is not a rail, it is a screenshot with extra steps"
+  },
+  "state": "designed",
+  "evidence": "install and link commands verified against the image's own readme; nothing has been linked on this host"
+}

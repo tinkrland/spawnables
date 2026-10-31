@@ -14,6 +14,7 @@ LANE = {
     "gate": ("SIGNAL_CLI_URL",),
     "state": "designed",
     "evidence": "the paths are named and the number dependency is explicit; no device has been linked",
+    "bootstrap": "heyphony get signal",
 }
 
 PATHS = {
@@ -47,5 +48,6 @@ def registration_plan(path="link-device", env=None):
     if spec["needs_number_of_its_own"] and not have_number:
         missing.append("HEYPHONY_SIP_DID (the number whose sms we receive)")
     return {"path": path, "possible": not missing, "missing": missing, "steps": spec["needs"],
+            "one_command": "heyphony get signal",
             "needs_number_of_its_own": spec["needs_number_of_its_own"], "command": spec["command"],
             "note": spec["note"], "refusals": REFUSALS}

@@ -48,6 +48,24 @@ the host runs **baresip**. its `ctrl_tcp` module is a json command socket: json 
 
 linphone still does the desktop job fine, and its config keys are what this folder generates.
 
+## get: what a number unlocks
+
+a number is the prerequisite for rails that want a phone. so the number's own package opens them:
+
+```
+heyphony get --list                 # what this host can open
+heyphony get signal                 # the plan: install, join, verify, what stays human
+heyphony get signal --run           # execute the install steps (docker pull + run)
+```
+
+getters are **data**, one json recipe per rail in `getters/`, with the commands verified against
+upstream rather than remembered. dry by default; `--run` when you mean it; the qr scan stays a
+person's act, because a linked device is an identity and identities are not self-service.
+
+nothing here imports the umbrella. a getter is not a lane: the lane (carrier, gate, honest state)
+lives in the comms branch, and this package only knows how to *install* the rail and hand back
+what remains human.
+
 ## honest state
 
 nothing here has placed a call yet. what is built and tested: config generation against linphone's own keys, call-history and message readers against its own sqlite schemas, the provider table, the sms catcher and the inbox. what proves it: one host, one did, an echo test, and `heyphony calls` seeing it.

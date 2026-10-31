@@ -23,6 +23,8 @@ bin/heyphony serve --port 8099 --token ...     # provider sms webhook
 
 point the client at the generated rc on the host (baresip is the chosen client: json over tcp via `ctrl_tcp`), dial the provider echo test, text the number, and confirm both with `bin/heyphony calls` and `bin/heyphony inbox`.
 
+once the number works, the rails it unlocks are one command each: `bin/heyphony get signal` installs and links the signal bridge, with the qr scan left to you.
+
 ## then whichever lanes you actually want
 
 each folder's readme carries its own gate and its own proof. the short version:

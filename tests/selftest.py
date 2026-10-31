@@ -16,6 +16,7 @@ from comms import catcher, envelope, gates, registry
 from comms import cli as comms_cli
 from heyphony import cli as telephony_cli
 from heyphony import catcher as phone_catcher
+from heyphony import getters
 from heyphony import inbox, providers, sip
 from heyphony import sip as linphone
 
@@ -179,9 +180,13 @@ class TestOneEnvelopeManyCarriers(unittest.TestCase):
             self.assertIn(name, registry.folders())
 
     def test_heyphony_stays_decoupled_from_the_umbrella(self):
+        """prose may name the umbrella; an import may not. that is the real boundary."""
         root = pathlib.Path(__file__).resolve().parent.parent
         for path in (root / "heyphony").rglob("*.py"):
-            self.assertNotIn("comms", path.read_text(), f"{path} imports the umbrella")
+            for line in path.read_text().splitlines():
+                stripped = line.strip()
+                if stripped.startswith(("import ", "from ")):
+                    self.assertNotIn("comms", stripped, f"{path} imports the umbrella: {stripped}")
 
     def test_refusals_are_named_once_not_improvised_per_card(self):
         for needle in ("otp-by-did", "group-reply", "social-reply"):
@@ -337,6 +342,54 @@ class TestCatcher(unittest.TestCase):
         ok, why = catcher.verify("whatsapp", "{}", {}, {"WAHA_HMAC_KEY": "k"})
         self.assertFalse(ok)
         self.assertIn("missing", why)
+
+
+class TestGetters(unittest.TestCase):
+    def test_signal_is_the_first_getter(self):
+        self.assertIn("signal", getters.available())
+
+    def test_linking_needs_no_number_at_all(self):
+        plan = getters.plan("signal", "link-device", env={})
+        self.assertTrue(plan["gettable"])
+        self.assertEqual(plan["missing"], [])
+
+    def test_registering_needs_the_did_heyphony_holds(self):
+        self.assertFalse(getters.plan("signal", "register-number", env={})["gettable"])
+        self.assertTrue(getters.plan("signal", "register-number", {"HEYPHONY_SIP_DID": "+1555"})["gettable"])
+
+    def test_an_unknown_getter_says_what_exists(self):
+        out = getters.plan("carrier-pigeon", env={})
+        self.assertFalse(out["gettable"])
+        self.assertIn("signal", out["known"])
+
+    def test_a_dry_run_executes_nothing(self):
+        out = getters.run("signal", "link-device", env={})
+        self.assertTrue(out["dry"])
+        self.assertTrue(all(not step["executed"] for step in out["ran"]))
+
+    def test_the_qr_scan_stays_a_human_act(self):
+        out = getters.run("signal", "link-device", env={})
+        self.assertTrue(any("qr" in who.lower() or "scan" in who.lower() for who in out["needs_a_human"]))
+        self.assertIn("qrcodelink", out["next"] + "".join(s["cmd"] for s in out["steps"]))
+
+    def test_the_recipe_pins_commands_verified_upstream(self):
+        recipe = getters.available()["signal"]
+        joined = " ".join(step["cmd"] for step in recipe["install"])
+        self.assertIn("MODE=native", joined)
+        self.assertIn("bbernhard/signal-cli-rest-api", joined)
+        self.assertIn("/v1/qrcodelink", " ".join(step["cmd"] for step in recipe["link"]))
+        self.assertIn("/v2/send", recipe["install"][0]["source"])
+
+    def test_the_getter_claims_no_bot_api(self):
+        self.assertIn("bot-api", getters.available()["signal"]["refused"])
+
+    def test_the_signal_lane_names_the_same_command(self):
+        self.assertEqual(lane("signal").LANE["bootstrap"], "heyphony get signal")
+        self.assertEqual(lane("signal").registration_plan("link-device", env={})["one_command"],
+                         "heyphony get signal")
+
+    def test_telephony_setup_advertises_the_getter(self):
+        self.assertIn("heyphony get signal", telephony_cli.SETUP["get"]["commands"])
 
 
 if __name__ == "__main__":

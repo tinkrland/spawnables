@@ -14,6 +14,7 @@ the map. everything worth reading, linked.
 - [twofa handoff](spec/twofa-handoff.md) ([companions](spec/warm-phone-pool.md), [warmpool.py](src/spawnables/warmpool.py)): desktop qr decoded locally, routed to a phone; the warm pool keeps paused phones with one pinned identity: the qr-scan lane, decoded locally ([twofa.py](src/spawnables/twofa.py)).
 - [connect with cloud](spec/cloud-connect.md) ([cloud.py](src/spawnables/cloud.py)): turnkey machines from a click - provider hypervisor, real oauth on azure and gcp, role federation on aws because aws has no user oauth, and no docker, qemu or disk images on this host.
 - [hypeman evaluation](spec/hypeman-eval.md): the boot path verdict - yes for linux guests and memory standby, no for legacy windows, no for usb lanes, and fork must never clone a pinned identity.
+- [tenki evaluation](spec/tenki-eval.md): measured - resume 1.7 s, snapshot-to-first-exec 1.6 s, and no /dev/kvm, so tenki hosts the primitive but cannot host hypeman.
 - [schemas](spec/schemas/): json schema drafts for every object.
 
 ## the control plane

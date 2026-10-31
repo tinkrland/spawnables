@@ -94,7 +94,13 @@ next step if this is approved: one host, one oci image of a debian guest, and a 
 standby to first-exec latency, because "milliseconds" is their number and we do not repeat
 numbers we have not measured.
 
-## measuring it (the number is still owed)
+## measuring it
+
+> 2026-10-31: tenki was measured instead, because a live key existed and this
+> sandbox has no kvm. see [tenki-eval.md](tenki-eval.md): resume ~1.7 s p50,
+> snapshot-to-first-exec ~1.6 s p50. hypeman itself remains unmeasured.
+
+## the harness
 
 `tools/hypeman_bench.py` is the measurement, not a claim. the readme's
 "milliseconds" is their number on their hardware; the pool only earns that

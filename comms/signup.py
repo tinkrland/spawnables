@@ -134,6 +134,7 @@ def phone_farm_note():
     """the owner asked whether we used phone-harness. we read it; here is the verdict."""
     return {
         "used": False,
+        "owner_answer": "no: the cloud farm is declined, not deferred",
         "what_it_is": ("shawnpana/phone-harness, mit: a cloud device farm behind four helpers "
                        "(open_app, tap_text, type_text, screen), iphones macOS-mirroring + vision ocr, "
                        "androids over adb, mcp endpoint cloud-only"),

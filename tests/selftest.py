@@ -515,6 +515,7 @@ class TestOpeningTheInboxes(unittest.TestCase):
     def test_phone_harness_was_read_and_not_adopted(self):
         note = signup.phone_farm_note()
         self.assertFalse(note["used"])
+        self.assertIn("declined, not deferred", note["owner_answer"])
         self.assertIn("their sims", note["why_not_for_signup"])
         self.assertIn("may not become the identity", note["where_it_would_fit"])
 

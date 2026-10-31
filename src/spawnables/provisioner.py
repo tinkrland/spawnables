@@ -244,6 +244,22 @@ class Provisioner:
             raise ProvisionError(
                 "phone coherence failed: "
                 + "; ".join(i[0] for i in issues if i[3] == "fail"))
+        # the hardware tells coherence cannot see: sensors, gpu string, build
+        # props, sim vs network. same gate, second lens, because a phone can
+        # tell a perfect story about its clock and still be a container.
+        from .mobile_tells import mobile_tells
+        tell_probe = dict(probe)
+        tell_probe.update((img.get("device") or {}))
+        tell_probe["api_level"] = (img.get("device") or {}).get("api_level")
+        tell_probe["kind"] = (img.get("device") or {}).get("kind") or img.get("kind")
+        told = mobile_tells(tell_probe, net)
+        for signal, expected, actual, severity, note in told:
+            self.emitter.emit("provision.mobile_tells", severity,
+                              f"{signal}: expected {expected}, got {actual} - {note}")
+        if any(i[3] == "fail" for i in told):
+            raise ProvisionError(
+                "phone hardware tells failed: "
+                + "; ".join(i[0] for i in told if i[3] == "fail"))
         self.emitter.emit("provision.mobile_coherence", "ok",
                           "screen, camera surface and network claim are honest")
 

@@ -1704,6 +1704,74 @@ class TestHypemanBench(unittest.TestCase):
 
 
 
+class TestMobileHardwareTells(unittest.TestCase):
+    """the tells that come from hardware rather than from the story the guest tells."""
+
+    def setUp(self):
+        import sys
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "src"))
+        from spawnables import mobile_tells as T
+        self.T = T
+
+    def test_software_renderer_is_a_headless_browser(self):
+        issues = self.T.gpu_tells({"webgl_renderer": "ANGLE (SwiftShader Device (Subzero))"})
+        self.assertEqual(issues[0][0], "gpu")
+        self.assertEqual(issues[0][3], "fail")
+
+    def test_gpu_family_must_match_the_model(self):
+        mismatched = self.T.gpu_tells({"brand": "google",
+                                       "webgl_renderer": "Adreno (TM) 740"})
+        self.assertEqual(mismatched[0][3], "fail")
+        self.assertFalse(self.T.gpu_tells({"brand": "google",
+                                           "webgl_renderer": "Mali-G715"}))
+
+    def test_missing_accelerometer_blocks_the_phone(self):
+        issues = self.T.sensor_tells({"sensors": {"accelerometer": False}})
+        self.assertTrue(any(i[0] == "sensors" and i[3] == "fail" for i in issues))
+
+    def test_flat_quantised_sensor_data_is_generated(self):
+        issues = self.T.sensor_tells({"sensors": {"accelerometer": True, "sampling_hz": 100,
+                                                  "noise_floor": 0}})
+        self.assertTrue(any("generated" in i[4] for i in issues))
+
+    def test_engineering_build_and_debuggable_fail(self):
+        issues = self.T.build_props_tells(
+            {"build": {"debuggable": True, "tags": "test-keys"}})
+        self.assertEqual(sum(1 for i in issues if i[3] == "fail"), 2)
+
+    def test_patch_level_cannot_predate_the_android_version(self):
+        issues = self.T.build_props_tells(
+            {"api_level": 12, "build": {"security_patch": "2019-08-05"}})
+        self.assertTrue(any(i[0] == "build" and i[3] == "fail" for i in issues))
+
+    def test_sim_and_network_must_agree_about_the_country(self):
+        issues = self.T.sim_carrier_tells({"sim": {"present": True, "country_iso": "FR",
+                                                   "mcc": 208, "carrier": "orange"}},
+                                          {"exit_geo": {"country": "IN"}})
+        self.assertTrue(any(i[0] == "sim" and i[3] == "fail" for i in issues))
+
+    def test_cellular_exit_with_no_sim_is_the_modem_less_lie(self):
+        issues = self.T.sim_carrier_tells({"sim": {"present": False},
+                                           "network_kind": "mobile"})
+        self.assertTrue(any(i[3] == "fail" for i in issues))
+
+    def test_attestation_is_refused_on_anything_but_real_hardware(self):
+        self.assertFalse(self.T.attestation_reality({"kind": "container"})["available"])
+        self.assertTrue(self.T.attestation_reality({"kind": "device-farm"})["available"])
+        issues = self.T.mobile_tells({"kind": "container", "claims_attestation": True})
+        self.assertTrue(any(i[0] == "attestation" for i in issues))
+
+    def test_clean_phone_passes_the_second_lens(self):
+        device = {"brand": "google", "webgl_renderer": "Mali-G715",
+                  "sensors": {"accelerometer": True, "gyroscope": True,
+                              "sampling_hz": 400, "noise_floor": 0.02},
+                  "build": {"debuggable": False, "tags": "release-keys"},
+                  "sim": {"present": True, "mcc": 404, "carrier": "airtel",
+                          "country_iso": "IN"}}
+        issues = self.T.mobile_tells(device, {"exit_geo": {"country": "IN"}})
+        self.assertEqual([i for i in issues if i[3] == "fail"], [])
+
+
 if __name__ == "__main__":
     suite = unittest.defaultTestLoader.loadTestsFromModule(sys.modules["__main__"])
     result = unittest.TextTestRunner(verbosity=0).run(suite)

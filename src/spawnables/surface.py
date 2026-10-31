@@ -51,7 +51,7 @@ BACKENDS = {
         "verbs": list(VERBS),
         "covers": "a hosted phone farm (phone-harness cloud and friends)",
         "why": "their device, their sim, their account: adopting it would move the identity off our side",
-        "holds": "borrowed, so refused for pinned work",
+        "holds": "borrowed, and the owner's answer on this one is no",
     },
 }
 
@@ -60,6 +60,8 @@ REFUSED = {
     "ocr-pretending-to-press": "vision reads; a tap needs a coordinate somebody can vouch for",
     "farm-borrowed-identity": "a hosted phone's sim and account are theirs, so the device may work and may not become the identity",
     "silent-tap": "a tap without a dump is a guess with a screenshot attached",
+    "cloud-farm-declined": ("the owner's answer is no. the card still lists what a farm offers so the "
+                            "refusal has a reason next to it, and plan() will not route work there"),
 }
 
 
@@ -149,6 +151,11 @@ def screen(backend="android-adb"):
 
 def plan(verb, backend="android-adb", **kw):
     """one call for an agent: verb + backend -> argv or a refusal with the reason."""
+    if backend == "cloud-farm":
+        return {"refused": True, "verb": verb, "backend": backend,
+                "why": REFUSED["cloud-farm-declined"],
+                "alternatives": ["android-adb"],
+                "rule": "the device may work elsewhere; it may not become the identity"}
     table = {"open_app": open_app, "tap_text": tap_text, "type_text": type_text, "screen": screen}
     if verb not in table:
         raise ValueError(f"unknown verb {verb!r}; the set is {VERBS}")

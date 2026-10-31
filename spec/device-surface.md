@@ -31,7 +31,8 @@ pixels, and vision ocr reads them. one platform has an api, the other has a came
   with a screenshot attached.
 - **a borrowed identity.** the cloud farm offers all four verbs and still loses: its sim and its
   account are theirs, so the device may work and may not become the identity. same rule as the
-  mobile pool and the same rule as a vault session.
+  mobile pool and the same rule as a vault session. the owner's answer on this one is no, so the
+  card keeps listing what a farm offers and `plan()` refuses to route work there.
 
 ## where it sits
 

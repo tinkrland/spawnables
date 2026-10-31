@@ -12,8 +12,16 @@ import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from heyphony import channels, cli, gates, inbox, mail, meetings, providers, sip, socials, webhook
+from comms import catcher, envelope, gates, registry
+from comms import cli as comms_cli
+from heyphony import cli as telephony_cli
+from heyphony import catcher as phone_catcher
+from heyphony import inbox, providers, sip
 from heyphony import sip as linphone
+
+
+def lane(name):
+    return registry._load(name)
 
 
 def call_db(path, rows):
@@ -122,18 +130,18 @@ class TestInbox(unittest.TestCase):
 
 class TestWebhook(unittest.TestCase):
     def test_normalize_pulls_the_flat_shape_and_keeps_raw(self):
-        entry = webhook.normalize("sms", {"from": "+1555", "to": "+1", "body": "ping", "id": "x1"})
+        entry = phone_catcher.normalize({"from": "+1555", "to": "+1", "body": "ping", "id": "x1"})
         self.assertEqual((entry["sender"], entry["body"], entry["id"]), ("+1555", "ping", "x1"))
         self.assertEqual(entry["channel"], "sms")
         self.assertIn("from", entry["raw"])
 
     def test_normalize_walks_the_nested_shape(self):
-        entry = webhook.normalize("sms", {"data": {"id": "y1", "attributes": {
+        entry = phone_catcher.normalize({"data": {"id": "y1", "attributes": {
             "from": "+1666", "body": "nested", "timestamp": "1700000000"}}})
         self.assertEqual((entry["id"], entry["body"]), ("y1", "nested"))
 
     def test_an_unknown_payload_still_gets_stored(self):
-        entry = webhook.normalize("sms", {"weird": {"thing": 1}})
+        entry = phone_catcher.normalize({"weird": {"thing": 1}})
         self.assertIn("raw", entry)
         self.assertIsNotNone(entry["at"])
 
@@ -153,162 +161,182 @@ class TestProviderClaims(unittest.TestCase):
             self.assertEqual(providers.still_voip(name)["number_type"], "voip")
 
 
-class TestOneEnvelopeManyChannels(unittest.TestCase):
-    def test_every_channel_gate_closes_when_unset(self):
-        for name in channels.CHANNELS:
-            self.assertEqual(channels.state(name, env={})["state"], "closed", name)
 
-    def test_the_envelope_is_the_same_shape_whichever_carrier(self):
-        a = channels.envelope("sms", sender="+1", body="hi", at=1, message_id="a")
-        b = channels.envelope("mail", sender="x@y", body="hi", at=1, message_id="b")
+class TestOneEnvelopeManyCarriers(unittest.TestCase):
+    def test_every_lane_closes_when_its_gate_is_unset(self):
+        for name, spec in registry.lanes().items():
+            self.assertEqual(envelope.state_for(spec, env={})["state"], "closed", name)
+
+    def test_the_envelope_is_one_shape_whichever_folder_sent_it(self):
+        a = envelope.envelope("whatsapp", sender="+1", body="hi", at=1, id="a")
+        b = envelope.envelope("imessage", sender="x", body="hi", at=1, id="b")
         self.assertEqual(set(a), set(b))
-        self.assertEqual(set(a), set(channels.KEYS))
+        self.assertEqual(set(a), set(envelope.KEYS))
 
-    def test_an_unmodelled_channel_is_refused_not_invented(self):
-        with self.assertRaises(KeyError):
-            channels.envelope("telegram", body="hi")
+    def test_every_folder_at_the_root_is_a_lane(self):
+        for name in ("email", "imessage", "whatsapp", "discord", "slack", "signal", "meetings", "streaming"):
+            self.assertIn(name, registry.lanes())
+            self.assertIn(name, registry.folders())
 
-    def test_refusals_are_named_so_no_card_improvises_them(self):
-        self.assertIn("otp-by-did", channels.BLOCKED)
-        self.assertIn("publish", channels.refused("publish-on-its-own")["why"])
+    def test_heyphony_stays_decoupled_from_the_umbrella(self):
+        root = pathlib.Path(__file__).resolve().parent.parent
+        for path in (root / "heyphony").rglob("*.py"):
+            self.assertNotIn("comms", path.read_text(), f"{path} imports the umbrella")
+
+    def test_refusals_are_named_once_not_improvised_per_card(self):
+        for needle in ("otp-by-did", "group-reply", "social-reply"):
+            self.assertIn(needle, envelope.REFUSED)
 
 
-class TestMailInbox(unittest.TestCase):
+class TestEmailFrontDoor(unittest.TestCase):
     good = {"HEYPHONY_MAIL_SECRET": "s3cret", "HEYPHONY_FORWARD_WHITELIST": "owner@example.com"}
 
-    def test_unset_secret_closes_the_lane(self):
-        ok, why = mail.verify({"x-agentmail-secret": "anything"}, env={})
+    def test_unset_secret_closes_the_door(self):
+        ok, why = lane("email").verify({"x-agentmail-secret": "anything"}, "{}", env={})
         self.assertFalse(ok)
         self.assertIn("closed", why)
 
     def test_a_wrong_secret_is_rejected(self):
-        ok, _ = mail.verify({"x-agentmail-secret": "nope"}, env=self.good)
-        self.assertFalse(ok)
+        self.assertFalse(lane("email").verify({"x-agentmail-secret": "nope"}, "{}", self.good)[0])
 
     def test_unset_whitelist_allows_nobody(self):
-        ok, why = mail.whitelisted("owner@example.com", env={"HEYPHONY_MAIL_SECRET": "s3cret"})
+        ok, why = lane("email").whitelisted("owner@example.com", env={"HEYPHONY_MAIL_SECRET": "s3cret"})
         self.assertFalse(ok)
         self.assertIn("unset", why)
 
     def test_an_unlisted_sender_does_not_become_work(self):
-        ok, why = mail.whitelisted("stranger@example.com", env=self.good)
+        ok, why = lane("email").whitelisted("stranger@example.com", self.good)
         self.assertFalse(ok)
         self.assertIn("unlisted", why)
 
-    def test_a_whitelisted_mail_becomes_a_message(self):
-        body, why = mail.inbound({"message_id": "m1", "from": "Owner <owner@example.com>",
-                                  "subject": "hi", "text": "join this"}, {"x-agentmail-secret": "s3cret"}, self.good)
-        self.assertEqual(why, "ok")
-        self.assertEqual(body["id"], "m1")
-        self.assertEqual(body["subject"], "hi")
-
-    def test_shape_is_checked_before_trust(self):
-        body, why = mail.inbound({"from": "owner@example.com"}, {"x-agentmail-secret": "s3cret"}, self.good)
-        self.assertIsNone(body)
-        self.assertIn("required", why)
+    def test_a_whitelisted_sender_does(self):
+        self.assertTrue(lane("email").whitelisted("Owner <owner@example.com>", self.good)[0])
 
     def test_relay_is_closed_without_smtp(self):
-        self.assertFalse(mail.outbound_plan("a@b", "s", "b", env={})["sendable"])
+        self.assertFalse(lane("email").relay_plan("a@b", "s", "b", env={})["sendable"])
 
 
-class TestMeetingJoin(unittest.TestCase):
+class TestSignalNeedsANumber(unittest.TestCase):
+    def test_linking_a_device_needs_no_number(self):
+        plan = lane("signal").registration_plan("link-device", env={})
+        self.assertTrue(plan["possible"])
+        self.assertFalse(plan["needs_number_of_its_own"])
+
+    def test_registering_does_and_says_where_it_comes_from(self):
+        plan = lane("signal").registration_plan("register-number", env={})
+        self.assertFalse(plan["possible"])
+        self.assertIn("HEYPHONY_SIP_DID", plan["missing"][0])
+
+    def test_the_number_from_telephony_opens_it(self):
+        plan = lane("signal").registration_plan("register-number", {"HEYPHONY_SIP_DID": "+1555"})
+        self.assertTrue(plan["possible"])
+
+    def test_no_bot_api_is_claimed(self):
+        self.assertIn("bot-api", lane("signal").REFUSALS)
+
+
+class TestMeetingsAndRails(unittest.TestCase):
     env = {"ZOOM_SDK_KEY": "key", "ZOOM_SDK_SECRET": "secret"}
 
     def test_a_signed_join_round_trips(self):
-        token = meetings.sign_zoom_join("123456789", env=self.env)
-        self.assertTrue(meetings.verify_zoom_token(token["join_token"], self.env))
+        token = lane("meetings").sign_zoom_join("123456789", env=self.env)
+        self.assertTrue(lane("meetings").verify_zoom_token(token["join_token"], self.env))
 
     def test_a_tampered_token_does_not_verify(self):
-        env = dict(self.env, ZOOM_SDK_SECRET="other")
-        token = meetings.sign_zoom_join("123456789", env=self.env)
-        self.assertFalse(meetings.verify_zoom_token(token["join_token"], env))
+        token = lane("meetings").sign_zoom_join("123456789", env=self.env)
+        self.assertFalse(lane("meetings").verify_zoom_token(token["join_token"], {"ZOOM_SDK_SECRET": "other"}))
 
     def test_the_lane_closes_instead_of_lying(self):
         with self.assertRaises(RuntimeError):
-            meetings.sign_zoom_join("123456789", env={})
-        self.assertFalse(meetings.lane_available({}))
+            lane("meetings").sign_zoom_join("123456789", env={})
 
-    def test_join_plan_names_what_is_missing(self):
-        plan = meetings.join_plan("zoom", "123456789", env={})
-        self.assertFalse(plan["joinable"])
-        self.assertEqual(plan["missing"], ["ZOOM_SDK_KEY", "ZOOM_SDK_SECRET"])
+    def test_every_platform_says_how_it_is_joined(self):
+        for name in ("zoom", "meet", "teams"):
+            self.assertTrue(lane("meetings").join_plan(name, "1")["join"])
 
-    def test_an_unmodelled_platform_is_refused(self):
-        self.assertFalse(meetings.join_plan("webex", "1")["joinable"])
-
-
-class TestTheCommand(unittest.TestCase):
-    def test_setup_flag_is_the_same_as_the_subcommand(self):
-        self.assertEqual(cli.setup_payload()["order"], cli.setup_payload()["order"])
-        self.assertEqual(set(cli.setup_payload()["lanes"]), set(channels.CHANNELS))
-
-    def test_every_lane_says_what_to_ask_the_owner_for(self):
-        for name, lane in cli.setup_payload()["lanes"].items():
-            self.assertTrue(lane["needs"]["from_owner"], name)
-            self.assertTrue(lane["needs"]["prove"], name)
-
-    def test_setup_names_the_rules_not_just_the_steps(self):
-        rules = " ".join(cli.setup_payload()["rules"])
-        for needle in ("unset credentials close a lane", "a did is voip", "never publishes"):
-            self.assertIn(needle, rules)
+    def test_the_two_rails_exist_and_say_why(self):
+        rails = lane("meetings").RAILS
+        self.assertIn("audio", rails)
+        self.assertIn("livekit", rails["audio"]["how"])
+        self.assertIn("getdisplaymedia", rails["screenshare"]["how"])
 
 
-class TestTheGates(unittest.TestCase):
-    def test_svix_signature_round_trips_and_expires(self):
-        import base64, hashlib, hmac as h
-        key = b"k" * 32
-        secret = "whsec_" + base64.b64encode(key).decode()
-        ts = "1700000000"
-        raw = '{"a":1}'
-        sig = base64.b64encode(h.new(key, f"m1.{ts}.{raw}".encode(), hashlib.sha256).digest()).decode()
-        headers = {"webhook-id": "m1", "webhook-timestamp": ts, "webhook-signature": f"v1,{sig}"}
-        self.assertTrue(gates.svix(raw, headers, secret, now=1700000010)[0])
-        self.assertFalse(gates.svix(raw, headers, secret, now=1700000900)[0])  # stale
-        self.assertFalse(gates.svix(raw + "x", headers, secret, now=1700000010)[0])  # body covered
+class TestStreamingIsTheOneThatPublishes(unittest.TestCase):
+    def test_the_press_is_always_a_person_s(self):
+        for name in ("twitch", "kick"):
+            self.assertTrue(lane("streaming").go_live_plan(name)["human_presses_go_live"])
 
-    def test_v0_covers_the_body_and_the_clock(self):
-        ts, raw = "1700000000", '{"message":"hi"}'
-        sig = gates._hex("s3", f"v0:{ts}:{raw}")
-        headers = {"x-spectrum-timestamp": ts, "x-spectrum-signature": f"v0={sig}"}
-        self.assertTrue(gates.v0(raw, headers, "s3", now=1700000005)[0])
-        self.assertFalse(gates.v0(raw, headers, "other", now=1700000005)[0])
-        self.assertFalse(gates.v0(raw, headers, "s3", now=1700009999)[0])
+    def test_kick_refuses_the_api_rather_than_scraping(self):
+        plan = lane("streaming").go_live_plan("kick", {"KICK_STREAM_KEY": "k"})
+        self.assertIn("no official api", plan["refuses"])
 
-    def test_waha_takes_its_algorithm_from_the_header(self):
-        raw = "{}"
-        sha512 = gates._hex("k", raw, __import__("hashlib").sha512)
-        h512 = {"x-webhook-hmac": sha512, "x-webhook-hmac-algorithm": "sha512"}
-        self.assertTrue(gates.waha(raw, h512, "k")[0])
-        self.assertFalse(gates.waha(raw, {"x-webhook-hmac": sha512,
-                                          "x-webhook-hmac-algorithm": "md5"}, "k")[0])
-
-    def test_every_gate_closes_when_its_secret_is_unset(self):
-        self.assertFalse(gates.svix("{}", {}, "")[0])
-        self.assertFalse(gates.v0("{}", {}, "")[0])
-        self.assertFalse(gates.waha("{}", {}, "")[0])
+    def test_twitch_takes_its_api_creds(self):
+        self.assertFalse(lane("streaming").go_live_plan("twitch", {})["live_ready"])
+        self.assertTrue(lane("streaming").go_live_plan(
+            "twitch", {"TWITCH_CLIENT_ID": "a", "TWITCH_CLIENT_SECRET": "b"})["live_ready"])
 
 
-class TestSocialsWatchOnly(unittest.TestCase):
-    def test_watching_never_answers(self):
-        plan = socials.watch_plan("discord", {"DISCORD_BOT_TOKEN": "t"})
-        self.assertTrue(plan["watching"])
-        self.assertTrue(plan["says_nothing_back"])
-        self.assertIsNone(plan["relay"])
+class TestChatGates(unittest.TestCase):
+    def test_slack_signature_is_the_same_v0_scheme(self):
+        import hashlib, hmac
+        ts, raw, secret = "1700000000", '{"type":"event_callback"}', "s3"
+        sig = "v0=" + hmac.new(secret.encode(), f"v0:{ts}:{raw}".encode(), hashlib.sha256).hexdigest()
+        headers = {"x-slack-request-timestamp": ts, "x-slack-signature": sig}
+        self.assertTrue(gates.slack(raw, headers, secret, now=1700000005)[0])
+        self.assertFalse(gates.slack(raw, headers, secret, now=1700009999)[0])
 
-    def test_no_token_means_no_watch(self):
-        self.assertFalse(socials.watch_plan("discord", {})["watching"])
+    def test_slack_answers_the_url_verification_first(self):
+        import hashlib, hmac, json as j
+        import time
+        ts, raw, secret = str(int(time.time())), '{"type": "url_verification", "challenge": "abc"}', "s3"
+        sig = "v0=" + hmac.new(secret.encode(), f"v0:{ts}:{raw}".encode(), hashlib.sha256).hexdigest()
+        out = lane("slack").handle(raw, {"x-slack-request-timestamp": ts, "x-slack-signature": sig},
+                                   {"SLACK_SIGNING_SECRET": secret})
+        self.assertEqual(out["body"]["challenge"], "abc")
 
-    def test_x_is_refused_rather_than_scraped(self):
-        self.assertEqual(socials.watch_plan("x", {})["state"], "refused")
+    def test_a_group_never_reaches_whatsapp(self):
+        ok, why = lane("whatsapp").whitelisted("1234-5678@g.us", {"HEYPHONY_WHATSAPP_WHITELIST": "12345678"})
+        self.assertFalse(ok)
+        self.assertIn("group", why)
+
+    def test_discord_answers_only_when_addressed(self):
+        env = {"DISCORD_BOT_TOKEN": "t"}
+        self.assertFalse(lane("discord").reply_plan("c1", "hi", addressed=False, env=env)["sendable"])
+        self.assertTrue(lane("discord").reply_plan("c1", "hi", addressed=True, env=env)["sendable"])
 
 
-class TestTheHostClient(unittest.TestCase):
-    def test_baresip_won_and_the_reason_is_attached(self):
-        choice = sip.host_client()
-        self.assertEqual(choice["client"], "baresip")
-        self.assertIn("json", choice["control"])
-        self.assertTrue(sip.HOST_CLIENTS["baresip"]["chosen"])
-        self.assertFalse(sip.HOST_CLIENTS["pjsua"]["chosen"])
+class TestTheTwoCommands(unittest.TestCase):
+    def test_omni_setup_covers_every_lane(self):
+        self.assertEqual(set(comms_cli.setup_payload()["lanes"]), set(registry.lanes()))
+
+    def test_omni_setup_points_telephony_at_its_own_command(self):
+        self.assertIn("heyphony --setup", comms_cli.setup_payload()["telephony"])
+
+    def test_telephony_setup_is_only_telephony(self):
+        payload = telephony_cli.SETUP
+        self.assertEqual(set(payload["lanes"]), {"voice", "sms"})
+        self.assertEqual(payload["decided"]["client"], "baresip")
+
+    def test_telephony_setup_names_the_proof(self):
+        steps = " ".join(s["do"] for s in telephony_cli.SETUP["steps"])
+        self.assertIn("echo test", steps)
+
+
+class TestCatcher(unittest.TestCase):
+    def test_a_whatsapp_payload_becomes_an_envelope(self):
+        entry = catcher.normalize("whatsapp", {"id": "w1", "from": "9199@c.us", "body": "hello"})
+        self.assertEqual((entry["channel"], entry["sender"], entry["body"]), ("whatsapp", "9199@c.us", "hello"))
+        self.assertTrue(entry["at"])
+
+    def test_an_unknown_shape_is_still_stored_with_its_raw(self):
+        entry = catcher.normalize("email", {"weird": {"thing": 1}})
+        self.assertEqual(entry["channel"], "email")
+        self.assertEqual(entry["raw"], {"weird": {"thing": 1}})
+
+    def test_an_unsigned_delivery_is_refused_before_parsing(self):
+        ok, why = catcher.verify("whatsapp", "{}", {}, {"WAHA_HMAC_KEY": "k"})
+        self.assertFalse(ok)
+        self.assertIn("missing", why)
 
 
 if __name__ == "__main__":

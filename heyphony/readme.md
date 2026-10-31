@@ -1,66 +1,61 @@
-# the sip lane
+give your ai agent a communication stack of its own
 
-a number that rings a process. sip over the internet, the same ordinary telephony a call centre runs, except the queue is an agent and the desk phone is a vm.
+# heyphony
 
-nothing in this folder is an agent-only product and nothing here needs an agent to be useful: an agent is just another sip endpoint, sitting beside softphones, desk phones and an ivr that answers in a queue. the framing matters because the honest version is the ordinary one. we are not selling telephony to robots, we are pointing a number at a process.
+one number that rings a process. sip over the internet, a did from a provider that sells them for a dollar, and a client on the host. that is the whole product, and it is deliberately the least interesting part of telephony.
 
-## what sip actually gives you
+## the jerryrig, said plainly
 
-- a real pstn number, a did, that rings wherever the endpoint is, including a machine with no modem and no sim
-- inbound and outbound calls over ip: no transmitter, no attach, no imsi, no eid
-- the same stack as everyone else, so debugging is ordinary telephony debugging and not a research project
-- a call record on disk when the call ends, which is what an agent actually consumes
+nothing here is an "ai-native" platform. nobody rebuilt telecom for agents, and pretending to would be the mistake: the interesting property of a phone number is that it is *old*. it reaches people, it lives in the same network everyone else's number lives in, and it does not need a new app on anyone's phone to work.
 
-## what it does not give you
+so this folder is the opposite thing: an **onramp**. the telecom layer already exists, it is boring, it is thirty years deep, and an agent is not going to be handed a dashboard and a login. what an agent can hold is a cli that emits json, a config file it can write, and a socket it can speak into. that is the shape of the adaptation:
 
-- **no mobile identity.** no imsi, no eid. that is the point and the limit at once.
-- **no sms over sip in practice.** pstn sms reaches a did as a provider event (webhook, smpp, email), never as a message inside the softphone. see each provider's folder.
-- **no otp.** a voice did is refused as a verification channel: `otp_viability("sip-did") == "no"`. use a sim for codes, sip for voice and inboxes.
-- **no free outbound.** calls you originate usually attest b or c, so reputation decides whether anyone picks up.
-- **no e911 without an address.** register it with the provider and mean it. it is a legal statement.
+- **cli fetching, not dashboards.** `heyphony status` and `heyphony --setup` return json on stdout with exit codes that mean something. no prompts, no menus, nothing an autonomous process has to guess at.
+- **setup as a runbook.** `heyphony --setup` is not documentation, it is the plan: what to ask the owner for, which env var opens which lane, what to run, and what proves it worked.
+- **config it writes, not config you type.** the sip rc file is generated with the sections the client actually reads, mode 0600 because it holds a password.
+- **decoupled and packageable.** this folder imports nothing else in the branch. take it alone, put it on a host, and it still works.
 
-## what the lane is for
+## calls and messages, and why the asymmetry
 
-**receiving.** a number that rings a process: voicemail arrives as a file or an email, texts arrive as events, transcripts and callbacks run on the agent's own schedule. the machine does not have to be awake for any of it if the provider is doing the catching, and the two providers in this folder are chosen precisely because they differ there.
+the interesting part of telephony for an agent is that it is **inbound-first**. receiving is cheap, patient and useful: a number that rings a process, a voicemail that becomes a file, a text that is waiting when nothing was awake. sending is the part with consequences, so it is narrower on purpose.
 
-**occasional outbound** at human pace is fine. **bulk outbound is refused**: a dialer at volume is a2p and consent territory needing attested origination and a registered business, and a softphone behind a cheap did is the shape carriers and recipients block first.
+| | intake | outgoing |
+| --- | --- | --- |
+| voice | a call that rings the host, recorded, transcribed when wired | a call at human pace, dialled from the host client |
+| sms | provider webhook, caught even when the machine is asleep | one message at a time, never a campaign |
 
-## the price honesty
+receiving is where this earns its keep, because a number is a thing that exists whether or not your machine is on. texts arrive as provider events (they never travel over sip, whatever the marketing says), voicemail sits at the carrier, and the agent reads it later from one jsonl inbox.
 
-most companies advertising "give your agent a phone number" hand over exactly this, a voip did, and charge a wrapper for it. the convenience fee buys a dashboard, not a different number type, and not a different outcome at the sender's risk engine. a did is about a dollar a month and, from providers that enable sms on it, incoming messages are free or a fraction of a cent.
+outgoing bulk calling is **refused**, not deferred. so is using any of this as a verification channel.
 
-## the command
+## what a number is and is not
 
-this folder is one lane of [heyphony](../docs/setup.md); the omnichannel map lives in `heyphony/channels.py` and the setup order in `docs/setup.md`.
+a did from voip.ms or flowroute is voip, and voip numbers are widely refused by the flows that most want a phone number: bank signups, a large share of consumer verification, messaging apps that verify by sms. that is a property of the number type, not of the provider, and no dashboard fee changes it. the price honesty is the same point from the other end: the money the agent-voice startups charge buys convenience, not a different class of number and not a better outcome at the sender's risk engine.
 
-`bin/heyphony` configures linphone and reads what came in, in the shape an agent can consume: json on stdout, exit codes that mean something, and no interactive prompts.
+so the honest promises are: a number that receives, a mailbox that catches while you sleep, calls that ring a process. not: an identity that passes a bank.
+
+## where it lives, and why on the host
+
+the number registers on the **host**, not inside a spawnable guest. a did is one registration, so a second machine registering it is a race, not a second line. the sip password is long-lived; a burnable guest copies it into a machine we mean to shred and then needs a fresh secret every spawn. and a number that only rings while a guest happens to be up is dead in exactly the case that matters most, which is idle.
+
+guests read the inbox over the control plane and never hold the provider credential, the same rule every other secret here follows. `--on guest` still exists, for tests that must exercise registration from inside a guest, and it says what it costs: `secret_in_burn: true`, `survives_burn: false`, a rotation per spawn.
+
+## the client, decided
+
+the host runs **baresip**. its `ctrl_tcp` module is a json command socket: json in, json out, `"command": "dial"`, an event bus back (`json_decode_odict` in the module source, and `ctrl_tcp_listen 0.0.0.0:4444` in its shipped config example). a typed protocol an agent speaks beats a cli a parser has to read.
+
+**pjsua** was the other candidate and lost on weight: the pjsip media stack plus pjsua2 bindings built per host, and a telnet console instead of a socket, for a lane that mostly needs to dial, hear, and hang up. the verdict lives in `sip.py` as data so it is not relitigated from vibes.
+
+linphone still does the desktop job fine, and its config keys are what this folder generates.
+
+## honest state
+
+nothing here has placed a call yet. what is built and tested: config generation against linphone's own keys, call-history and message readers against its own sqlite schemas, the provider table, the sms catcher and the inbox. what proves it: one host, one did, an echo test, and `heyphony calls` seeing it.
 
 ```
-heyphony connect sip --voipms --did +15551234567 --username 123456_agent --password ... 
-heyphony status                 # account, rc path, which dbs exist, inbox count
-heyphony calls --missed --json  # missed calls, from linphone's own database
-heyphony inbox --channel sms      # texts that arrived by webhook or email
-heyphony serve --port 8099 --token ...   # provider callbacks
-heyphony doctor                 # what works while this machine is off, per provider
+heyphony --setup                        # the plan, as json
+heyphony connect sip --voipms --did +1... --username ... --password ...
+heyphony status | calls [--missed] | inbox | serve --port 8099 | doctor
 ```
 
-`--voipms` and `--flowroute` are sugar for `--provider voip.ms` and `--provider flowroute`. the command writes a `linphonerc` with the sections linphone actually reads, which were taken from its source rather than guessed: `proxy_%i` (`reg_proxy`, `reg_identity`, `reg_expires`, `realm`) and `auth_info_%i` (`username`, `userid`, `passwd`, `realm`, `domain`).
-
-call *control* is the one thing the linphone path does not give us for free, and the limit is narrow: the linphone repositories ship no headless console client. the desktop app has a command surface (`call`, `fetch-config`, `sip-address` in `Linphone/model/cli/CliModel.cpp`), but it is the gui's ipc. that is a statement about linphone, not about whether an agent can hold a phone line, and the section below is where it stops mattering.
-
-## why the number lives on the host
-
-the agent's durable machine owns the number. guests do not, and mostly should not.
-
-- **a did is one registration.** a second machine registering the same number is a race, not a second line. `connection_plan()` returns `registrations: 1` for both endpoints because that is a property of the did, not of our cleverness.
-- **the sip password is a long-lived secret.** a throwaway guest holding it burns a copy into a machine we intend to shred, then needs a fresh secret every spawn. on the host it is one file at 0600, rotated once.
-- **a number has to ring when nothing is running.** if the only endpoint is a guest, the number is dead exactly when it is most useful to be reachable, which is the idle case.
-- **guests read, they do not register.** a guest asks the control plane for the inbox; it never needs the provider credential at all. that keeps the long-lived key out of the burn lane entirely and matches how every other secret is handled here.
-
-`--on guest` still exists because there are real cases for it (a test that must exercise registration from inside a guest), and it says plainly what it costs: `secret_in_burn: true`, `survives_burn: false`, and a rotation per spawn.
-
-so where does call control actually run? on the host, which is a normal linux box we control and not a shred-on-schedule guest. candidates are honest, not chosen yet: `linphone-desktop` under a virtual display driven through its own command surface, or a console sip client built for exactly this (`baresip`, `pjsua`), neither of which has been evaluated here. picking one is the next piece of work, and the reason it is now a small decision instead of a wall is that the host is allowed to be a long-lived machine with a real desktop session.
-
-## status
-
-nothing here has placed a call yet. the config generation, the database readers, the inbox and the webhook receiver are built and tested against linphone's own schemas and fixtures. first proof: on a runner, connect to a voip.ms sub-account, dial the echo test, then confirm `heyphony calls` sees it.
+licences: linphone (gpl/agpl), baresip (bsd-3), and nothing here is agent-only software. an agent is just another sip endpoint, sitting beside softphones, desk phones and an ivr that answers in a queue.

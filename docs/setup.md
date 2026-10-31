@@ -1,102 +1,50 @@
-# heyphony setup
+# setup
 
-the plan an agent follows to give itself a communication stack. `bin/heyphony --setup` prints the same thing as json, which is the version a program should read.
-
-## how to run it
+two commands, two scopes. `bin/heyphony` gives an agent a number; `bin/comms` tells it which other lanes exist and what each one costs to open.
 
 ```
 git checkout comms
-python3 tests/selftest.py          # 37 tests, stdlib only, no network
-bin/heyphony --setup               # the plan, as json
-bin/heyphony status                # which lanes are open, which are closed and why
+python3 tests/selftest.py       # 52 tests, stdlib only, no network
+bin/heyphony --setup            # telephony: the number, the client, the proof
+bin/comms --setup               # every lane, its gate, its honest state
 ```
 
-the order matters: mail first, because it is the cheapest to prove and it is how the owner will reach you. then sms, then voice, then meetings.
+## telephony first
 
-## lane one, mail
+a number is the lane that unlocks the others: signal needs one to register, and a meetings lane is more useful when people can also call.
 
-ask the owner for: a mailbox on agentmail or carlyemail for the agent, the inbound webhook signing secret, and the addresses allowed to send work.
-
-```
-export HEYPHONY_MAIL_SECRET=...                  # unset = the lane is closed
-export HEYPHONY_FORWARD_WHITELIST=owner@example.com,desk@example.com
-export SMTP_URL=smtps://user:pass@smtp.host:465  # outbound, optional
-bin/heyphony serve --port 8099 --token ...
-```
-
-point the provider's inbound webhook at `https://<host>/mail`. the catcher verifies the secret header, checks the sender against the whitelist, and appends one envelope to the inbox. proof: forward a real message and see it in `bin/heyphony inbox --channel mail`.
-
-why this shape: the provider catches the mail, so the message exists while your machine is off. the whitelist is not paranoia, it is the difference between "an invite I join" and "a stranger's invite I join".
-
-## lane two, imessage and whatsapp
-
-both are webhooks with real signature schemes, so both are already gated in code.
+`bin/heyphony --setup` prints the plan. in short: buy a did (flowroute or voip.ms, about a dollar a month), then
 
 ```
-export PHOTON_SIGNING_SECRET=...       # /imessage, v0 hmac, 5 min freshness
-export PHOTON_PROJECT_ID=... PHOTON_PROJECT_SECRET=...   # only needed to reply
-export WAHA_HMAC_KEY=...               # /whatsapp, sha512 hmac, digits whitelist
+export HEYPHONY_SIP_DID=+1...
+bin/heyphony connect sip --voipms --did +1... --username ... --password ...
+bin/heyphony serve --port 8099 --token ...     # provider sms webhook
 ```
 
-proof: text the number from a whitelisted phone and see it in the inbox. a group never reaches the agent, because a group is not somebody asking.
+point the client at the generated rc on the host (baresip is the chosen client: json over tcp via `ctrl_tcp`), dial the provider echo test, text the number, and confirm both with `bin/heyphony calls` and `bin/heyphony inbox`.
 
-## lane three, sms
+## then whichever lanes you actually want
 
-ask for: a did with sms enabled, and the provider's webhook token.
-
-```
-export HEYPHONY_SMS_TOKEN=...
-bin/heyphony serve --port 8099 --token ...       # /sms is the route
-```
-
-proof: text the number, then `bin/heyphony inbox --channel sms`. texts arrive as provider events, never over sip, so a softphone alone will never show them.
-
-## lane four, voice
-
-ask for: the did, and the sip username and password for it.
+each folder's readme carries its own gate and its own proof. the short version:
 
 ```
-bin/heyphony connect sip --voipms --did +1555... --username ... --password ...
-bin/heyphony connect sip --flowroute --did +1555... --username ... --password ...
+export CARLYEMAIL_SIGNING_SECRET=...   # email,   /email
+export PHOTON_SIGNING_SECRET=...       # imessage, /imessage
+export WAHA_HMAC_KEY=...               # whatsapp, /whatsapp
+export SLACK_SIGNING_SECRET=...        # slack,    /slack
+export DISCORD_BOT_TOKEN=...           # watch
+export ZOOM_SDK_KEY=... ZOOM_SDK_SECRET=...   # meetings
+export LIVEKIT_URL=... LIVEKIT_API_KEY=...    # meetings audio
+export TWITCH_CLIENT_ID=...            # streaming, api only; the go-live press stays a human's
 ```
 
-this writes a `linphonerc` with the sections linphone actually reads (`proxy_0` with `reg_proxy`/`reg_identity`, `auth_info_0` with `username`/`passwd`), mode 0600, and it defaults to `--on host`: the number registers on the durable machine, not in a burnable guest. proof: dial the provider's echo test from the host, then `bin/heyphony calls`.
-
-the host runs baresip, because its ctrl_tcp module is a json command socket instead of a cli to parse. linphone places calls perfectly well. what it does not ship is a headless console, so *scripted* call control needs a client that has one (`baresip`, `pjsua`) or the desktop app driven through its own command surface. that is a host decision, and it is the next piece of work rather than a limitation of the number.
-
-## lane five, meetings
-
-ask for: a zoom sdk key and secret if zoom is the platform, and the meeting number.
-
-```
-export ZOOM_SDK_KEY=... ZOOM_SDK_SECRET=...
-bin/heyphony join --platform zoom --meeting 123456789
-```
-
-the browser inside the spawnable opens the meeting's own web client with a signed token instead of credentials. proof: join a real meeting and watch the token be accepted.
-
-## lane six, watching
-
-```
-export DISCORD_BOT_TOKEN=...
-bin/heyphony watch --platform discord
-```
-
-intake only. the agent learns its name came up and never answers there, because a monitoring lane with a mouth is a spam bot. platforms with no read api stay refused rather than scraped with borrowed cookies.
+`bin/comms serve --port 8098` catches the webhook lanes and stores every message as one envelope in the shared inbox. `bin/comms join --platform zoom --meeting N`, `bin/comms signal --path link-device`, `bin/comms go-live --platform twitch` return the plan for their lane instead of performing it, which is the point: an agent reads the plan, a person keeps the last press.
 
 ## the rules, which are not optional
 
-- unset credentials close a lane. nothing here is open by default.
+- unset credentials close a lane. nothing is open by default.
 - a config file is not proof. a lane becomes real when one real message carries through it.
-- a did is voip by nature: refused for otp, refused for bulk outbound, fine for voice and inboxes.
-- the sip secret lives on the host and never in a burnable guest.
-- it renders, never publishes.
-
-## what came from where
-
-ported, with the original named in the module docstring so it stays traceable:
-
-- `heyphony/meetings.py`: the zoom signing algorithm, from tinkrland/clawtel `meetings/platforms/zoom/signature.ts`.
-- `heyphony/mail.py`: the mail front door rules (closed-when-unset secret, sender whitelist), from tinkrland/prixie.ai `backend/src/routes/agentmail.ts`.
-- `heyphony/sip.py`, `heyphony/providers.py`: linphone's own config keys and sqlite schemas, read from the linphone sdk source.
-- the rest is new here.
+- a group is never whitelisted, and a monitoring lane never answers.
+- the sip secret lives on the host, never in a burnable guest.
+- a did is voip: refused for otp, refused for bulk outbound.
+- it renders, never publishes, except streaming where a human presses go live.

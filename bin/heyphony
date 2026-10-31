@@ -1,15 +1,3 @@
-#!/usr/bin/env python3
-"""telephony: a communication stack of your own, driven by an agent.
-
-this shim exists so the command reads as `bin/telephony connect linphone
---voipms` from a repo checkout without installing anything.
-"""
-import pathlib
-import sys
-
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
-
-from heyphony.cli import main  # noqa: E402
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+#!/bin/sh
+here=$(cd "$(dirname "$0")/.." && pwd)
+PYTHONPATH="$here" exec python3 -m heyphony.cli "$@"

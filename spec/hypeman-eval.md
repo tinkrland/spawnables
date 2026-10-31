@@ -117,7 +117,8 @@ state of the evidence: **unmeasured**. the sandbox this was written in has no
 labelled) is all it can produce here. one command on a kvm host closes it:
 
 ```
-HYPMAN_API=http://127.0.0.1:8080 HYPMAN_TOKEN=... make bench   # -n 20
+HYPMAN_API=http://127.0.0.1:8080 HYPMAN_TOKEN=... \
+  python3 tools/hypeman_bench.py --image debian:bookworm-slim -n 20
 ```
 
 two numbers to record when it runs: p95 standby->first-exec, and whether

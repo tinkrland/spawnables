@@ -15,6 +15,7 @@ the map. everything worth reading, linked.
 - [connect with cloud](spec/cloud-connect.md) ([cloud.py](src/spawnables/cloud.py)): turnkey machines from a click - provider hypervisor, real oauth on azure and gcp, role federation on aws because aws has no user oauth, and no docker, qemu or disk images on this host.
 - [hypeman evaluation](spec/hypeman-eval.md): the boot path verdict - yes for linux guests and memory standby, no for legacy windows, no for usb lanes, and fork must never clone a pinned identity.
 - [tenki evaluation](spec/tenki-eval.md): measured - resume 1.7 s, snapshot-to-first-exec 1.6 s, and no /dev/kvm, so tenki hosts the primitive but cannot host hypeman.
+- [credential plane](spec/credential-plane.md): a password is a secret, being logged in is state - broker the first with infisical agent vault, pin the second with the guest.
 - [schemas](spec/schemas/): json schema drafts for every object.
 
 ## the control plane

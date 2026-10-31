@@ -71,6 +71,15 @@ def cmd_signal(args):
     _out(mod.registration_plan(args.path))
 
 
+def cmd_audio(args):
+    from comms import audio
+    if args.audit:
+        _out(audio.audit())
+    else:
+        _out({"meeting": audio.meeting_mic(args.meeting, client=args.client),
+              "readiness": audio.readiness(), "stack": audio.STACK})
+
+
 def cmd_signup(args):
     from comms import signup
     if args.phone_farm:
@@ -103,6 +112,11 @@ def build_parser():
     g.set_defaults(func=cmd_go_live)
     sg = sub.add_parser("signal"); sg.add_argument("--path", default="link-device")
     sg.set_defaults(func=cmd_signal)
+    au = sub.add_parser("audio", help="the mic rail per room, and which parts are free software")
+    au.add_argument("--meeting", default="zoom")
+    au.add_argument("--client", default=None, help="a native client: zoom-client, linphone, baresip")
+    au.add_argument("--audit", action="store_true")
+    au.set_defaults(func=cmd_audio)
     su = sub.add_parser("signup", help="the four legs an account stands on, per service")
     su.add_argument("service", nargs="?")
     su.add_argument("--list", action="store_true")

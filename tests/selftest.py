@@ -46,6 +46,7 @@ def message_db(path, rows):
     conn.commit(); conn.close()
 
 
+from comms import audio
 from comms import signup
 
 
@@ -516,6 +517,38 @@ class TestOpeningTheInboxes(unittest.TestCase):
         self.assertFalse(note["used"])
         self.assertIn("their sims", note["why_not_for_signup"])
         self.assertIn("may not become the identity", note["where_it_would_fit"])
+
+    def test_livekit_is_the_transport_and_is_free(self):
+        self.assertTrue(audio.is_oss("livekit"))
+        self.assertEqual(audio.STACK["livekit"]["licence"], "apache-2.0")
+
+    def test_obs_is_oss_and_still_not_the_mic(self):
+        self.assertTrue(audio.is_oss("obs"))
+        self.assertIn("obs", audio.audit()["not_needed_for_audio"])
+        self.assertTrue(any("macos" in audio.STACK["obs"]["role"] for _ in [0]))
+
+    def test_a_browser_room_needs_no_audio_device(self):
+        plan = audio.meeting_mic("meet", "voice.wav")
+        self.assertEqual(plan["mode"], "chromium-flags")
+        self.assertIn("--use-fake-device-for-media-stream", plan["argv"])
+        self.assertTrue(any("voice.wav" in a for a in plan["argv"]))
+
+    def test_a_native_client_gets_a_real_source(self):
+        commands = audio.virtual_mic()["commands"]
+        self.assertEqual(len(commands), 2)
+        self.assertEqual(commands[0][:4], ["pactl", "load-module", "module-null-sink", "sink_name=agent"])
+        self.assertIn("master=agent.monitor", commands[1])
+        self.assertEqual(audio.meeting_mic("zoom", client="zoom-client")["mode"], "null-sink")
+
+    def test_a_livekit_room_publishes_instead_of_faking_a_mic(self):
+        plan = audio.meeting_mic("livekit")
+        self.assertEqual(plan["mode"], "livekit")
+        self.assertIn("LIVEKIT_API_KEY", plan["gate"])
+
+    def test_the_two_hosts_that_need_an_install_say_so(self):
+        self.assertIn("blackhole", audio.virtual_mic("macos")["device"])
+        self.assertIn("NOT oss", audio.virtual_mic("windows")["note"])
+        self.assertEqual(audio.audit()["not_oss"], ["vb-cable"])
 
 if __name__ == "__main__":
     suite = unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__])

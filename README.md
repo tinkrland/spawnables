@@ -49,6 +49,19 @@ prixie and clawtel solved most of this already, so the parts that were load-bear
 
 what did not move: the demo packs, the meeting ui, the recording pipeline, the vector store, the avatar. those are that project's product, not this branch's transport.
 
+## the mic, and what is actually oss
+
+`comms audio --meeting zoom` says which rail a room needs. the short version, cheapest first: a
+browser we launch needs no audio device at all (chromium answers getUserMedia from a wav via
+--use-fake-device-for-media-stream --use-file-for-fake-audio-capture), which covers zoom web, meet
+and teams. a native client needs a real source, and that is pipewire's null sink plus a remap
+source, two commands, mit. obs is oss (gpl-2.0) and still not the mic: its virtual audio capture
+is a macos add-on, and on linux it was never in the path. livekit (apache-2.0) is the transport for
+a livekit room, so it publishes the tts track rather than inventing a microphone.
+
+`comms audio --audit` answers the licence question as data: everything needed is free software,
+vb-cable is the one named as not oss, and it is not on our path.
+
 ## signing up elsewhere
 
 `comms signup <service>` answers what an account somewhere actually needs, and which of those

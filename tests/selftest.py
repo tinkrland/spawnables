@@ -46,6 +46,9 @@ def message_db(path, rows):
     conn.commit(); conn.close()
 
 
+from comms import signup
+
+
 class TestLinphoneConfig(unittest.TestCase):
     def test_rc_writes_the_sections_linphone_reads(self):
         text = linphone.rc_text("voip.ms", "+15550001111", "123456_agent", "hunter2", "chicago.voip.ms")
@@ -479,6 +482,40 @@ class TestOpeningTheInboxes(unittest.TestCase):
         self.assertEqual(views.calls(home=self.home)["inbox"], "calls")
         self.assertEqual(views.voicemail(home=self.home)["inbox"], "voicemail")
 
+
+    def test_signup_legs_name_what_we_hold_and_what_we_dont(self):
+        plan = signup.plan("slack", {"CARLYEMAIL_SIGNING_SECRET": "s"})
+        self.assertTrue(plan["known"])
+        self.assertEqual(plan["legs"]["phone"]["viable"], True)  # slack does not ask for one
+        self.assertEqual(plan["legs"]["inbox"]["state"], "built")
+        self.assertEqual(plan["stops"], [])
+
+    def test_a_service_that_may_demand_a_number_stops_at_the_number(self):
+        plan = signup.plan("discord", {"CARLYEMAIL_SIGNING_SECRET": "s"})
+        self.assertFalse(plan["legs"]["phone"]["viable"])
+        self.assertTrue(any("voip class" in s for s in plan["stops"]))
+
+    def test_attestation_is_refused_rather_than_faked(self):
+        plan = signup.plan("google")
+        self.assertTrue(any("play integrity" in s for s in plan["stops"]))
+        # and the refusal list is not decorative: it is the reason the plan says no
+        self.assertIn("signup-to-evade", signup.REFUSED)
+
+    def test_an_unknown_service_says_so_instead_of_inventing_a_plan(self):
+        plan = signup.plan("myspace")
+        self.assertFalse(plan["known"])
+        self.assertEqual(plan["known_services"], ["discord", "github", "google", "slack"])
+
+    def test_a_closed_inbox_gate_means_nothing_could_be_verified(self):
+        plan = signup.plan("github", {})
+        self.assertFalse(plan["legs"]["inbox"]["open"])
+        self.assertTrue(any("inbox gate is unset" in s for s in plan["stops"]))
+
+    def test_phone_harness_was_read_and_not_adopted(self):
+        note = signup.phone_farm_note()
+        self.assertFalse(note["used"])
+        self.assertIn("their sims", note["why_not_for_signup"])
+        self.assertIn("may not become the identity", note["where_it_would_fit"])
 
 if __name__ == "__main__":
     suite = unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__])

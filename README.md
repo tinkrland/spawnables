@@ -49,6 +49,16 @@ prixie and clawtel solved most of this already, so the parts that were load-bear
 
 what did not move: the demo packs, the meeting ui, the recording pipeline, the vector store, the avatar. those are that project's product, not this branch's transport.
 
+## signing up elsewhere
+
+`comms signup <service>` answers what an account somewhere actually needs, and which of those
+legs we hold. four legs, three built: a custom-domain address, an inbox that answers while the
+machine is off, and a browser on a machine whose ip, clock and locale agree with each other. the
+fourth is a phone, which is voip class and therefore refused by a large share of the flows that
+want one. the cheaper path is usually the right one anyway: an invite into a workspace, or a bot
+token on your own server, is consent rather than a signup. an account is state, not a secret, so
+whatever creates one has to live on the identity that will use it.
+
 ## the rules
 
 - unset credentials close a lane, they never open it.

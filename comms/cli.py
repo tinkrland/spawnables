@@ -71,6 +71,16 @@ def cmd_signal(args):
     _out(mod.registration_plan(args.path))
 
 
+def cmd_signup(args):
+    from comms import signup
+    if args.phone_farm:
+        _out(signup.phone_farm_note())
+    elif args.list or not args.service:
+        _out({"services": signup.listing(), "legs": signup.LEGS, "refused": signup.REFUSED})
+    else:
+        _out(signup.plan(args.service))
+
+
 def cmd_doctor(args):
     _out({"lanes": registry.states(), "refused": envelope.REFUSED,
           "note": "a lane with credentials and no live message is designed, not verified"})
@@ -93,6 +103,11 @@ def build_parser():
     g.set_defaults(func=cmd_go_live)
     sg = sub.add_parser("signal"); sg.add_argument("--path", default="link-device")
     sg.set_defaults(func=cmd_signal)
+    su = sub.add_parser("signup", help="the four legs an account stands on, per service")
+    su.add_argument("service", nargs="?")
+    su.add_argument("--list", action="store_true")
+    su.add_argument("--phone-farm", action="store_true", help="what we concluded about phone-harness")
+    su.set_defaults(func=cmd_signup)
     d = sub.add_parser("doctor"); d.set_defaults(func=cmd_doctor)
     return p
 

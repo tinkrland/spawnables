@@ -23,7 +23,11 @@ bin/heyphony serve --port 8099 --token ...     # provider sms webhook
 
 point the client at the generated rc on the host (baresip is the chosen client: json over tcp via `ctrl_tcp`), dial the provider echo test, text the number, and confirm both with `bin/heyphony calls` and `bin/heyphony inbox`.
 
-once the number works, the rails it unlocks are one command each: `bin/heyphony get signal` installs and links the signal bridge, with the qr scan left to you.
+once the number works, two things open up.
+
+read what arrived: `bin/heyphony open messages` (numbered rows, `--show 3`, `--mark-read 3`, `--unread`), `bin/heyphony open calls --missed`, `bin/heyphony open voicemail`. json only, no dashboard, and the read marks are ours because a webhook never tells you whether anyone looked.
+
+and the rail signal needs: `bin/heyphony get signal` for the flow (the android spawnable signs up, the sms code arrives in the inbox above, the desktop then links to the phone as a secondary device), with the qr scan left to you.
 
 ## then whichever lanes you actually want
 

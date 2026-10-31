@@ -8,7 +8,7 @@ import argparse
 import json
 import sys
 
-from heyphony import getters, inbox, providers, sip
+from heyphony import getters, inbox, providers, sip, views
 
 SETUP = {
     "what_this_is": "one number that rings a process: a sip did, a provider, a client on the host.",
@@ -44,7 +44,9 @@ def cmd_setup(args):
 def cmd_status(args):
     _out({"rc": str(sip.rc_path()), "rc_present": sip.rc_path().is_file(),
           "provider": providers.profile("voip.ms")["name"],
-          "sms_inbox": inbox.count(), "host_client": sip.host_client()["client"]})
+          "sms_inbox": inbox.count(), "host_client": sip.host_client()["client"],
+          "unread": sum(1 for r in views.messages(limit=500)["rows"] if r["unread"]),
+          "voicemail": views.voicemail()["count"]})
 
 
 def cmd_connect(args):
@@ -70,6 +72,21 @@ def cmd_inbox(args):
 def cmd_serve(args):
     from heyphony import catcher
     catcher.serve(port=args.port, token=args.token)
+
+
+def cmd_open(args):
+    """the inbox, the call log, the voicemail: json the agent can walk one item at a time."""
+    if args.what == "messages":
+        _out(views.messages(unread=args.unread, since_days=args.since, thread=args.thread,
+                            limit=args.limit, show=args.show, do_mark=args.mark_read))
+    elif args.what == "calls":
+        _out(views.calls(missed=args.missed, limit=args.limit, show=args.show))
+    elif args.what == "voicemail":
+        _out(views.voicemail(limit=args.limit, show=args.show, play=args.play))
+    else:
+        _out({"messages": views.messages(limit=args.limit, unread=args.unread, since_days=args.since),
+              "calls": views.calls(missed=args.missed, limit=args.limit),
+              "voicemail": views.voicemail(limit=args.limit)})
 
 
 def cmd_get(args):
@@ -106,9 +123,21 @@ def build_parser():
     i.set_defaults(func=cmd_inbox)
     w = sub.add_parser("serve"); w.add_argument("--port", type=int, default=8099)
     w.add_argument("--token"); w.set_defaults(func=cmd_serve)
+    o = sub.add_parser("open", help="read the inbox, the call log or the voicemail")
+    o.add_argument("what", nargs="?", default="all", choices=["messages", "calls", "voicemail", "all"])
+    o.add_argument("--unread", action="store_true")
+    o.add_argument("--since", type=float, default=None, help="days back")
+    o.add_argument("--thread", default=None)
+    o.add_argument("--limit", type=int, default=20)
+    o.add_argument("--show", type=int, default=None, help="expand row N")
+    o.add_argument("--mark-read", type=int, nargs="*", default=None, dest="mark_read")
+    o.add_argument("--missed", action="store_true")
+    o.add_argument("--play", type=int, default=None, help="play voicemail row N")
+    o.set_defaults(func=cmd_open)
+
     g = sub.add_parser("get", help="open a rail that needs the number this host already holds")
     g.add_argument("name", nargs="?")
-    g.add_argument("--path", default="link-device", choices=["link-device", "register-number"])
+    g.add_argument("--path", default=None, help="phone-signup (default) | link-desktop | register-number")
     g.add_argument("--run", action="store_true", help="actually execute the install steps")
     g.add_argument("--list", action="store_true")
     g.set_defaults(func=cmd_get)

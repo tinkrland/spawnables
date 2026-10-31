@@ -223,7 +223,7 @@ class TestEmailFrontDoor(unittest.TestCase):
 
 class TestSignalNeedsANumber(unittest.TestCase):
     def test_linking_a_device_needs_no_number(self):
-        plan = lane("signal").registration_plan("link-device", env={})
+        plan = lane("signal").registration_plan("link-desktop", env={})
         self.assertTrue(plan["possible"])
         self.assertFalse(plan["needs_number_of_its_own"])
 
@@ -349,9 +349,29 @@ class TestGetters(unittest.TestCase):
         self.assertIn("signal", getters.available())
 
     def test_linking_needs_no_number_at_all(self):
-        plan = getters.plan("signal", "link-device", env={})
+        plan = getters.plan("signal", "link-desktop", env={})
         self.assertTrue(plan["gettable"])
         self.assertEqual(plan["missing"], [])
+
+    def test_the_phone_signup_is_the_default_and_needs_the_did(self):
+        self.assertEqual(getters.plan("signal", None, {})["path"], "phone-signup")
+        self.assertFalse(getters.plan("signal", "phone-signup", {})["gettable"])
+        self.assertTrue(getters.plan("signal", "phone-signup", {"HEYPHONY_SIP_DID": "+1555"})["gettable"])
+
+    def test_the_code_is_read_from_heyphony_not_a_handset(self):
+        plan = getters.plan("signal", "phone-signup", {"HEYPHONY_SIP_DID": "+1555"})
+        cmds = " ".join(step["cmd"] for step in plan["steps"])
+        self.assertIn("heyphony open messages", cmds)
+        self.assertIn("durable", getters.available()["signal"]["flow"][0])
+
+    def test_the_desktop_links_as_a_named_device(self):
+        cmds = " ".join(s["cmd"] for s in getters.plan("signal", "link-desktop", {})["steps"])
+        self.assertIn("device_name=heyphony-desktop", cmds)
+
+    def test_voip_strictness_is_described_honestly(self):
+        risky = getters.available()["signal"]["paths"]["register-number"]["why_risky"]
+        self.assertIn("less strict about voip", risky)
+        self.assertIn("never a promise", risky)
 
     def test_registering_needs_the_did_heyphony_holds(self):
         self.assertFalse(getters.plan("signal", "register-number", env={})["gettable"])
@@ -363,21 +383,21 @@ class TestGetters(unittest.TestCase):
         self.assertIn("signal", out["known"])
 
     def test_a_dry_run_executes_nothing(self):
-        out = getters.run("signal", "link-device", env={})
+        out = getters.run("signal", "link-desktop", env={})
         self.assertTrue(out["dry"])
         self.assertTrue(all(not step["executed"] for step in out["ran"]))
 
     def test_the_qr_scan_stays_a_human_act(self):
-        out = getters.run("signal", "link-device", env={})
-        self.assertTrue(any("qr" in who.lower() or "scan" in who.lower() for who in out["needs_a_human"]))
-        self.assertIn("qrcodelink", out["next"] + "".join(s["cmd"] for s in out["steps"]))
+        out = getters.run("signal", "link-desktop", env={})
+        self.assertTrue(any("scan" in who.lower() for who in out["needs_a_human"]))
+        self.assertIn("qrcodelink", "".join(s["cmd"] for s in out["steps"]))
 
     def test_the_recipe_pins_commands_verified_upstream(self):
         recipe = getters.available()["signal"]
         joined = " ".join(step["cmd"] for step in recipe["install"])
         self.assertIn("MODE=native", joined)
         self.assertIn("bbernhard/signal-cli-rest-api", joined)
-        self.assertIn("/v1/qrcodelink", " ".join(step["cmd"] for step in recipe["link"]))
+        self.assertIn("/v1/qrcodelink", " ".join(step["cmd"] for step in recipe["paths"]["link-desktop"]["steps"]))
         self.assertIn("/v2/send", recipe["install"][0]["source"])
 
     def test_the_getter_claims_no_bot_api(self):
@@ -385,11 +405,69 @@ class TestGetters(unittest.TestCase):
 
     def test_the_signal_lane_names_the_same_command(self):
         self.assertEqual(lane("signal").LANE["bootstrap"], "heyphony get signal")
-        self.assertEqual(lane("signal").registration_plan("link-device", env={})["one_command"],
+        self.assertEqual(lane("signal").registration_plan("phone-signup", env={})["one_command"],
                          "heyphony get signal")
 
     def test_telephony_setup_advertises_the_getter(self):
         self.assertIn("heyphony get signal", telephony_cli.SETUP["get"]["commands"])
+
+
+class TestOpeningTheInboxes(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.home = tempfile.mkdtemp()
+        from heyphony import inbox as store
+        self.store = store
+        self.path = pathlib.Path(self.home) / "telephony" / "inbox.jsonl"
+        store.append({"id": "a1", "channel": "sms", "sender": "+1555",
+                      "body": "your signal code is 123456", "at": 1700000000}, self.path)
+        store.append({"id": "a2", "channel": "sms", "sender": "+1666", "body": "hello", "at": 1700000100}, self.path)
+
+    def test_rows_are_numbered_and_previewed(self):
+        from heyphony import views
+        out = views.messages(home=self.home, path=self.path)
+        self.assertEqual([r["n"] for r in out["rows"]], [1, 2])
+        self.assertEqual(out["rows"][0]["from"], "+1666")
+        self.assertTrue(out["rows"][0]["preview"])
+
+    def test_the_unread_mark_is_ours_because_the_provider_does_not_track_it(self):
+        from heyphony import views
+        self.assertEqual(views.messages(home=self.home, path=self.path)["unread_total"], 2)
+        views.messages(home=self.home, path=self.path, do_mark=[1])
+        self.assertEqual(views.messages(home=self.home, path=self.path, unread=True)["count"], 1)
+
+    def test_show_expands_exactly_one_body(self):
+        from heyphony import views
+        out = views.messages(home=self.home, path=self.path, show=2)
+        self.assertIn("signal code", out["message"]["body"])
+
+    def test_a_thread_filter_narrows_to_one_number(self):
+        from heyphony import views
+        out = views.messages(home=self.home, path=self.path, thread="+1555")
+        self.assertEqual(out["count"], 1)
+
+    def test_voicemail_reads_its_sidecar_and_never_invents_a_transcript(self):
+        from heyphony import views
+        folder = pathlib.Path(self.home) / "telephony" / "voicemail"
+        folder.mkdir(parents=True)
+        (folder / "vm1.wav").write_bytes(b"RIFF")
+        (folder / "vm1.json").write_text(json.dumps({"from": "+1777", "seconds": 9, "transcript": "call me back"}))
+        (folder / "vm2.wav").write_bytes(b"RIFF")
+        rows = views.voicemail(home=self.home)["rows"]
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(any(r["transcript"] == "call me back" for r in rows))
+        self.assertTrue(any(r["transcript"] == "" for r in rows))
+
+    def test_the_call_log_is_empty_rather_than_wrong_without_a_database(self):
+        from heyphony import views
+        out = views.calls(home=self.home)
+        self.assertEqual((out["count"], out["rows"]), (0, []))
+
+    def test_open_is_one_command_for_all_three(self):
+        from heyphony import views
+        self.assertEqual(views.messages(home=self.home, path=self.path)["inbox"], "messages")
+        self.assertEqual(views.calls(home=self.home)["inbox"], "calls")
+        self.assertEqual(views.voicemail(home=self.home)["inbox"], "voicemail")
 
 
 if __name__ == "__main__":

@@ -48,6 +48,33 @@ the host runs **baresip**. its `ctrl_tcp` module is a json command socket: json 
 
 linphone still does the desktop job fine, and its config keys are what this folder generates.
 
+## open: the inbox, shaped for something without eyes
+
+a mail client gives a human three things for free: a stable handle, a way to know what is
+new, and a cheap way to read one item in full. an agent gets none of that from a mailbox,
+so `open` supplies exactly those three and nothing else.
+
+```
+heyphony open messages                  # numbered rows: from, when, unread, 64-char preview
+heyphony open messages --unread --since 2
+heyphony open messages --show 3         # one body in full, plus a text message with heyphony
+heyphony open messages --mark-read 3    # clear it
+heyphony open messages --thread +1555...
+heyphony open calls --missed            # the call log, from linphone's own sqlite
+heyphony open voicemail                 # what the carrier or the email lane dropped here
+heyphony open all
+```
+
+read state is a sidecar (`~/.local/share/telephony/read-marks.json`) because a provider
+webhook does not say whether anyone looked. pretending it does is what makes an inbox
+useless to an agent that has to answer "is this new?" honestly.
+
+voicemail is a carrier feature, so the view reads wherever the carrier put it: voip.ms
+emails it (it arrives through the email lane), flowroute does not answer at all. a file
+plus a `<name>.json` sidecar (`from`, `seconds`, `transcript`) is the shape; a missing
+sidecar means no transcript, never an invented one. `--play N` uses ffplay, paplay or aplay
+if one exists, and says so plainly if none does.
+
 ## get: what a number unlocks
 
 a number is the prerequisite for rails that want a phone. so the number's own package opens them:
@@ -73,6 +100,8 @@ nothing here has placed a call yet. what is built and tested: config generation 
 ```
 heyphony --setup                        # the plan, as json
 heyphony connect sip --voipms --did +1... --username ... --password ...
+heyphony open messages|calls|voicemail|all
+heyphony get signal [--path phone-signup|link-desktop|register-number] [--run]
 heyphony status | calls [--missed] | inbox | serve --port 8099 | doctor
 ```
 

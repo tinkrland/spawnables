@@ -2066,6 +2066,84 @@ class TestDeviceSurface(unittest.TestCase):
         self.assertNotIn("requests", text)
 
 
+class TestDutyCycle(unittest.TestCase):
+    """a machine with hours instead of a machine that is always home."""
+
+    def duty(self):
+        from spawnables import duty
+        return duty
+
+    def test_the_middle_tier_is_a_different_promise(self):
+        tiers = self.duty().TIERS
+        self.assertIn("keeper", tiers["overnight"]["cost"])
+        self.assertIn("cannot be messaged", tiers["on-demand"]["reachable"])
+
+    def test_the_window_is_derived_from_the_persona_timezone(self):
+        window = self.duty().sleep_window("overnight", "asia/kolkata")
+        self.assertEqual(window["local_window"], "01:30-07:30 asia/kolkata")
+        self.assertEqual(window["utc_window"], "20:00-02:00 utc")
+        self.assertAlmostEqual(window["duty_fraction"], 0.75, places=3)
+
+    def test_lowercase_ids_resolve_to_iana(self):
+        self.assertEqual(self.duty().canonical_tz("asia/kolkata"), "Asia/Kolkata")
+        with self.assertRaises(ValueError):
+            self.duty().canonical_tz("asia/atlantis")
+
+    def test_an_always_on_profile_sleeps_never(self):
+        window = self.duty().sleep_window("always-on", "asia/kolkata")
+        self.assertFalse(window["asleep"])
+        self.assertEqual(window["duty_fraction"], 1.0)
+
+    def test_a_guest_timer_is_refused_as_a_wake_trigger(self):
+        with self.assertRaises(ValueError) as ctx:
+            self.duty().plan(triggers=("guest-cron",))
+        self.assertIn("cannot wake a suspended guest", str(ctx.exception))
+
+    def test_a_disk_snapshot_does_not_claim_continuity(self):
+        plan = self.duty().plan(caps={"freeze": True})
+        self.assertFalse(plan["continuity_claimed"])
+        self.assertIn("the guest boots", plan["fidelity"])
+
+    def test_memory_suspend_is_the_only_continuity_claim(self):
+        plan = self.duty().plan(caps={"sleep": True})
+        self.assertTrue(plan["continuity_claimed"])
+        self.assertIn("uptime keeps counting", plan["fidelity"])
+        self.assertTrue(any(s.startswith("suspend: pause the vm with its memory") for s in plan["steps"]))
+
+    def test_sync_and_verify_follow_every_wake(self):
+        steps = self.duty().plan()["steps"]
+        self.assertLess(steps.index("timesync: force a step, not a slew, because the clock jumped"),
+                        steps.index([s for s in steps if s.startswith("verify")][0]))
+
+    def test_the_fence_runs_before_the_snapshot(self):
+        plan = self.duty().plan()
+        fence = [s for s in plan["steps"] if s.startswith("fence")][0]
+        self.assertLess(plan["steps"].index(fence), 2)
+        self.assertIn("job-in-flight", plan["fence"])
+
+    def test_a_tcp_peer_sees_slow_rather_than_refused(self):
+        path = self.duty().wake_path("tcp")
+        self.assertIn("held by the front", path["peer_sees"])
+        self.assertFalse(path["guest_timer"])
+
+    def test_the_always_on_list_is_holders_not_the_guest(self):
+        holders = self.duty().plan(triggers=("mail", "tcp"))["always_on"]
+        self.assertIn("the mail catcher on the host", holders)
+        self.assertNotIn("the guest", holders)
+
+    def test_coherence_flags_a_machine_awake_during_its_own_night(self):
+        report = self.duty().coherence("overnight", "asia/kolkata", awake_at_local="03:00",
+                                       clock_jump_seconds=5400)
+        self.assertFalse(report["clean"])
+        self.assertEqual(len(report["issues"]), 2)
+        self.assertIn("fibbing", report["issues"][0])
+        self.assertIn("force a step", report["issues"][1])
+
+    def test_latency_is_not_quoted_before_it_is_measured(self):
+        self.assertIn("unmeasured", self.duty().plan()["resume_latency"])
+        self.assertIn("resume_latency_is_unmeasured", self.duty().honesty())
+
+
 if __name__ == "__main__":
     suite = unittest.defaultTestLoader.loadTestsFromModule(sys.modules["__main__"])
     result = unittest.TextTestRunner(verbosity=0).run(suite)

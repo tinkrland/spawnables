@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 
+from . import duty
 from .catalog import Catalog
 from .models import MachineOrder
 from .validate import validate_order
@@ -96,6 +97,20 @@ def cmd_vaults(args):
     return 0
 
 
+def cmd_duty(args):
+    """the schedule, what it takes to sleep, and who answers while it is down."""
+    profile, tz = args.profile, args.tz
+    if args.plan:
+        caps = {"sleep": True} if args.memory else {}
+        triggers = tuple(t.strip() for t in args.wake.split(",") if t.strip())
+        print(json.dumps(duty.plan(profile, tz, caps, triggers), indent=2, default=str))
+    elif args.honesty:
+        print(json.dumps(duty.honesty(), indent=2))
+    else:
+        print(json.dumps(duty.card(profile, tz), indent=2, default=str))
+    return 0
+
+
 def cmd_surface(args):
     """the four verbs an agent gets on a device with no dom, and who offers which."""
     from . import surface
@@ -121,6 +136,14 @@ def main(argv=None):
     v.add_argument("action", choices=["check", "card", "resolve", "code"])
     v.add_argument("ref", nargs="?", help="op://vault/item/field, bw://item/field, pass://vault/item/field")
     v.set_defaults(fn=cmd_vaults)
+    du = sub.add_parser("duty", help="machines with hours: overnight, office, on-demand")
+    du.add_argument("--profile", default="overnight", choices=sorted(duty.PROFILES))
+    du.add_argument("--tz", default="asia/kolkata", help="the persona's timezone; the schedule derives from it")
+    du.add_argument("--wake", default="schedule,mail,agent", help="comma-separated wake triggers")
+    du.add_argument("--memory", action="store_true", help="the host can suspend with memory (session survives)")
+    du.add_argument("--plan", action="store_true")
+    du.add_argument("--honesty", action="store_true")
+    du.set_defaults(fn=cmd_duty)
     sf = sub.add_parser("surface", help="the device verb set: open_app, tap_text, type_text, screen")
     sf.add_argument("verb", nargs="?")
     sf.add_argument("--backend", default="android-adb",

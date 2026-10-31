@@ -2,7 +2,7 @@
 
 this branch is the telecom line: sims, esims, vuicc, modems and the numbers an agent can own. it is its own line by the owner's call, decoupled from main.
 
-main carries the machines (orders, lifecycle, grants, the guest homes, the phone pool, the twofa handoff). this branch carries what happens when a machine needs a *mobile identity*: the lane selector ([sim.py](src/spawnables/sim.py)), the software uicc ([vuicc.py](src/spawnables/vuicc.py)), the dated research ([esim-feasibility.md](spec/esim-feasibility.md)), and the software ue path tool ([ueransim](catalog/path-tools/ueransim.json)).
+main carries the machines (orders, lifecycle, grants, the guest homes, the phone pool, the twofa handoff). this branch carries what happens when a machine needs a *mobile identity*: the lane selector ([sim.py](src/spawnables/sim.py)), the software uicc ([vuicc.py](src/spawnables/vuicc.py)), the dated research ([esim-feasibility.md](spec/esim-feasibility.md)), the software ue path tool ([ueransim](catalog/path-tools/ueransim.json)), and the voice-without-a-radio lane ([workaround-voip](workaround-voip/readme.md)): ordinary sip telephony with licences checked rather than assumed, keeping its own limits (no mobile identity, no sms by default, attestation at b or c, e911 registration).
 
 rules of the line:
 

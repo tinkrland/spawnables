@@ -44,17 +44,25 @@ them through a broker at use time, never by signing 1password itself into a gues
 owner's instinct is correct: 1password logged in everywhere is a device-linking tell, and
 the fix is not to log it in.
 
-correction to keep on file: i could not confirm a bitbucket integration in the list i
-read; confirm before repeating it.
+correction to keep on file (owner, nov 2026): i wrote "bitbucket" where they said **bitwarden**.
+neither appears in the kernel integrations list i read, so the honest line is: 1password is
+confirmed there, bitwarden is not confirmed either way, and vaultwarden is our own service entry
+rather than an integration.
 
 ## two-factor: the app is not on the critical path
 
 an authenticator app stores an `otpauth://` uri. a code is a computation over that uri,
 not a feature of an app. we already decode the qr (`twofa.py`), so the agent's side is:
 decode the qr the service shows, seal the uri in the vault, compute codes at use time.
-the app choice matters only for the human holding the same seed later. proton
-authenticator is a reasonable choice for that, but i could not verify its licence or
-export format from the urls i tried (both 404), so nothing here depends on it.
+the app choice matters only for the human holding the same seed later.
+
+correction on file (nov 2026): **proton authenticator** describes itself as open source for
+iphone, ipad, apple watch, mac, android, linux and windows, free and standalone, no account
+required, with encrypted backups and token import. i could not find its source repository
+under `github.com/ProtonMail` (organisation search returned none, and
+`github.com/ProtonMail/proton-authenticator` 404s), so the open-source claim is proton's own
+statement and the repo location is unverified. either way nothing here depends on it: it is
+the human's copy of the same seed, not a component.
 
 three rules, because a seed is an identity: one seed per identity; never copy a seed to
 a second guest; seal backup codes beside the seed, they are the recovery lane and the
@@ -82,4 +90,25 @@ same person on two devices.
 - agent-vault licence text not read yet (repo has LICENSE; confirm before shipping).
 - the proxy needs its root ca trusted inside each guest; our provisioner can do that,
   but it is a provisioner step that must be written, not assumed.
-- kernel's bitbucket integration unverified; proton authenticator licence unverified.
+- kernel's bitwarden integration unconfirmed (1password is confirmed); proton authenticator's repo location unverified, its open-source claim is their own.
+
+## what exists, and what is still a spec
+
+asked plainly (nov 2026): did we pair an authenticator app, or build vaultwarden/bitwarden
+rails the way 1password plus the guest agent-vault is designed? the answer is no to all three,
+and the gap is worth stating so nobody plans around a rail that is not there.
+
+| piece | state | evidence |
+| --- | --- | --- |
+| totp decoding and code computation | **built** | `twofa.py`: `decode_command`, `extract_totp`, `classify`, `scan_gate`; seeds are referenced as `@@vault:` |
+| seed storage in the sealed vault | **built for totp uris** | the same vault path every other secret uses; one seed per identity, never copied to a second guest |
+| proton authenticator | **not integrated, by design** | no code; it is the human's copy of the seed. oss claim is proton's, repo unverified |
+| 1password | **spec only** | `spec/credential-plane.md`; kernel ships an integration, we treat 1password as the owner's vault reached through a broker, never signed into a guest |
+| agent-vault (infisical) proxy | **spec only** | no `agent_vault` code in `src/` (checked). the design is written, the egress proxy is not |
+| vaultwarden | **provisionable app, no rail** | `catalog/services/vaultwarden.json`, agpl-3.0, port 8222, status ready. its notes now say the credential plane does not point at it yet |
+| bitwarden cli / api integration | **not built** | nothing in `src/` speaks `bw` |
+
+so the honest ordering of work here: the proxy is the thing that makes a vault useful to a
+guest (it is what keeps the secret out of the guest at all), and until it exists, pointing at
+vaultwarden would only mean a second place to copy secrets from by hand. the app is ready when
+the rail is.

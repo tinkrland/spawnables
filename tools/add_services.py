@@ -34,7 +34,7 @@ SERVICES = [
     single(
         "vaultwarden", "secrets", "agpl-3.0 (oss)", 8222, 512,
         "vaultwarden/server:latest", "/data",
-        "bitwarden-compatible server in one container (rust, no bitwarden cloud account). this is the vault the credential plane points at: bw cli or the web vault lives behind localhost:8222, so an owner's logins never need to be typed into a guest by hand and the guest can reach them only through the proxy. signups are off by default in the image, so enabling a new account is an explicit step on the owner's card, not something a guest can do to itself.",
+        "bitwarden-compatible server in one container (rust, no bitwarden cloud account). this is the vault the credential plane is meant to point at, and the rail is not built yet: provisioning it today gives a working vault behind localhost:8222 (web vault, or bw cli from the host) and nothing that wires it to a guest. spec/credential-plane.md keeps the honest list. signups are off by default in the image, so enabling a new account is an explicit step on the owner's card, not something a guest can do to itself.",
         verify="curl -sf http://localhost:8222/alive -o /dev/null || curl -sf http://localhost:8222 -o /dev/null",
     ),
     single(

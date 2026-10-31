@@ -93,3 +93,34 @@ behaviour instead of silently pretending to pre-warm.
 next step if this is approved: one host, one oci image of a debian guest, and a measured
 standby to first-exec latency, because "milliseconds" is their number and we do not repeat
 numbers we have not measured.
+
+## measuring it (the number is still owed)
+
+`tools/hypeman_bench.py` is the measurement, not a claim. the readme's
+"milliseconds" is their number on their hardware; the pool only earns that
+sentence once we have ours.
+
+protocol, per iteration: create from image and wait running, exec a warm-up so
+the guest agent is paged in, standby and wait, then `t0 = monotonic` -> restore
+-> wait running -> exec `true` -> `t1`. the sample is `t1 - t0`, which is
+restore plus scheduling plus the agent round trip. that is the number an agent
+feels, and it is deliberately not restore alone.
+
+pass is judged on **p95, not the mean**: a pool that is usually fast and
+sometimes awful still makes the agent wait. default budget is 1500 ms, chosen
+because above that the pool is spending the agent's patience rather than
+saving it. cold boot is measured once, separately, and reported only as
+context so nobody mistakes it for resume.
+
+state of the evidence: **unmeasured**. the sandbox this was written in has no
+`/dev/kvm` and no hypervisor binaries, so `--dry-run` (synthetic, clearly
+labelled) is all it can produce here. one command on a kvm host closes it:
+
+```
+HYPMAN_API=http://127.0.0.1:8080 HYPMAN_TOKEN=... make bench   # -n 20
+```
+
+two numbers to record when it runs: p95 standby->first-exec, and whether
+p95 degrades with `--settle` (a guest that idles before restore may hand back
+faster or slower depending on page cache, and the answer decides how long the
+pool may hold a warm phone).

@@ -183,5 +183,91 @@ class TestLegacyTree(unittest.TestCase):
         self.assertEqual(m["status"], "refused")
 
 
+class TestBridge(unittest.TestCase):
+    """the bridge harness: a fixture either proves the path or names why not."""
+
+    MANIFEST = {
+        "target": "debian10",
+        "path": "linux/debian/10-buster",
+        "status": "planned",
+        "bridges": ["native-automation", "file-in-out", "gui-automation"],
+        "guest": {"clock": "frozen"},
+    }
+
+    def setUp(self):
+        import tempfile
+        sys.path.insert(0, str(ROOT / "tools"))
+        import bridge as B
+        self.B = B
+        self.tmp = pathlib.Path(tempfile.mkdtemp())
+
+    def guest(self):
+        return self.B.LocalGuest(self.tmp / "guest")
+
+    def test_the_shipped_example_fixture_runs_end_to_end(self):
+        out = self.B.run_fixture(self.MANIFEST, ROOT / "fixtures/example-file-in-out",
+                                 self.guest())
+        self.assertTrue(out.ok, out.mismatches)
+        self.assertEqual(out.kind, "file-in-out")
+        self.assertEqual(out.mismatches, [])
+
+    def test_a_refused_target_has_no_bridge_to_run(self):
+        man = dict(self.MANIFEST, status="refused", path="windows/windows-phone-8.1")
+        with self.assertRaises(self.B.BridgeError):
+            self.B.run_fixture(man, ROOT / "fixtures/example-file-in-out", self.guest())
+
+    def test_a_fixture_may_only_use_a_declared_bridge(self):
+        man = dict(self.MANIFEST, bridges=["native-automation"])
+        with self.assertRaises(self.B.BridgeError):
+            self.B.run_fixture(man, ROOT / "fixtures/example-file-in-out", self.guest())
+
+    def _fixture(self, spec, app=None, inp=None):
+        d = self.tmp / f"fx{len(list(self.tmp.iterdir()))}"
+        (d / "input").mkdir(parents=True)
+        (d / "expected").mkdir()
+        (d / "fixture.json").write_text(json.dumps(spec))
+        if app:
+            (d / "app.py").write_text(app)
+        if inp:
+            (d / "input" / "in.txt").write_text(inp)
+        return d
+
+    def test_a_clock_dependent_fixture_is_refused_on_a_live_clock(self):
+        d = self._fixture({"bridge": "file-in-out", "argv": ["true"], "timeout_s": 5,
+                           "determinism": "clock-dependent",
+                           "compare": {"mode": "text"}})
+        live = dict(self.MANIFEST, guest={"clock": "host"})
+        with self.assertRaises(self.B.BridgeError):
+            self.B.run_fixture(live, d, self.guest())
+        # and the same fixture is fine once the target declares a frozen clock
+        self.assertTrue(self.B.run_fixture(self.MANIFEST, d, self.guest()).ok)
+
+    def test_a_hanging_app_is_killed_and_named_as_a_timeout(self):
+        d = self._fixture({"bridge": "file-in-out", "argv": ["sleep", "5"],
+                           "timeout_s": 1, "determinism": "deterministic",
+                           "compare": {"mode": "text"}})
+        out = self.B.run_fixture(self.MANIFEST, d, self.guest())
+        self.assertFalse(out.ok)
+        self.assertTrue(out.timed_out)
+
+    def test_comparison_modes_are_explicit(self):
+        got, want = b"a\nb\n", b"a\nb\n"
+        self.assertEqual(self.B.compare(got, want, {"compare": {"mode": "exact"}}), [])
+        self.assertEqual(self.B.compare(b"a\r\nb", b"a\nb\n",
+                                        {"compare": {"mode": "text"}}), [])
+        json_t = json.dumps({"rows": 3, "name": "x"}).encode()
+        self.assertEqual(self.B.compare(json_t, json.dumps({"rows": 3}).encode(),
+                                        {"compare": {"mode": "json-subset"}}), [])
+        self.assertTrue(self.B.compare(json_t, json.dumps({"rows": 4}).encode(),
+                                       {"compare": {"mode": "json-subset"}}))
+
+    def test_an_undeclared_compare_mode_is_refused(self):
+        d = self._fixture({"bridge": "file-in-out", "argv": ["true"], "timeout_s": 5,
+                           "determinism": "deterministic",
+                           "compare": {"mode": "vibes"}})
+        with self.assertRaises(self.B.BridgeError):
+            self.B.load_fixture(d)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

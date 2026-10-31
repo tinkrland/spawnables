@@ -61,6 +61,25 @@ every bridge declares: inputs, outputs, verbs, determinism class, and what happe
 - **quarantined by default, not by configuration.** default-deny egress, no inbound, snapshot on demand, and a burn that shreds the disk. if a legacy guest needs the internet, that is an explicit order and it shows on the card in the same font as everything else.
 - **no claim it cannot keep.** "supports the app" with no bridge is exactly the "software esim" mistake in another costume. a legacy entry without a bridge is a research note.
 
+## the bridge exists, and the fixture proves it (2026-10-31)
+
+`tools/bridge.py` implements the contract instead of describing it. a fixture is a
+directory: `fixture.json` (bridge kind, argv, timeout, determinism class, compare mode),
+`input/` to seed, `expected/` to match, and the app's own copy so the guest has
+something to run. `run_fixture(manifest, fixture, guest)` seeds, runs, harvests and
+compares, and the guest is an interface, so the same fixture replays on the host
+(`LocalGuest`) and inside a real windows 7 or debian 10 without being rewritten.
+
+four rules are enforced rather than documented: a refused target has no bridge to run;
+a fixture may only use a bridge its target declares; every run has a timeout, because a
+bridge that hangs on a modal is not finished; and a clock-dependent fixture may not run
+on a guest whose clock is live, because a jump fabricates the number and a backward
+jump corrupts the save.
+
+`fixtures/example-file-in-out/` is the pilot shape, with a stand-in program that does
+nothing interesting on purpose: replacing that stub with the real binary is the only
+change a first real target needs, and 7 tests keep the harness honest.
+
 ## first target, when this line opens
 
 one dead application, one bridge, one fixture set, end to end: thaw, feed it a fixture, harvest the output, match the known-good answer, burn. pick it for how *representative* it is of a class (an accounting package, a label printer tool, an instrument controller), because the second one will be much cheaper than the first.

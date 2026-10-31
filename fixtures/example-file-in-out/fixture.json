@@ -1,0 +1,9 @@
+{
+  "fixture": "example-file-in-out",
+  "bridge": "file-in-out",
+  "argv": ["python3", "app.py", "batch.txt", "report.txt"],
+  "timeout_s": 30,
+  "determinism": "deterministic",
+  "compare": {"mode": "text", "exit_code": 0},
+  "note": "the pilot shape: a dead app that reads a file and writes one. swap app.py for the real binary and the fixture still holds."
+}

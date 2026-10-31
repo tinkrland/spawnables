@@ -5,8 +5,8 @@ that". a desktop guest has a shell, a browser has a dom, and a phone has pixels.
 can only look at pixels is a camera with a bill.
 
 phone-harness solved this for their fleet with four helpers: `open_app`, `tap_text`, `type_text`,
-`screen`. the contract is the good part and we adopt it. the cloud farm is not adopted: their
-device, their sim, their account, which is borrowing an identity rather than holding one.
+`screen`. the contract is the good part and we adopt it, against devices we hold: our own android
+guests, and a real phone on a desk.
 
 ## the four verbs
 
@@ -29,10 +29,8 @@ pixels, and vision ocr reads them. one platform has an api, the other has a came
   `tap_text` on ios is refused rather than approximated.
 - **a silent tap.** `tap_text` with no dump returns the two calls that produce one, not a guess
   with a screenshot attached.
-- **a borrowed identity.** the cloud farm offers all four verbs and still loses: its sim and its
-  account are theirs, so the device may work and may not become the identity. same rule as the
-  mobile pool and the same rule as a vault session. the owner's answer on this one is no, so the
-  card keeps listing what a farm offers and `plan()` refuses to route work there.
+- **a borrowed identity.** a device somebody else owns may be driven and may not become the
+  identity. same rule as the mobile pool and the same rule as a vault session.
 
 ## where it sits
 

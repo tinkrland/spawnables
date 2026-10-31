@@ -1,8 +1,8 @@
 """surface: the four verbs an agent gets on a device that has no DOM.
 
-owner, correcting my reading of the phone-harness repo: the interesting half is not their cloud
-farm, it is "on ur own phone let agents run". they are right about why it matters, and the reason
-is the gap this module exists for: our phone guests give an agent a screen and nothing to click.
+owner, correcting my reading of the phone-harness repo: the interesting half is "on ur own phone
+let agents run". they are right about why it matters, and the reason is the gap this module exists
+for: our phone guests give an agent a screen and nothing to click.
 a desktop guest has a shell, a browser exposes a DOM, but a phone is pixels plus an accessibility
 tree, and an agent that can only look at pixels is a camera.
 
@@ -19,8 +19,8 @@ on the owner's desk, which is the half of phone-harness worth adopting: the same
 own device, our own account, nothing borrowed.
 
 ios is honest about the asymmetry. on a mac, iPhone Mirroring plus vision ocr gives screen() and
-nothing else, because the mirror is pixels; the accessibility tree stays inside the phone. their
-cloud farm gets tap_text on ios by owning the device. we do not, so we do not pretend.
+nothing else, because the mirror is pixels; the accessibility tree stays inside the phone. the
+remedy is a device we hold, not a service that holds one for us.
 """
 import re
 import xml.etree.ElementTree as ET
@@ -47,21 +47,13 @@ BACKENDS = {
         "why": "a simulator has no springboard to tap and no tree to read, so no verb is honest here",
         "holds": "nothing",
     },
-    "cloud-farm": {
-        "verbs": list(VERBS),
-        "covers": "a hosted phone farm (phone-harness cloud and friends)",
-        "why": "their device, their sim, their account: adopting it would move the identity off our side",
-        "holds": "borrowed, and the owner's answer on this one is no",
-    },
 }
 
 # things this module will not do, in the same voice as the rest of the plane
 REFUSED = {
     "ocr-pretending-to-press": "vision reads; a tap needs a coordinate somebody can vouch for",
-    "farm-borrowed-identity": "a hosted phone's sim and account are theirs, so the device may work and may not become the identity",
+    "borrowed-identity": "a device somebody else owns may be driven and may not become the identity",
     "silent-tap": "a tap without a dump is a guess with a screenshot attached",
-    "cloud-farm-declined": ("the owner's answer is no. the card still lists what a farm offers so the "
-                            "refusal has a reason next to it, and plan() will not route work there"),
 }
 
 
@@ -151,11 +143,6 @@ def screen(backend="android-adb"):
 
 def plan(verb, backend="android-adb", **kw):
     """one call for an agent: verb + backend -> argv or a refusal with the reason."""
-    if backend == "cloud-farm":
-        return {"refused": True, "verb": verb, "backend": backend,
-                "why": REFUSED["cloud-farm-declined"],
-                "alternatives": ["android-adb"],
-                "rule": "the device may work elsewhere; it may not become the identity"}
     table = {"open_app": open_app, "tap_text": tap_text, "type_text": type_text, "screen": screen}
     if verb not in table:
         raise ValueError(f"unknown verb {verb!r}; the set is {VERBS}")
@@ -181,6 +168,5 @@ def agent_card():
         "why": why_no_dom(),
         "refused": REFUSED,
         "adopted_from": ("phone-harness's local mode (their four helpers: open_app, tap_text, type_text, "
-                         "screen). the contract is worth taking; the cloud farm is their device and "
-                         "their account, which is not adoption, it is borrowing"),
+                         "screen). the contract is worth taking; a device we do not own is not"),
     }

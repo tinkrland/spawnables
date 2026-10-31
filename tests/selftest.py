@@ -2050,16 +2050,14 @@ class TestDeviceSurface(unittest.TestCase):
         self.assertTrue(refusal["refused"])
         self.assertEqual(refusal["alternatives"], ["android-adb"])
 
-    def test_the_cloud_farm_is_documented_and_still_refused(self):
+    def test_only_backends_we_hold_are_offered(self):
         card = self.surface().agent_card()
-        self.assertIn("tap_text", card["backends"]["cloud-farm"]["verbs"])
-        self.assertIn("it is borrowing", card["adopted_from"])
-        self.assertIn("farm-borrowed-identity", card["refused"])
-        # the card says what a farm offers; the router will not send work there
-        refusal = self.surface().plan("tap_text", label="send", backend="cloud-farm")
+        self.assertEqual(sorted(card["backends"]), ["android-adb", "ios-guest", "ios-mirroring"])
+        self.assertIn("borrowed-identity", card["refused"])
+        # a backend that does not exist cannot be planned into
+        refusal = self.surface().plan("tap_text", label="send", backend="someone-elses-phone")
         self.assertTrue(refusal["refused"])
-        self.assertIn("owner's answer is no", refusal["why"])
-        self.assertEqual(refusal["alternatives"], ["android-adb"])
+        self.assertIn("unknown backend", refusal["why"])
 
     def test_no_cloud_endpoint_hides_in_this_module(self):
         import pathlib

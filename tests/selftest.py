@@ -12,7 +12,8 @@ import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from telephony import inbox, linphone, providers, webhook
+from heyphony import channels, cli, inbox, mail, meetings, providers, webhook
+from heyphony import sip as linphone
 
 
 def call_db(path, rows):
@@ -121,17 +122,18 @@ class TestInbox(unittest.TestCase):
 
 class TestWebhook(unittest.TestCase):
     def test_normalize_pulls_the_flat_shape_and_keeps_raw(self):
-        entry = webhook.normalize({"from": "+1555", "to": "+1", "body": "ping", "id": "x1"})
-        self.assertEqual((entry["from"], entry["body"], entry["id"]), ("+1555", "ping", "x1"))
+        entry = webhook.normalize("sms", {"from": "+1555", "to": "+1", "body": "ping", "id": "x1"})
+        self.assertEqual((entry["sender"], entry["body"], entry["id"]), ("+1555", "ping", "x1"))
+        self.assertEqual(entry["channel"], "sms")
         self.assertIn("from", entry["raw"])
 
     def test_normalize_walks_the_nested_shape(self):
-        entry = webhook.normalize({"data": {"id": "y1", "attributes": {
+        entry = webhook.normalize("sms", {"data": {"id": "y1", "attributes": {
             "from": "+1666", "body": "nested", "timestamp": "1700000000"}}})
         self.assertEqual((entry["id"], entry["body"]), ("y1", "nested"))
 
     def test_an_unknown_payload_still_gets_stored(self):
-        entry = webhook.normalize({"weird": {"thing": 1}})
+        entry = webhook.normalize("sms", {"weird": {"thing": 1}})
         self.assertIn("raw", entry)
         self.assertIsNotNone(entry["at"])
 
@@ -149,6 +151,106 @@ class TestProviderClaims(unittest.TestCase):
     def test_markup_never_changes_the_classification(self):
         for name in providers.PROVIDERS:
             self.assertEqual(providers.still_voip(name)["number_type"], "voip")
+
+
+class TestOneEnvelopeManyChannels(unittest.TestCase):
+    def test_every_channel_gate_closes_when_unset(self):
+        for name in channels.CHANNELS:
+            self.assertEqual(channels.state(name, env={})["state"], "closed", name)
+
+    def test_the_envelope_is_the_same_shape_whichever_carrier(self):
+        a = channels.envelope("sms", sender="+1", body="hi", at=1, message_id="a")
+        b = channels.envelope("mail", sender="x@y", body="hi", at=1, message_id="b")
+        self.assertEqual(set(a), set(b))
+        self.assertEqual(set(a), set(channels.KEYS))
+
+    def test_an_unmodelled_channel_is_refused_not_invented(self):
+        with self.assertRaises(KeyError):
+            channels.envelope("telegram", body="hi")
+
+    def test_refusals_are_named_so_no_card_improvises_them(self):
+        self.assertIn("otp-by-did", channels.BLOCKED)
+        self.assertIn("publish", channels.refused("publish-on-its-own")["why"])
+
+
+class TestMailInbox(unittest.TestCase):
+    good = {"HEYPHONY_MAIL_SECRET": "s3cret", "HEYPHONY_FORWARD_WHITELIST": "owner@example.com"}
+
+    def test_unset_secret_closes_the_lane(self):
+        ok, why = mail.verify({"x-agentmail-secret": "anything"}, env={})
+        self.assertFalse(ok)
+        self.assertIn("closed", why)
+
+    def test_a_wrong_secret_is_rejected(self):
+        ok, _ = mail.verify({"x-agentmail-secret": "nope"}, env=self.good)
+        self.assertFalse(ok)
+
+    def test_unset_whitelist_allows_nobody(self):
+        ok, why = mail.whitelisted("owner@example.com", env={"HEYPHONY_MAIL_SECRET": "s3cret"})
+        self.assertFalse(ok)
+        self.assertIn("unset", why)
+
+    def test_an_unlisted_sender_does_not_become_work(self):
+        ok, why = mail.whitelisted("stranger@example.com", env=self.good)
+        self.assertFalse(ok)
+        self.assertIn("unlisted", why)
+
+    def test_a_whitelisted_mail_becomes_a_message(self):
+        body, why = mail.inbound({"message_id": "m1", "from": "Owner <owner@example.com>",
+                                  "subject": "hi", "text": "join this"}, {"x-agentmail-secret": "s3cret"}, self.good)
+        self.assertEqual(why, "ok")
+        self.assertEqual(body["id"], "m1")
+        self.assertEqual(body["subject"], "hi")
+
+    def test_shape_is_checked_before_trust(self):
+        body, why = mail.inbound({"from": "owner@example.com"}, {"x-agentmail-secret": "s3cret"}, self.good)
+        self.assertIsNone(body)
+        self.assertIn("required", why)
+
+    def test_relay_is_closed_without_smtp(self):
+        self.assertFalse(mail.outbound_plan("a@b", "s", "b", env={})["sendable"])
+
+
+class TestMeetingJoin(unittest.TestCase):
+    env = {"ZOOM_SDK_KEY": "key", "ZOOM_SDK_SECRET": "secret"}
+
+    def test_a_signed_join_round_trips(self):
+        token = meetings.sign_zoom_join("123456789", env=self.env)
+        self.assertTrue(meetings.verify_zoom_token(token["join_token"], self.env))
+
+    def test_a_tampered_token_does_not_verify(self):
+        env = dict(self.env, ZOOM_SDK_SECRET="other")
+        token = meetings.sign_zoom_join("123456789", env=self.env)
+        self.assertFalse(meetings.verify_zoom_token(token["join_token"], env))
+
+    def test_the_lane_closes_instead_of_lying(self):
+        with self.assertRaises(RuntimeError):
+            meetings.sign_zoom_join("123456789", env={})
+        self.assertFalse(meetings.lane_available({}))
+
+    def test_join_plan_names_what_is_missing(self):
+        plan = meetings.join_plan("zoom", "123456789", env={})
+        self.assertFalse(plan["joinable"])
+        self.assertEqual(plan["missing"], ["ZOOM_SDK_KEY", "ZOOM_SDK_SECRET"])
+
+    def test_an_unmodelled_platform_is_refused(self):
+        self.assertFalse(meetings.join_plan("webex", "1")["joinable"])
+
+
+class TestTheCommand(unittest.TestCase):
+    def test_setup_flag_is_the_same_as_the_subcommand(self):
+        self.assertEqual(cli.setup_payload()["order"], cli.setup_payload()["order"])
+        self.assertEqual(set(cli.setup_payload()["lanes"]), set(channels.CHANNELS))
+
+    def test_every_lane_says_what_to_ask_the_owner_for(self):
+        for name, lane in cli.setup_payload()["lanes"].items():
+            self.assertTrue(lane["needs"]["from_owner"], name)
+            self.assertTrue(lane["needs"]["prove"], name)
+
+    def test_setup_names_the_rules_not_just_the_steps(self):
+        rules = " ".join(cli.setup_payload()["rules"])
+        for needle in ("unset credentials close a lane", "a did is voip", "never publishes"):
+            self.assertIn(needle, rules)
 
 
 if __name__ == "__main__":

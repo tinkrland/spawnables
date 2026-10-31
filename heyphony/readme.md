@@ -1,4 +1,4 @@
-# telephony
+# the sip lane
 
 a number that rings a process. sip over the internet, the same ordinary telephony a call centre runs, except the queue is an agent and the desk phone is a vm.
 
@@ -31,15 +31,17 @@ most companies advertising "give your agent a phone number" hand over exactly th
 
 ## the command
 
-`bin/telephony` configures linphone and reads what came in, in the shape an agent can consume: json on stdout, exit codes that mean something, and no interactive prompts.
+this folder is one lane of [heyphony](../docs/setup.md); the omnichannel map lives in `heyphony/channels.py` and the setup order in `docs/setup.md`.
+
+`bin/heyphony` configures linphone and reads what came in, in the shape an agent can consume: json on stdout, exit codes that mean something, and no interactive prompts.
 
 ```
-telephony connect linphone --voipms --did +15551234567 --username 123456_agent --password ... 
-telephony status                 # account, rc path, which dbs exist, inbox count
-telephony calls --missed --json  # missed calls, from linphone's own database
-telephony messages --since 7d    # texts that arrived by webhook or email
-telephony webhook serve --port 8099 --token ...   # flowroute's inbound path
-telephony doctor                 # what works while this machine is off, per provider
+heyphony connect sip --voipms --did +15551234567 --username 123456_agent --password ... 
+heyphony status                 # account, rc path, which dbs exist, inbox count
+heyphony calls --missed --json  # missed calls, from linphone's own database
+heyphony inbox --channel sms      # texts that arrived by webhook or email
+heyphony serve --port 8099 --token ...   # provider callbacks
+heyphony doctor                 # what works while this machine is off, per provider
 ```
 
 `--voipms` and `--flowroute` are sugar for `--provider voip.ms` and `--provider flowroute`. the command writes a `linphonerc` with the sections linphone actually reads, which were taken from its source rather than guessed: `proxy_%i` (`reg_proxy`, `reg_identity`, `reg_expires`, `realm`) and `auth_info_%i` (`username`, `userid`, `passwd`, `realm`, `domain`).
@@ -61,4 +63,4 @@ so where does call control actually run? on the host, which is a normal linux bo
 
 ## status
 
-nothing here has placed a call yet. the config generation, the database readers, the inbox and the webhook receiver are built and tested against linphone's own schemas and fixtures. first proof: on a runner, connect to a voip.ms sub-account, dial the echo test, then confirm `telephony calls` sees it.
+nothing here has placed a call yet. the config generation, the database readers, the inbox and the webhook receiver are built and tested against linphone's own schemas and fixtures. first proof: on a runner, connect to a voip.ms sub-account, dial the echo test, then confirm `heyphony calls` sees it.

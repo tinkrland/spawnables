@@ -17,7 +17,7 @@ spawnables is not reinventing the wheel. the wheel is [celesto](https://github.c
 
 a spawned machine stays. it accumulates files, logins, state, a personality. you pause it, you freeze it, it is there tomorrow.
 
-"fixed" is the default, not a cage. ephemeral machines stay first-class: spawn one for a ten-minute need and burn it, or keep a companion phone alive for exactly as long as a task lasts. the card decides, and spawnables refuses to assume everything should vanish.
+"fixed" is the default, not a cage. ephemeral machines are still first-class: spawn one for a ten-minute need and burn it after, or keep a companion phone alive for exactly as long as a task lasts. the card decides, and spawnables refuses to assume everything should vanish.
 
 ### yours, not rented
 
@@ -41,7 +41,7 @@ we keep it anyway, because a permanent computer should feel homey rather than li
 
 the whole pitch, as three lanes you actually own.
 
-- **byoc, the computer.** [bare metal, a vps, gcp, aws, azure](connect/byoc/readme.md), a machine under your desk, or a mix of all of them. the runner is identical and the control plane holds no preference.
+- **byoc, the computer.** [bare metal, a vps, gcp, aws, azure](connect/byoc/readme.md), a local machine under your desk, or a mix of all of them. the runner is identical and the control plane holds no preference.
 - **byoa, the agent.** [cloud or local, any mcp client](connect/byoa/readme.md). your agent drives the machine; we do not ship one.
 - **byollm, the model.** [bring your own](connect/byollm/readme.md). nothing here routes your prompts anywhere.
 - **no lock-in, the exit.** byoc is not a euphemism for "pick your favorite of three clouds". moving is exporting a machine and running it somewhere else, because there is nowhere to get locked in.

@@ -18,6 +18,29 @@ the lane where a guest gets a phone number for *voice* without a radio: sip over
 - **e911.** register an address with the provider or emergency calling fails. that address is a legal statement about where the endpoint is, not a field to fill with a placeholder.
 - **quality equals the path.** rtp over the open internet, so stun/turn for nat, a jitter buffer, opus, and a provider with decent peering.
 
+## what the lane is for, said plainly
+
+**receiving.** a number that rings a process: voicemail lands as a file, the file gets
+transcribed, a callback happens on the agent's own schedule. the machine is already
+there, so a did plus a softphone is the whole build, and that is the honest reason
+this rung exists.
+
+**occasional outbound**, at human pace: returning a call, a confirmation nobody
+automated.
+
+**not bulk outbound.** a dialer at volume is a2p and consent territory, needs attested
+origination and a registered business, and a self-hosted softphone behind a cheap did
+is the exact shape carriers and recipients block first.
+
+## the price honesty
+
+agent-voice saas sells a voip number with a dashboard and a convenience fee on top.
+that is a fair thing to buy if you want the dashboard. it is not a thing that buys
+trust: the number is still classified as voip, the same services refuse it, and a
+cheap self-hosted softphone gets the same treatment for a did's monthly fee instead
+of a platform's. since we are handing the machine over anyway, the dashboard is
+mostly the thing we do not need.
+
 ## stacks, licences checked rather than assumed
 
 | stack | role | licence |

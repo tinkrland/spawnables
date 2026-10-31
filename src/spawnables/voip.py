@@ -96,3 +96,49 @@ def attestation_reality(origin):
 def e911_requirement():
     return {"required": True,
             "honest": "an address must be registered with the provider or emergency calls fail; it is a legal statement about where the endpoint is"}
+
+
+USE_PROFILES = {
+    "inbound-receive": {
+        "fit": "good",
+        "what": ["a number that rings a process", "voicemail as a file",
+                 "transcripts of what arrived", "callbacks on the agent's own schedule"],
+        "honest": "this is the profile the lane is actually for: receiving. the machine is already there, so a did and a softphone is the whole build.",
+    },
+    "outbound-occasional": {
+        "fit": "acceptable",
+        "what": ["returning a call", "a confirmation nobody automated"],
+        "honest": "fine at human pace. the moment it becomes a dialer with volume, the problems stop being ours and start being the provider's.",
+    },
+    "outbound-bulk": {
+        "fit": "refused",
+        "what": [],
+        "honest": "not this lane. bulk voice is a2p/tcpa/consent territory, needs attested origination and a registered business, and a self-hosted softphone behind a cheap did is the shape carriers and recipients block first.",
+    },
+    "otp-or-verification": {
+        "fit": "refused",
+        "what": [],
+        "honest": "see otp_viability: a voice did is not an sms route and many services reject voip number types outright.",
+    },
+}
+
+
+def use_profile(name):
+    """what the lane is for, so nobody markets it as a call centre."""
+    if name not in USE_PROFILES:
+        raise ValueError(f"unknown profile: {name}")
+    return dict(USE_PROFILES[name], profile=name)
+
+
+def blocked_by():
+    """the invariant that survives every price comparison: it is still voip."""
+    return {
+        "number_type": "voip",
+        "blocked": ["a large share of consumer signup and verification flows",
+                    "banks and financial services, nearly always",
+                    "messaging apps that verify by sms to the same number"],
+        "honest": ("paying a saas vendor does not change the number type. the mark-up buys "
+                   "a dashboard, a dashboard nobody's risk engine reads, not trust. a cheap "
+                   "self-hosted softphone and an expensive agent-voice product are the same "
+                   "classification and get refused by the same services."),
+    }

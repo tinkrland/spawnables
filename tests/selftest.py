@@ -1999,8 +1999,23 @@ class TestWorkaroundVoip(unittest.TestCase):
     def test_the_readme_keeps_the_honest_limits(self):
         text = (pathlib.Path(__file__).resolve().parents[1] / "workaround-voip" / "readme.md").read_text().lower()
         for needle in ("no mobile identity", "no sms by default", "stir/shaken",
-                       "e911", "does not give you", "nothing here has placed a call yet"):
+                       "e911", "does not give you", "nothing here has placed a call yet",
+                       "what the lane is for", "not bulk outbound", "the price honesty", "classified as voip"):
             self.assertIn(needle, text)
+
+    def test_the_lane_is_for_receiving_and_refuses_bulk(self):
+        self.assertEqual(self.voip.use_profile("inbound-receive")["fit"], "good")
+        self.assertEqual(self.voip.use_profile("outbound-occasional")["fit"], "acceptable")
+        for refused in ("outbound-bulk", "otp-or-verification"):
+            self.assertEqual(self.voip.use_profile(refused)["fit"], "refused")
+        with self.assertRaises(ValueError):
+            self.voip.use_profile("dialler-in-a-hurry")
+
+    def test_price_never_changes_the_classification(self):
+        blocked = self.voip.blocked_by()
+        self.assertEqual(blocked["number_type"], "voip")
+        self.assertTrue(blocked["blocked"])
+        self.assertIn("does not change the number type", blocked["honest"])
 
     def test_the_lane_is_not_marketed_as_agent_only(self):
         text = (pathlib.Path(__file__).resolve().parents[1] / "workaround-voip" / "readme.md").read_text().lower()

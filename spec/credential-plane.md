@@ -80,6 +80,27 @@ back to a person, the app's own import format is readable from the repo instead 
 a screenshot of a settings screen. that is the whole difference between "an app we trust" and
 "code we can check", and it is why proton authenticator stays the recommended human copy.
 
+## both ways: the phone enrols, the desktop computes
+
+the owner's observation is the design, and it is worth writing in their words: services
+hand out a qr **during setup** and their flow assumes a phone will scan it, and after that
+the code is only ever wanted on a desktop. so the phone is needed exactly once.
+
+- **enrolment (phone):** the ceremony is mobile-shaped, so let it be. we decode the qr from a
+  screenshot (`decode_command`) and seal the seed, which also means the qr image never has to
+  be pasted into a chat with an agent, and a second manual copy never happens.
+- **steady state (desktop):** `twofa.code_for(public, vault)` asks the vault for a *code* and
+  gets thirty seconds of arithmetic. the seed stays at the control plane, in `twofa.issue()`,
+  which runs where the vault runs. verified against the rfc 6238 vector in the suite.
+
+what agent-vault can and cannot do, said once: it brokers the **call**, not the **form**. a
+totp is a form field, not an http header, so the proxy can hand back a short-lived code and
+something in the browser (or the agent) types it. anything that claims the proxy fills the field
+for you is describing browser automation with a vault beside it.
+
+the sentence to keep: **a code travels, a seed does not.** a seed in two apps is two devices
+forever, which is a fine thing for a person to want and a pointless thing for an agent to keep.
+
 three rules, because a seed is an identity: one seed per identity; never copy a seed to
 a second guest; seal backup codes beside the seed, they are the recovery lane and the
 first thing a lost device story needs.

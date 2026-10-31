@@ -1317,7 +1317,8 @@ class TestCatalogRoster(unittest.TestCase):
                 imported.add((node.module or "").split(".")[0])
         # in-package modules are fine (coherence is local policy, no io); the rule
         # that matters is that nothing here can open a socket to a vision api
-        self.assertLessEqual(imported, {"secrets", "urllib", "coherence"})
+        self.assertLessEqual(imported, {"secrets", "urllib", "coherence",
+                                        "base64", "struct", "time", "hmac", "hashlib"})
         zbar = CATALOG.path_tools["zbar"]
         self.assertEqual(zbar["installs"]["debian"]["verify"], "zbarimg --version")
 
@@ -1836,6 +1837,65 @@ class TestServiceRoster(unittest.TestCase):
         self.assertIn(CATALOG.services["affine"]["category"], {"design", "notes"})
         self.assertEqual(CATALOG.services["n8n"]["category"], "automation")
         self.assertEqual(CATALOG.services["vaultwarden"]["category"], "secrets")
+
+
+class TestTwoFactorCodes(unittest.TestCase):
+    """enrolment on the phone, arithmetic on the desktop. the seed never travels."""
+
+    SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"  # rfc 6238 appendix b, ascii "12345678901234567890"
+
+    @property
+    def twofa(self):
+        from spawnables import twofa
+        return twofa
+
+    def _public(self):
+        return {"kind": "totp", "issuer": "github", "label": "acct", "algorithm": "SHA1",
+                "digits": 6, "period": 30, "secret_ref": "@@vault:totp-github@@"}
+
+    def test_the_rfc_vector_passes(self):
+        self.assertEqual(self.twofa.totp_code(self.SECRET, at=59, digits=8), "94287082")
+
+    def test_six_digits_by_default(self):
+        self.assertEqual(self.twofa.totp_code(self.SECRET, at=59), "287082")
+
+    def test_the_code_never_carries_the_secret(self):
+        out = self.twofa.issue(self._public(), self.SECRET, at=59)
+        self.assertNotIn(self.SECRET, repr(out))
+        self.assertEqual(out["code"], "287082")
+        self.assertTrue(0 < out["expires_in"] <= 30)
+
+    def test_the_guest_asks_the_vault_and_never_holds_a_seed(self):
+        asked = []
+        out = self.twofa.code_for(self._public(), lambda ref: asked.append(ref) or self.SECRET, at=59)
+        self.assertEqual(asked, ["@@vault:totp-github@@"])
+        self.assertEqual(out["code"], "287082")
+
+    def test_a_raw_secret_is_refused_on_the_guest_side(self):
+        with self.assertRaises(self.twofa.TwoFAError):
+            self.twofa.code_for(self._public(), self.SECRET)
+
+    def test_a_public_card_without_a_reference_is_refused(self):
+        with self.assertRaises(self.twofa.TwoFAError):
+            self.twofa.code_for({"issuer": "x"}, lambda ref: self.SECRET)
+
+    def test_decode_seal_compute_end_to_end(self):
+        public, secret = self.twofa.extract_totp(
+            "otpauth://totp/github:acct?secret=" + self.SECRET + "&issuer=github")
+        self.assertEqual(secret, self.SECRET)
+        self.assertEqual(public["secret_ref"], "@@vault:totp-github@@")
+        self.assertEqual(self.twofa.code_for(public, lambda ref: secret, at=59)["code"], "287082")
+
+    def test_both_ways_names_the_phone_then_the_desktop(self):
+        model = self.twofa.both_ways(self._public())
+        self.assertEqual(model["enrolment"]["device"], "the phone")
+        self.assertEqual(model["steady_state"]["device"], "the desktop")
+        self.assertIn("a code travels", model["honest_limit"])
+        self.assertIn("form field", model["steady_state"]["how_it_appears_in_the_form"])
+
+    def test_an_authenticator_app_is_still_optional_for_the_agent(self):
+        model = self.twofa.both_ways(self._public())
+        self.assertIn("two devices forever", model["the_phone_after"])
 
 
 if __name__ == "__main__":

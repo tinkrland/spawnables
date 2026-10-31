@@ -1663,6 +1663,46 @@ class TestAdapterSelection(unittest.TestCase):
             a.boot(order(base_image="win11-24h2"), CATALOG.base_images["win11-24h2"])
         self.assertIn("ssh_user", str(ctx.exception))
 
+class TestHypemanBench(unittest.TestCase):
+    """the measurement is the point, so the measurement has to be honest about
+    what it has not done: no host has been timed yet."""
+
+    def _bench(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "hypeman_bench", "tools/hypeman_bench.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_percentiles_are_nearest_rank_and_p95_binds(self):
+        b = self._bench()
+        rep = b.summarize([900, 1000, 1100, 5000, 1200])
+        self.assertEqual(rep["n"], 5)
+        self.assertEqual(rep["max_ms"], 5000)
+        self.assertEqual(rep["min_ms"], 900)
+        self.assertGreaterEqual(rep["p95_ms"], rep["p50_ms"])
+        self.assertFalse(b.verdict(rep, 1500)["ok"])
+        self.assertTrue(b.verdict(rep, 6000)["ok"])
+
+    def test_one_slow_resume_fails_the_budget_even_with_a_good_mean(self):
+        b = self._bench()
+        rep = b.summarize([800] * 19 + [9000])
+        self.assertLess(rep["mean_ms"], 1500)
+        self.assertFalse(b.verdict(rep, 1500)["ok"])
+        self.assertEqual(b.verdict(rep, 1500)["binding"], "p95_ms")
+
+    def test_dry_run_labels_itself_synthetic_and_never_a_measurement(self):
+        b = self._bench()
+        samples, cold = b.dry_run(10)
+        self.assertEqual(len(samples), 10)
+        self.assertGreater(cold, 0)
+        rep = b.summarize(samples)
+        rep["source"] = "dry-run (synthetic, not a measurement)"
+        self.assertIn("not a measurement", rep["source"])
+
+
+
 
 if __name__ == "__main__":
     suite = unittest.defaultTestLoader.loadTestsFromModule(sys.modules["__main__"])

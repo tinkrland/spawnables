@@ -28,7 +28,19 @@ point the provider's inbound webhook at `https://<host>/mail`. the catcher verif
 
 why this shape: the provider catches the mail, so the message exists while your machine is off. the whitelist is not paranoia, it is the difference between "an invite I join" and "a stranger's invite I join".
 
-## lane two, sms
+## lane two, imessage and whatsapp
+
+both are webhooks with real signature schemes, so both are already gated in code.
+
+```
+export PHOTON_SIGNING_SECRET=...       # /imessage, v0 hmac, 5 min freshness
+export PHOTON_PROJECT_ID=... PHOTON_PROJECT_SECRET=...   # only needed to reply
+export WAHA_HMAC_KEY=...               # /whatsapp, sha512 hmac, digits whitelist
+```
+
+proof: text the number from a whitelisted phone and see it in the inbox. a group never reaches the agent, because a group is not somebody asking.
+
+## lane three, sms
 
 ask for: a did with sms enabled, and the provider's webhook token.
 
@@ -39,7 +51,7 @@ bin/heyphony serve --port 8099 --token ...       # /sms is the route
 
 proof: text the number, then `bin/heyphony inbox --channel sms`. texts arrive as provider events, never over sip, so a softphone alone will never show them.
 
-## lane three, voice
+## lane four, voice
 
 ask for: the did, and the sip username and password for it.
 
@@ -50,9 +62,9 @@ bin/heyphony connect sip --flowroute --did +1555... --username ... --password ..
 
 this writes a `linphonerc` with the sections linphone actually reads (`proxy_0` with `reg_proxy`/`reg_identity`, `auth_info_0` with `username`/`passwd`), mode 0600, and it defaults to `--on host`: the number registers on the durable machine, not in a burnable guest. proof: dial the provider's echo test from the host, then `bin/heyphony calls`.
 
-linphone places calls perfectly well. what it does not ship is a headless console, so *scripted* call control needs a client that has one (`baresip`, `pjsua`) or the desktop app driven through its own command surface. that is a host decision, and it is the next piece of work rather than a limitation of the number.
+the host runs baresip, because its ctrl_tcp module is a json command socket instead of a cli to parse. linphone places calls perfectly well. what it does not ship is a headless console, so *scripted* call control needs a client that has one (`baresip`, `pjsua`) or the desktop app driven through its own command surface. that is a host decision, and it is the next piece of work rather than a limitation of the number.
 
-## lane four, meetings
+## lane five, meetings
 
 ask for: a zoom sdk key and secret if zoom is the platform, and the meeting number.
 
@@ -62,6 +74,15 @@ bin/heyphony join --platform zoom --meeting 123456789
 ```
 
 the browser inside the spawnable opens the meeting's own web client with a signed token instead of credentials. proof: join a real meeting and watch the token be accepted.
+
+## lane six, watching
+
+```
+export DISCORD_BOT_TOKEN=...
+bin/heyphony watch --platform discord
+```
+
+intake only. the agent learns its name came up and never answers there, because a monitoring lane with a mouth is a spam bot. platforms with no read api stay refused rather than scraped with borrowed cookies.
 
 ## the rules, which are not optional
 

@@ -12,7 +12,7 @@ import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from heyphony import channels, cli, inbox, mail, meetings, providers, webhook
+from heyphony import channels, cli, gates, inbox, mail, meetings, providers, sip, socials, webhook
 from heyphony import sip as linphone
 
 
@@ -251,6 +251,64 @@ class TestTheCommand(unittest.TestCase):
         rules = " ".join(cli.setup_payload()["rules"])
         for needle in ("unset credentials close a lane", "a did is voip", "never publishes"):
             self.assertIn(needle, rules)
+
+
+class TestTheGates(unittest.TestCase):
+    def test_svix_signature_round_trips_and_expires(self):
+        import base64, hashlib, hmac as h
+        key = b"k" * 32
+        secret = "whsec_" + base64.b64encode(key).decode()
+        ts = "1700000000"
+        raw = '{"a":1}'
+        sig = base64.b64encode(h.new(key, f"m1.{ts}.{raw}".encode(), hashlib.sha256).digest()).decode()
+        headers = {"webhook-id": "m1", "webhook-timestamp": ts, "webhook-signature": f"v1,{sig}"}
+        self.assertTrue(gates.svix(raw, headers, secret, now=1700000010)[0])
+        self.assertFalse(gates.svix(raw, headers, secret, now=1700000900)[0])  # stale
+        self.assertFalse(gates.svix(raw + "x", headers, secret, now=1700000010)[0])  # body covered
+
+    def test_v0_covers_the_body_and_the_clock(self):
+        ts, raw = "1700000000", '{"message":"hi"}'
+        sig = gates._hex("s3", f"v0:{ts}:{raw}")
+        headers = {"x-spectrum-timestamp": ts, "x-spectrum-signature": f"v0={sig}"}
+        self.assertTrue(gates.v0(raw, headers, "s3", now=1700000005)[0])
+        self.assertFalse(gates.v0(raw, headers, "other", now=1700000005)[0])
+        self.assertFalse(gates.v0(raw, headers, "s3", now=1700009999)[0])
+
+    def test_waha_takes_its_algorithm_from_the_header(self):
+        raw = "{}"
+        sha512 = gates._hex("k", raw, __import__("hashlib").sha512)
+        h512 = {"x-webhook-hmac": sha512, "x-webhook-hmac-algorithm": "sha512"}
+        self.assertTrue(gates.waha(raw, h512, "k")[0])
+        self.assertFalse(gates.waha(raw, {"x-webhook-hmac": sha512,
+                                          "x-webhook-hmac-algorithm": "md5"}, "k")[0])
+
+    def test_every_gate_closes_when_its_secret_is_unset(self):
+        self.assertFalse(gates.svix("{}", {}, "")[0])
+        self.assertFalse(gates.v0("{}", {}, "")[0])
+        self.assertFalse(gates.waha("{}", {}, "")[0])
+
+
+class TestSocialsWatchOnly(unittest.TestCase):
+    def test_watching_never_answers(self):
+        plan = socials.watch_plan("discord", {"DISCORD_BOT_TOKEN": "t"})
+        self.assertTrue(plan["watching"])
+        self.assertTrue(plan["says_nothing_back"])
+        self.assertIsNone(plan["relay"])
+
+    def test_no_token_means_no_watch(self):
+        self.assertFalse(socials.watch_plan("discord", {})["watching"])
+
+    def test_x_is_refused_rather_than_scraped(self):
+        self.assertEqual(socials.watch_plan("x", {})["state"], "refused")
+
+
+class TestTheHostClient(unittest.TestCase):
+    def test_baresip_won_and_the_reason_is_attached(self):
+        choice = sip.host_client()
+        self.assertEqual(choice["client"], "baresip")
+        self.assertIn("json", choice["control"])
+        self.assertTrue(sip.HOST_CLIENTS["baresip"]["chosen"])
+        self.assertFalse(sip.HOST_CLIENTS["pjsua"]["chosen"])
 
 
 if __name__ == "__main__":

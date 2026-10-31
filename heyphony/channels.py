@@ -32,6 +32,30 @@ CHANNELS = {
         "state": "designed",
         "evidence": "config generation and call-history readers are verified against linphone's own schemas; nothing has dialed",
     },
+    "imessage": {
+        "carried_by": "photon / spectrum webhook, v0 signed",
+        "intake": "webhook -> inbox jsonl",
+        "relay": "the provider's send endpoint, project creds gated",
+        "gate": ("PHOTON_SIGNING_SECRET",),
+        "state": "designed",
+        "evidence": "the v0 signature check is ported from working code and tested here; no real blue bubble has arrived",
+    },
+    "whatsapp": {
+        "carried_by": "a waha session webhook, sha512 hmac",
+        "intake": "webhook -> inbox jsonl",
+        "relay": "the waha session, same seat the human uses",
+        "gate": ("WAHA_HMAC_KEY",),
+        "state": "designed",
+        "evidence": "hmac gate and digit whitelist ported; groups are never whitelisted, so a group never reaches the agent",
+    },
+    "social": {
+        "carried_by": "each platform's own read api, watched not polled blind",
+        "intake": "mentions, links and watched rooms, read only",
+        "relay": None,
+        "gate": ("DISCORD_BOT_TOKEN",),
+        "state": "designed",
+        "evidence": "the watch contract is defined per platform in socials.py; nothing is scraped with borrowed cookies",
+    },
     "mail": {
         "carried_by": "agentmail / carlyemail inbound webhook, smtp outbound",
         "intake": "webhook -> inbox jsonl",
@@ -51,6 +75,8 @@ CHANNELS = {
 }
 
 BLOCKED = {
+    "group-reply": "a group is never whitelisted: the agent answers people who asked it, not a room that did not",
+    "social-reply": "a monitoring lane with a mouth is a spam bot. watching is intake, replying is a human's decision",
     "otp-by-did": "a voice did is refused as a verification channel; the number type is the blocker",
     "sms-over-sip": "carriers do not hand texts to a sip endpoint, so a softphone cannot receive them",
     "publish-on-its-own": "renders, never publishes: handing back the artifact is the agent's job, pressing publish is a human's",

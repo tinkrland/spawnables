@@ -10,8 +10,11 @@ the verification and whitelist behaviour is ported from code that runs in
 production (tinkrland/prixie.ai, backend/src/routes/agentmail.ts), including the
 part people get wrong: an unset secret closes the lane instead of opening it.
 """
+import json
 import os
 import re
+
+from . import gates
 
 ADDRESS = re.compile(r"[\w.+-]+@[\w.-]+")
 SECRET_HEADER = "x-agentmail-secret"
@@ -24,7 +27,7 @@ LANES = {
         "catch_while_off": True,
     },
     "carlyemail": {
-        "inbound": "webhook post, same shape",
+        "inbound": "webhook post, svix-signed (webhook-signature over id.timestamp.body)",
         "outbound": "smtp, or the provider's own send api",
         "free": "1000 messages, 3 inboxes on custom domains, per month",
         "catch_while_off": True,
@@ -38,14 +41,24 @@ def lane(name):
     return dict(LANES[name])
 
 
-def verify(headers, env=None):
-    """constant-ish check of the shared secret. unset secret = closed."""
+def verify(headers, env=None, raw_body=None):
+    """two schemes, one door: svix when the provider signs that way, plain header otherwise.
+
+    carlyemail signs like svix (webhook-id/webhook-timestamp/webhook-signature), and
+    that is the better scheme because it covers the body and expires. a provider
+    that only offers a shared header secret still works, and says so.
+    """
     env = env if env is not None else os.environ
+    headers = {k.lower(): v for k, v in (headers or {}).items()}
+    if "webhook-signature" in headers:
+        secret = env.get("CARLYEMAIL_SIGNING_SECRET")
+        if not secret:
+            return False, "lane closed: CARLYEMAIL_SIGNING_SECRET is unset"
+        return gates.svix(raw_body or "", headers, secret)
     expected = env.get("HEYPHONY_MAIL_SECRET")
     if not expected:
         return False, "lane closed: HEYPHONY_MAIL_SECRET is unset"
-    got = (headers or {}).get(SECRET_HEADER)
-    if got != expected:
+    if headers.get(SECRET_HEADER) != expected:
         return False, "bad secret"
     return True, "ok"
 
@@ -66,9 +79,9 @@ def whitelisted(sender, env=None):
     return True, "ok"
 
 
-def inbound(payload, headers=None, env=None):
+def inbound(payload, headers=None, env=None, raw_body=None):
     """webhook body -> (envelope-ish dict, verdict). shape validated before trust."""
-    ok, why = verify(headers, env)
+    ok, why = verify(headers, env, raw_body if raw_body is not None else json.dumps(payload))
     if not ok:
         return None, why
     message_id = payload.get("message_id")

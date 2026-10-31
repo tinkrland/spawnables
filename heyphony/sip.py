@@ -102,6 +102,33 @@ def read_rc(path=None):
 
 ENDPOINTS = ("host", "guest")
 
+# which host-side client actually drives the line. decided, not deferred.
+HOST_CLIENTS = {
+    "baresip": {
+        "chosen": True,
+        "why": "its ctrl_tcp module is a json command socket: newline json in, json out, "
+               "with \"command\": \"dial\" and an event bus back. read from the module source "
+               "(json_decode_odict, ctrl_tcp_listen 0.0.0.0:4444 in the shipped config example). "
+               "a small c binary, plain-text config, one process per line.",
+        "weight": "small: static-ish c, no heavy media stack, modules load on demand",
+        "cost": "the config is its own dialect, so heyphony writes it rather than documenting it",
+    },
+    "pjsua": {
+        "chosen": False,
+        "why": "scriptable through pjsua2 python bindings, which is genuinely nice, but it drags the "
+               "whole pjsip media stack along and the interactive console is a telnet cli instead of a "
+               "typed protocol. more surface to bind, more to break on a quiet host.",
+        "weight": "heavier: pjsip + pjmedia + pjlib, and python bindings built per host",
+        "cost": "a python abi per host, for a lane that mostly needs to dial and hang up",
+    },
+}
+
+
+def host_client():
+    """the one decision this lane was missing, with the reason attached."""
+    return {"client": "baresip", "control": "json over tcp (ctrl_tcp)",
+            "transport": "sip/rtp", "alternatives": HOST_CLIENTS}
+
 
 def connection_plan(did, endpoint="host"):
     """where the number actually registers, which is not where the agent runs.

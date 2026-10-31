@@ -11,7 +11,7 @@ import sys
 
 from . import channels, inbox, mail, meetings, sip, providers
 
-LANES_IN_ORDER = ["mail", "sms", "voice", "meeting"]
+LANES_IN_ORDER = ["mail", "sms", "imessage", "whatsapp", "voice", "meeting", "social"]
 
 NEEDS = {
     "mail": {"from_owner": ["a mailbox on agentmail or carlyemail for the agent",
@@ -23,9 +23,21 @@ NEEDS = {
     "sms": {"from_owner": ["a did with sms enabled", "the provider's webhook token"],
             "env": {"HEYPHONY_SMS_TOKEN": "webhook token"},
             "prove": "text the number, then `heyphony inbox --channel sms`"},
+    "imessage": {"from_owner": ["a photon project (project id + secret)", "the webhook signing secret",
+                                 "the numbers allowed to text the agent"],
+                 "env": {"PHOTON_SIGNING_SECRET": "v0 signature secret",
+                         "PHOTON_PROJECT_ID": "send creds", "PHOTON_PROJECT_SECRET": "send creds"},
+                 "prove": "text the number from a whitelisted phone and see it in `heyphony inbox --channel imessage`"},
+    "whatsapp": {"from_owner": ["a waha session, logged in as whoever owns the number",
+                                 "its hmac key", "the numbers allowed to message the agent"],
+                 "env": {"WAHA_HMAC_KEY": "session webhook hmac"},
+                 "prove": "message the number from a whitelisted phone; a group will never reach the agent"},
     "voice": {"from_owner": ["a did", "the sip username and password for it"],
               "env": {"HEYPHONY_SIP_DID": "the number the host registers"},
               "prove": "dial the provider echo test from the host, then `heyphony calls`"},
+    "social": {"from_owner": ["a discord bot token if discord is watched, nothing else is needed"],
+               "env": {"DISCORD_BOT_TOKEN": "watch token"},
+               "prove": "watch a server, see a mention land in the inbox, and confirm the agent did not answer"},
     "meeting": {"from_owner": ["zoom sdk key and secret, if zoom is wanted", "a meeting number to join"],
                 "env": {"ZOOM_SDK_KEY": "sdk key", "ZOOM_SDK_SECRET": "sdk secret"},
                 "prove": "join a real meeting from a spawnable and see the token accepted"},
@@ -101,6 +113,11 @@ def cmd_serve(args):
     webhook.serve(port=args.port, token=args.token)
 
 
+def cmd_watch(args):
+    from . import socials
+    _out(socials.watch_plan(args.platform))
+
+
 def cmd_join(args):
     _out(meetings.join_plan(args.platform, args.meeting))
 
@@ -155,6 +172,10 @@ def build_parser():
     w.add_argument("--port", type=int, default=8099)
     w.add_argument("--token")
     w.set_defaults(func=cmd_serve)
+
+    ws = sub.add_parser("watch", help="the read-only monitoring lane")
+    ws.add_argument("--platform", default="discord")
+    ws.set_defaults(func=cmd_watch)
 
     j = sub.add_parser("join", help="what a spawnable needs to walk into a meeting")
     j.add_argument("--platform", default="zoom")

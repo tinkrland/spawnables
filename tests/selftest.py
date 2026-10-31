@@ -513,10 +513,10 @@ class TestOpeningTheInboxes(unittest.TestCase):
         self.assertTrue(any("inbox gate is unset" in s for s in plan["stops"]))
 
     def test_phone_harness_was_read_and_not_adopted(self):
-        note = signup.phone_farm_note()
+        note = signup.device_note()
         self.assertFalse(note["used"])
-        self.assertIn("declined, not deferred", note["owner_answer"])
-        self.assertIn("their sims", note["why_not_for_signup"])
+        self.assertIn("may act, it may not become the identity", note["where_it_would_fit"])
+        self.assertIn("somebody else's sim", note["why_not_for_signup"])
         self.assertIn("may not become the identity", note["where_it_would_fit"])
 
     def test_livekit_is_the_transport_and_is_free(self):

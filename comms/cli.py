@@ -82,8 +82,8 @@ def cmd_audio(args):
 
 def cmd_signup(args):
     from comms import signup
-    if args.phone_farm:
-        _out(signup.phone_farm_note())
+    if args.devices:
+        _out(signup.device_note())
     elif args.list or not args.service:
         _out({"services": signup.listing(), "legs": signup.LEGS, "refused": signup.REFUSED})
     else:
@@ -120,7 +120,7 @@ def build_parser():
     su = sub.add_parser("signup", help="the four legs an account stands on, per service")
     su.add_argument("service", nargs="?")
     su.add_argument("--list", action="store_true")
-    su.add_argument("--phone-farm", action="store_true", help="what we concluded about phone-harness")
+    su.add_argument("--devices", action="store_true", help="what we concluded about driving a phone")
     su.set_defaults(func=cmd_signup)
     d = sub.add_parser("doctor"); d.set_defaults(func=cmd_doctor)
     return p

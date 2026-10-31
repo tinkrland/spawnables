@@ -32,7 +32,7 @@ LEGS = {
         "state": "partial",
         "note": ("a voip number is refused by a large share of signup and verification flows "
                  "(see heyphony/providers.py). an app-only flow needs a real handset, and a "
-                 "device farm lends you theirs, which is borrowing an identity not holding one"),
+                 "borrowed handset is still somebody else's identity, not yours"),
     },
 }
 
@@ -80,7 +80,7 @@ REFUSED = {
     "autonomous-signup-against-terms": "creating accounts by automation where a platform forbids it is a banned pattern, not a growth hack",
     "signup-to-evade": "a new account after a ban or a suspension is the same person wearing a second face",
     "number-type-fiction": "a voip did presented as a mobile number is a lie a carrier notices",
-    "farm-borrowed-identity": "a device farm's phone is their sim and their account; that is borrowing, not owning",
+    "borrowed-identity": "a device somebody else owns is their sim and their account; that is borrowing, not owning",
 }
 
 
@@ -130,16 +130,16 @@ def listing():
              "verified": v["verified"]} for k, v in sorted(SERVICES.items())]
 
 
-def phone_farm_note():
-    """the owner asked whether we used phone-harness. we read it; here is the verdict."""
+def device_note():
+    """the owner asked whether we used phone-harness. we read it; here is the useful half."""
     return {
         "used": False,
-        "owner_answer": "no: the cloud farm is declined, not deferred",
-        "what_it_is": ("shawnpana/phone-harness, mit: a cloud device farm behind four helpers "
-                       "(open_app, tap_text, type_text, screen), iphones macOS-mirroring + vision ocr, "
-                       "androids over adb, mcp endpoint cloud-only"),
-        "why_not_for_signup": ("their phones, their sims, their accounts by arrangement. useful for "
-                               "app-only flows where no web path exists, useless as an identity we own"),
-        "where_it_would_fit": ("a lane that must touch an ios-only onboarding screen, behind the same "
-                               "rule as every other borrowed device: it may act, it may not become the identity"),
+        "what_it_is": ("shawnpana/phone-harness, mit: four helpers over a phone (open_app, tap_text, "
+                       "type_text, screen), iphones through macOS mirroring + vision ocr, androids over adb"),
+        "why_not_for_signup": ("a phone we do not own is somebody else's sim and somebody else's account, "
+                               "useful for app-only flows where no web path exists and useless as an "
+                               "identity we hold"),
+        "where_it_would_fit": ("a lane that must touch an ios-only onboarding screen on a handset we hold, "
+                               "behind the same rule as every other device: it may act, it may not "
+                               "become the identity"),
     }

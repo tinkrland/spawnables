@@ -94,20 +94,24 @@ def issue(public, secret, at=None):
             "note": "the seed stayed at the control plane; this code is the only thing that travelled"}
 
 
-def code_for(public, vault, at=None):
-    """**guest side.** ask the vault for a code, never for a secret.
+def code_for(public, store, at=None):
+    """ask the seed store for a code, never for a secret.
 
-    `vault` is a callable that takes a `@@vault:...@@` reference and returns the secret,
-    and in production that callable is a proxy on another machine. passing a plaintext
-    secret here is an error rather than a shortcut, so a guest has no code path that
-    ends with it holding a seed.
+    `store` takes a `@@vault:...@@` reference and returns the secret, and in production that is
+    the sealed store on the control plane, not a network proxy. **agent-vault is deliberately
+    not involved**: it substitutes credentials in outbound http, and a totp is neither outbound
+    nor substitutable, it is arithmetic over a seed we already hold. a proxy here would add a
+    hop, a root ca and a runtime dependency to buy nothing.
+
+    passing a plaintext secret (a store that is just a string) is an error rather than a
+    shortcut, so nothing reaches a seed by accident.
     """
     ref = public.get("secret_ref")
     if not ref or not str(ref).startswith(REF_PREFIX):
         raise TwoFAError("no vault reference: a code is computed from a sealed seed, not a raw one")
-    if isinstance(vault, str):
-        raise TwoFAError("a guest never receives the secret; compute at the control plane or not at all")
-    secret = vault(ref)
+    if isinstance(store, str):
+        raise TwoFAError("a plaintext secret is not a store; resolve a sealed reference instead")
+    secret = store(ref)
     if not secret:
         raise TwoFAError(f"the vault did not resolve {ref}")
     return issue(public, secret, at=at)
@@ -131,10 +135,11 @@ def both_ways(public):
         "steady_state": {
             "device": "the desktop",
             "why": "after enrolment a code is arithmetic over the sealed uri",
-            "what_we_do": "code_for(public, vault) at use time; the desktop never holds the secret",
-            "how_it_appears_in_the_form": ("the vault issues a short-lived code and something in the browser types it, "
-                                           "or the agent types it. totp is a form field, not an http header, so the "
-                                           "proxy can broker the value but not perform the entry"),
+            "what_we_do": "code_for(public, store) at use time; the desktop never holds the secret",
+            "how_it_appears_in_the_form": ("the code is computed locally and typed: by the agent, or by browser "
+                                           "automation in the guest. totp is a form field, not an http header"),
+            "not_agent_vault": ("agent-vault substitutes credentials in outbound http; a totp is arithmetic over a "
+                                "seed we already hold, so the proxy would add a hop and a root ca to buy nothing"),
         },
         "the_phone_after": ("keep it if the human wants a copy. a seed in two apps is two devices forever, which is "
                             "fine for a person and pointless for an agent that never leaves the desk"),

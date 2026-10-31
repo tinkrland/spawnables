@@ -89,14 +89,20 @@ the code is only ever wanted on a desktop. so the phone is needed exactly once.
 - **enrolment (phone):** the ceremony is mobile-shaped, so let it be. we decode the qr from a
   screenshot (`decode_command`) and seal the seed, which also means the qr image never has to
   be pasted into a chat with an agent, and a second manual copy never happens.
-- **steady state (desktop):** `twofa.code_for(public, vault)` asks the vault for a *code* and
-  gets thirty seconds of arithmetic. the seed stays at the control plane, in `twofa.issue()`,
-  which runs where the vault runs. verified against the rfc 6238 vector in the suite.
+- **steady state (desktop):** `twofa.code_for(public, store)` asks the seed store for a *code*
+  and gets thirty seconds of arithmetic. the seed never leaves the store, the code is computed
+  where the store lives, and it is verified against the rfc 6238 vector in the suite.
 
-what agent-vault can and cannot do, said once: it brokers the **call**, not the **form**. a
-totp is a form field, not an http header, so the proxy can hand back a short-lived code and
-something in the browser (or the agent) types it. anything that claims the proxy fills the field
-for you is describing browser automation with a vault beside it.
+**not through agent-vault** (owner, nov 2026, and the reasoning holds up): agent-vault exists to
+substitute credentials in **outbound http**, where a placeholder in a header becomes a real token
+on the way out. a totp is neither outbound nor substitutable: it is arithmetic over a seed we
+already hold. routing it through the proxy would add a hop, a root ca and a runtime dependency to
+a computation that costs microseconds, and would put a seed-shaped thing on a network path for no
+reason. so the proxy keeps its lane (api credentials) and 2fa does not touch it.
+
+what that leaves, honestly: the code still has to be *typed* somewhere, because a totp is a form
+field and not a header. the agent types it, or browser automation in the guest does. that is the
+whole mechanism, and it needs no proxy at all.
 
 the sentence to keep: **a code travels, a seed does not.** a seed in two apps is two devices
 forever, which is a fine thing for a person to want and a pointless thing for an agent to keep.

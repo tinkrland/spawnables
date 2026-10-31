@@ -1893,6 +1893,13 @@ class TestTwoFactorCodes(unittest.TestCase):
         self.assertIn("a code travels", model["honest_limit"])
         self.assertIn("form field", model["steady_state"]["how_it_appears_in_the_form"])
 
+    def test_2fa_does_not_route_through_agent_vault(self):
+        model = self.twofa.both_ways(self._public())
+        why = model["steady_state"]["not_agent_vault"]
+        self.assertIn("agent-vault", why)
+        self.assertIn("outbound http", why)
+        self.assertNotIn("vault_proxy", why)
+
     def test_an_authenticator_app_is_still_optional_for_the_agent(self):
         model = self.twofa.both_ways(self._public())
         self.assertIn("two devices forever", model["the_phone_after"])

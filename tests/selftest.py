@@ -56,6 +56,29 @@ class TestLinphoneConfig(unittest.TestCase):
             linphone.sip_host("somebody-else")
 
 
+class TestWhereTheNumberLives(unittest.TestCase):
+    def test_the_default_endpoint_is_the_durable_host(self):
+        plan = linphone.connection_plan("+15550001111")
+        self.assertEqual(plan["endpoint"], "host")
+        self.assertTrue(plan["survives_burn"])
+        self.assertTrue(plan["rings_with_no_guest"])
+        self.assertFalse(plan["secret_in_burn"])
+
+    def test_a_guest_registration_is_allowed_but_named_as_a_liability(self):
+        plan = linphone.connection_plan("+15550001111", "guest")
+        self.assertTrue(plan["secret_in_burn"])
+        self.assertFalse(plan["survives_burn"])
+        self.assertEqual(plan["registrations"], 1)
+
+    def test_one_did_is_one_registration_either_way(self):
+        for endpoint in linphone.ENDPOINTS:
+            self.assertEqual(linphone.connection_plan("+1555", endpoint)["registrations"], 1)
+
+    def test_an_endpoint_we_do_not_model_is_refused(self):
+        with self.assertRaises(KeyError):
+            linphone.connection_plan("+1555", "somewhere")
+
+
 class TestReaders(unittest.TestCase):
     def test_calls_are_read_and_named(self):
         with tempfile.TemporaryDirectory() as d:

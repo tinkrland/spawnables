@@ -15,12 +15,14 @@ def cmd_connect(args):
     if not provider:
         raise SystemExit("connect needs --provider, or the sugar flags --voipms / --flowroute")
     providers.profile(provider)  # refuses a provider we do not model
+    plan = linphone.connection_plan(args.did, args.on)
     path = linphone.write_rc(provider, args.did, args.username, args.password, args.server)
     _print({"rc": str(path), "provider": provider, "did": args.did,
             "server": linphone.sip_host(provider, args.server),
+            "endpoint": args.on, "plan": plan,
             "keys_written": ["proxy_0/reg_proxy", "proxy_0/reg_identity",
                              "auth_info_0/username", "auth_info_0/passwd"],
-            "next": "start linphone with this rc, then run: telephony status"})
+            "next": "start the client on the host with this rc, then: telephony status"})
 
 
 def cmd_status(args):
@@ -90,6 +92,8 @@ def build_parser():
     c.add_argument("--username", required=True)
     c.add_argument("--password", required=True)
     c.add_argument("--server")
+    c.add_argument("--on", choices=["host", "guest"], default="host",
+                   help="where the number registers: the durable host (default) or a burnable guest")
     c.set_defaults(func=cmd_connect)
 
     s = sub.add_parser("status", help="what is configured and what exists")

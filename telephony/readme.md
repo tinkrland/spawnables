@@ -44,7 +44,20 @@ telephony doctor                 # what works while this machine is off, per pro
 
 `--voipms` and `--flowroute` are sugar for `--provider voip.ms` and `--provider flowroute`. the command writes a `linphonerc` with the sections linphone actually reads, which were taken from its source rather than guessed: `proxy_%i` (`reg_proxy`, `reg_identity`, `reg_expires`, `realm`) and `auth_info_%i` (`username`, `userid`, `passwd`, `realm`, `domain`).
 
-call *control* is the one thing this command does not do, and the reason is in [linphone.py](linphone.py): the linphone repositories ship no headless console client. the desktop app has a command surface (`call`, `fetch-config`, `sip-address` in `Linphone/model/cli/CliModel.cpp`), but it is the gui's ipc, not a scriptable console. a headless dialer would be a small liblinphone-based client, which is a real piece of work and is not pretended here.
+call *control* is the one thing the linphone path does not give us for free, and the limit is narrow: the linphone repositories ship no headless console client. the desktop app has a command surface (`call`, `fetch-config`, `sip-address` in `Linphone/model/cli/CliModel.cpp`), but it is the gui's ipc. that is a statement about linphone, not about whether an agent can hold a phone line, and the section below is where it stops mattering.
+
+## why the number lives on the host
+
+the agent's durable machine owns the number. guests do not, and mostly should not.
+
+- **a did is one registration.** a second machine registering the same number is a race, not a second line. `connection_plan()` returns `registrations: 1` for both endpoints because that is a property of the did, not of our cleverness.
+- **the sip password is a long-lived secret.** a throwaway guest holding it burns a copy into a machine we intend to shred, then needs a fresh secret every spawn. on the host it is one file at 0600, rotated once.
+- **a number has to ring when nothing is running.** if the only endpoint is a guest, the number is dead exactly when it is most useful to be reachable, which is the idle case.
+- **guests read, they do not register.** a guest asks the control plane for the inbox; it never needs the provider credential at all. that keeps the long-lived key out of the burn lane entirely and matches how every other secret is handled here.
+
+`--on guest` still exists because there are real cases for it (a test that must exercise registration from inside a guest), and it says plainly what it costs: `secret_in_burn: true`, `survives_burn: false`, and a rotation per spawn.
+
+so where does call control actually run? on the host, which is a normal linux box we control and not a shred-on-schedule guest. candidates are honest, not chosen yet: `linphone-desktop` under a virtual display driven through its own command surface, or a console sip client built for exactly this (`baresip`, `pjsua`), neither of which has been evaluated here. picking one is the next piece of work, and the reason it is now a small decision instead of a wall is that the host is allowed to be a long-lived machine with a real desktop session.
 
 ## status
 

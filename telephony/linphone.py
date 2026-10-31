@@ -100,6 +100,36 @@ def read_rc(path=None):
     return out
 
 
+ENDPOINTS = ("host", "guest")
+
+
+def connection_plan(did, endpoint="host"):
+    """where the number actually registers, which is not where the agent runs.
+
+    a did is one registration, and the machine that holds it does not have to be
+    the machine that answers a given message. the default is the durable host for
+    three reasons that all point the same way: the sip password is a long-lived
+    secret and a throwaway guest burns one per spawn, one number means one
+    registration rather than a race between machines, and a number that rings
+    while no guest is running is the whole point of having a number.
+    """
+    if endpoint not in ENDPOINTS:
+        raise KeyError(f"unknown endpoint: {endpoint}")
+    on_host = endpoint == "host"
+    return {
+        "did": did,
+        "endpoint": endpoint,
+        "registrations": 1,
+        "secret_location": "the host's config dir, 0600" if on_host else "inside the burnable machine",
+        "secret_in_burn": not on_host,
+        "survives_burn": on_host,
+        "rings_with_no_guest": on_host,
+        "rotation": "once, on the host" if on_host else "every spawn, per machine",
+        "guests_read": "the inbox over the control plane" if on_host else "the local database only",
+        "verdict": "default" if on_host else "allowed, but you are putting a long-lived credential in a machine you intend to shred",
+    }
+
+
 def find_db(kind, home=None):
     p = data_dir(home) / DB_NAMES[kind]
     return p if p.is_file() else None

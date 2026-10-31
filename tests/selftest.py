@@ -2,6 +2,7 @@
 be planned, built or refused, but never quietly upgraded from one to another
 without the evidence the validator demands."""
 import json
+import os
 import pathlib
 import sys
 import unittest
@@ -9,6 +10,7 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 import validate_legacy as V  # noqa: E402
+import bridge as B  # noqa: E402
 
 
 def targets():
@@ -267,6 +269,61 @@ class TestBridge(unittest.TestCase):
                            "compare": {"mode": "vibes"}})
         with self.assertRaises(self.B.BridgeError):
             self.B.load_fixture(d)
+
+
+class TestFirstRealTarget(unittest.TestCase):
+    """windows movie maker is the pilot: a dead, gui-only app whose project file
+    is xml. these tests keep the fixture honest without pretending it has run
+    in a guest yet."""
+
+    def setUp(self):
+        self.cwd = pathlib.Path.cwd()
+        os.chdir(ROOT)
+
+    def tearDown(self):
+        os.chdir(self.cwd)
+
+    def test_fixture_is_declared_by_the_windows7_target(self):
+        m = targets()["windows7"]
+        f = B.load_fixture("fixtures/windows7-movie-maker")
+        self.assertIn(f["spec"]["bridge"], m["bridges"])
+        self.assertEqual(f["spec"]["determinism"], "interactive")
+        self.assertTrue(f["spec"].get("probe"), "a video needs a probe, not a byte compare")
+
+    def test_build_project_writes_a_parsable_project_file(self):
+        import subprocess
+        import xml.etree.ElementTree as ET
+        fx = ROOT / "fixtures" / "windows7-movie-maker"
+        subprocess.run([sys.executable, "build_project.py"], cwd=fx,
+                       check=True, capture_output=True)
+        tree = ET.parse(fx / ".build" / "cut.wlmp")
+        self.assertEqual(tree.getroot().tag, "wmproject")
+        self.assertEqual(len(tree.getroot().find("MediaItems")), 2)
+        (fx / ".build" / "cut.wlmp").unlink()
+        (fx / ".build").rmdir()
+
+    def test_expectation_keys_resolve_on_a_real_ffprobe_shape(self):
+        sample = {"format": {"duration": "4.03"},
+                  "streams": [{"codec_type": "video", "codec_name": "h264",
+                               "width": 640, "height": 480}]}
+        want = json.loads((ROOT / "fixtures" / "windows7-movie-maker" /
+                           "expected" / "probe.json").read_text())
+        spec = {"compare": {"mode": "json-subset",
+                            "tolerance": {"format.duration": 0.5}}}
+        self.assertEqual(B.compare(json.dumps(sample).encode(),
+                                   json.dumps(want).encode(), spec), [])
+        sample["streams"][0]["width"] = 1280
+        self.assertTrue(B.compare(json.dumps(sample).encode(),
+                                  json.dumps(want).encode(), spec))
+
+    def test_duration_tolerance_is_the_only_allowance(self):
+        spec = {"compare": {"mode": "json-subset",
+                            "tolerance": {"format.duration": 0.5}}}
+        ok = json.dumps({"format": {"duration": "4.4"}}).encode()
+        want = json.dumps({"format.duration": 4.0}).encode()
+        self.assertEqual(B.compare(ok, want, spec), [])
+        far = json.dumps({"format": {"duration": "5.1"}}).encode()
+        self.assertTrue(B.compare(far, want, spec))
 
 
 if __name__ == "__main__":

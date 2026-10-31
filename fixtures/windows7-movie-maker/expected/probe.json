@@ -1,0 +1,7 @@
+{
+  "format.duration": 4.0,
+  "streams.0.codec_type": "video",
+  "streams.0.codec_name": "h264",
+  "streams.0.width": 640,
+  "streams.0.height": 480
+}

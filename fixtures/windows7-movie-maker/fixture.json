@@ -1,0 +1,14 @@
+{
+  "fixture": "windows7-movie-maker",
+  "bridge": "gui-automation",
+  "argv": ["cmd", "/c", "render.bat"],
+  "timeout_s": 420,
+  "determinism": "interactive",
+  "compare": {
+    "mode": "json-subset",
+    "exit_code": 0,
+    "tolerance": {"format.duration": 0.5}
+  },
+  "probe": ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", "cut.mp4"],
+  "note": "the first real legacy target: a dead, gui-only microsoft app, driven through its own project file and its own save dialog. the probe asserts what a video can honestly promise (duration and streams), never bytes. the bridge is gui-automation because movie maker has no cli, and interactive because a save dialog must be answered."
+}

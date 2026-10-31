@@ -80,9 +80,36 @@ jump corrupts the save.
 nothing interesting on purpose: replacing that stub with the real binary is the only
 change a first real target needs, and 7 tests keep the harness honest.
 
-## first target, when this line opens
+## the first target: windows movie maker (2026-11-01)
 
-one dead application, one bridge, one fixture set, end to end: thaw, feed it a fixture, harvest the output, match the known-good answer, burn. pick it for how *representative* it is of a class (an accounting package, a label printer tool, an instrument controller), because the second one will be much cheaper than the first.
+skype was the other candidate and it is the wrong pilot, for a reason worth
+writing down: skype's servers are off, so the thing a fixture would prove no
+longer answers. a dead client whose service is dead cannot be tested, only
+lamented. movie maker is dead software whose work is entirely local.
+
+**windows7 + movie maker 2012, `fixtures/windows7-movie-maker/`.** chosen because
+it forces every honest part of the contract at once:
+
+- **gui only.** no cli, so the bridge is `gui-automation` and the manifest says
+  `interactive`: a human is expected somewhere, and a save dialog must be
+  answered. that is the fragile bridge, used on purpose.
+- **xml project file.** the agent's intent travels as `input/recipe.json`,
+  `build_project.py` turns it into the app's own project format, and the app does
+  the rendering. the agent never pretends to be the editor.
+- **output that cannot be compared byte for byte.** so `expected/probe.json`
+  asserts what a video can honestly promise - duration, codec, width, height -
+  read by `ffprobe` inside the guest, with a 0.5 s tolerance on duration. this
+  is why the harness grew `probe` and `tolerance` today.
+- **no third-party media.** the two stills and the tone are generated, so the
+  fixture ships nothing borrowed.
+
+what is NOT verified, stated plainly: the `.wlmp` skeleton in `build_project.py`
+has never been checked against a real install, the autohotkey window titles
+differ between wmm 2.6 and 2012, and the guest image recipe needs autohotkey plus
+ffprobe. the first run in a real guest is what settles all three, and it will
+fail loudly rather than pass quietly - `render.bat` exits 2 for a rejected
+project, 3 for missing autohotkey, 4 for a dialog that never appeared, 6 for a
+render that never finished.
 
 ## open questions for the owner
 

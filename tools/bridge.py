@@ -159,12 +159,49 @@ def compare(got: bytes, want: bytes, spec) -> list:
     except ValueError as exc:
         return [f"not json: {exc}"]
     bad = []
+    tol = spec["compare"].get("tolerance") or {}
     for key, value in w.items():
-        if key not in g:
+        found, gval = _get(g, key)
+        if not found:
             bad.append(f"missing {key!r}")
-        elif g[key] != value:
-            bad.append(f"{key}: got {g[key]!r} want {value!r}")
+        elif key in tol and _num(gval) is not None and _num(value) is not None:
+            drift = abs(_num(gval) - _num(value))
+            if drift > tol[key]:
+                bad.append(f"{key}: got {gval!r} want {value!r} (drift {drift:g} > {tol[key]:g})")
+        elif gval != value:
+            bad.append(f"{key}: got {gval!r} want {value!r}")
     return bad
+
+
+def _get(obj, dotted):
+    """look a dotted path up in nested json, so an expectation can assert on
+    ffprobe's real shape (format.duration, streams.0.codec_name) without us
+    pretending the output is flat."""
+    cur = obj
+    for part in str(dotted).split("."):
+        if isinstance(cur, dict) and part in cur:
+            cur = cur[part]
+        elif isinstance(cur, list) and part.lstrip("-").isdigit():
+            i = int(part)
+            if not -len(cur) <= i < len(cur):
+                return False, None
+            cur = cur[i]
+        else:
+            return False, None
+    return True, cur
+
+
+def _num(v):
+    """the number behind a json value, or none. strings count because ffprobe
+    reports durations as text, which is exactly where tolerance matters."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
 
 
 def run_fixture(manifest, fixture_path, guest):
@@ -221,6 +258,23 @@ def run_fixture(manifest, fixture_path, guest):
 
     env = spec["compare"]
     mismatches = []
+    # a probe turns an artifact into numbers we can assert on. a rendered movie
+    # is never byte-identical, but its duration and streams are comparable, so
+    # the probe (ffprobe inside the guest) is what the expectation checks.
+    if spec.get("probe"):
+        probe = guest.run(spec["probe"], timeout=spec["timeout_s"], cwd=workdir)
+        if probe.code != 0:
+            mismatches.append(f"probe failed: exit {probe.code}: {probe.stderr.strip()[:120]}")
+        expected_dir = fixture["dir"] / "expected"
+        want_path = sorted(expected_dir.rglob("*"))[0] if expected_dir.is_dir() else None
+        if want_path is not None:
+            for problem in compare(probe.stdout.encode(), want_path.read_bytes(), spec):
+                mismatches.append(f"probe {want_path.name}: {problem}")
+        elif env.get("exit_code") is not None and result.code != env["exit_code"]:
+            mismatches.append(f"exit code: got {result.code} want {env['exit_code']}")
+        return Outcome(not mismatches, spec["bridge"], spec["determinism"], duration,
+                       mismatches=mismatches, warnings=warnings)
+
     expected_dir = fixture["dir"] / "expected"
     if expected_dir.is_dir():
         for want_path in sorted(expected_dir.rglob("*")):

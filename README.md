@@ -12,7 +12,7 @@ the second is the dedicated agent computer. there are real services now that giv
 
 ## the point
 
-spawnables is not reinventing the wheel. the wheel is [celesto](https://github.com/celestoai/celesto) (apache-2.0, open source) and it is a good wheel. what spawnables adds is the easy path to an agent having its own fixed computer that is actually under your control.
+spawnables is not reinventing the wheel. it's building on the wheels that already exist like [celesto](https://github.com/celestoai/celesto) and adding the easy path to an agent having its own fixed computer that is actually under your control.
 
 ### fixed, not ephemeral
 
@@ -20,25 +20,9 @@ a spawned machine stays. it accumulates files, logins, state, a personality. you
 
 though "fixed" is the default, not a cage: ephemeral machines are still first-class citizens. an agent can spawn a disposable one for a ten-minute need and burn it after, or keep a companion phone alive for exactly as long as a task lasts. the card decides. spawnables does not care either way, it just refuses to assume everything should vanish.
 
-### yours, not rented
-
-the machine is yours in the way a rented one never is: it stays when you leave, it keeps what you put on it, and nobody else holds the keys. the three lanes that make that literal are [spelled out below](#work-ownership-trifecta).
-
-### clean, not opinionated
-
-no skills baked into the os, ever. the machine ships exactly what you ordered and nothing else.
-
-### control surface
-
-it follows you, too: the [gui](orders/modes/gui/readme.md) runs in your browser, and when a shell is where you are, the [cli](orders/modes/cli/readme.md) does the same job against the same catalogs. one order model, two surfaces, neither second-class.
-
-### the human touch
-
-some of the order form is useless to an agent. rice does not make a machine faster. an agent does not need a wallpaper, a catppuccin theme, a dock pinned just so. we keep it anyway, because we like the human touch. a permanent computer should feel homey, not like a hotel room someone else decorated. the machine is going to be somebody's whole little life for a long time, it may as well feel like theirs. that is why the [rice catalog](catalog/rices) exists, why rices apply per-account on multi-user machines, and why we will keep polishing it even though no benchmark will ever notice.
-
 ## work ownership trifecta
 
-the whole pitch, as three lanes you actually own. spawnables holds no infrastructure, no agent, and no model of its own; the control plane is the product. the machine itself is a card you can pause, freeze, thaw, duplicate, export, or burn.
+the machine is yours in the way a rented one never is: it stays when you leave, it keeps what you put on it, and nobody else holds the keys. the three lanes that make that literal is that spawnables holds no infrastructure, no agent, and no model of its own; the control plane is the product. the machine itself is a card you can pause, freeze, thaw, duplicate, export, or burn.
 
 ### byoc, the cloud
 
@@ -60,13 +44,47 @@ and byoc is not a euphemism for "pick your favorite of three clouds". the contro
 
 [bring your own](connect/byollm/readme.md). nothing here routes your prompts anywhere.
 
-## no ecosystem hostages
 
-a lot of "your own computer" products quietly mean "your own google or microsoft computer": chrome sign-in everywhere, onedrive nudges, an adobe subscription as the only door into creative work. spawnables does not assume you want any of that. the [privacy story](security/privacy/readme.md) is real rather than a coat of paint: vpn exits with a kill switch, private dns, [boring, uniform machine fingerprints](security/anti-machine-fingerprinting/readme.md) that read as one plausible person, [coherence checks](security/fingerprint-coherence/readme.md) that refuse to ship a costume contradicting itself, and secrets sealed in a vault that fails closed.
+## control surface
 
-the browser roster is the same stance: [brave](https://brave.com) leads (chromium, so everything works, but privacy-first, farbling the fingerprint surface itself) and [zen](https://zen-browser.app) sits right beside it, firefox-based, not chromium at all. tor is in the catalog for the days that call for it. the machine is yours; the defaults just happen to be paranoid in your favor.
+one order model, two surfaces that follow you, neither second-class and does the same job against the same catalogs:
+- the gui runs in your browser [*read here*](orders/modes/gui/readme.md)
+- the cli runs via the shell [*read here*](orders/modes/cli/readme.md)
 
-and if you design, you do not have to rent adobe forever. figma installs as a [pwa](setup/apps/readme.md) on every guest we run, and if you would rather own the whole pipeline, [penpot](setup/services/readme.md) is self-hosted oss: order it as a service and the machine spins it up on its own docker, on every boot, data in volumes that survive freezes. the catalog picks honest tools that do not hold your work hostage.
+### the human touch
+
+some of the order form is useless to an agent. rice does not make a machine faster. an agent does not need a wallpaper, a catppuccin theme, a dock pinned just so. we keep it anyway, because we like the human touch. a permanent computer should feel homey, not like a hotel room someone else decorated. the machine is going to be somebody's whole little life for a long time, it may as well feel like theirs. that is why the [rice catalog](catalog/rices) exists, why rices apply per-account on multi-user machines, and why we will keep polishing it even though no benchmark will ever notice.
+
+## privacy story
+
+the [privacy story](security/privacy/readme.md) is real rather than a coat of paint: 
+
+- vpn exits with a kill switch, private dns,
+- [boring, uniform machine fingerprints](security/anti-machine-fingerprinting/readme.md) that read as one plausible person,
+- [coherence checks](security/fingerprint-coherence/readme.md) that refuse to ship a costume contradicting itself,
+- and secrets sealed in a vault that fails closed.
+
+### no ecosystem lock-in
+a lot of "your own computer" products quietly mean "your own google or microsoft computer": chrome sign-in everywhere, onedrive nudges, an adobe subscription as the only door into creative work. spawnables does not assume you want any of that. it's clean, not opinionated and there are no skills baked into the os, ever. the machine ships exactly what you ordered and nothing else. 
+
+#### browser
+the browser roster inherits the same stance: 
+- [brave](https://brave.com) leads (chromium, so everything works, but privacy-first, farbling the fingerprint surface itself)
+- [zen](https://zen-browser.app) sits right beside it, firefox-based, not chromium at all.
+- tor is in the catalog for the days that call for it.
+
+the machine is yours; the defaults just happen to be paranoid in your favor.
+
+#### design
+and if you design, you do not have to rent adobe forever. 
+- figma installs as a [pwa](setup/apps/readme.md) on every guest we run,
+- photopea does too
+
+and if you would rather own the whole pipeline for design,
+
+- [penpot](setup/services/readme.md) is self-hosted oss:
+
+order it as a service and the machine spins it up on its own docker, on every boot, data in volumes that survive freezes. the catalog picks honest tools that do not hold your work hostage.
 
 ## beyond linux, beyond the browser
 
@@ -74,8 +92,20 @@ to be fair, some sandbox options are open source and you can spin them up yourse
 
 a lot of real life runs through consumer apps that ship for windows, macos, android, or ios and never for linux. an agent living in a linux sandbox can only reach those through the browser, and the dom is exactly the part many of these apps do not have. spawnables is for when the work goes beyond the browser.
 
-phone-gated logins get the same treatment instead of a dead end: an ephemeral android companion holds the phone's side of the scan, the qr on the desktop is decoded on the machine itself (no cloud vision, no lens), totp seeds go straight to the vault, and a webauthn qr is refused honestly because no amount of decoding finishes a passkey handshake. the pool behind it keeps [pre-warmed phones paused with one pinned identity](spec/warm-phone-pool.md), so the service sees your phone coming back, not a new one. see [the twofa lane](spec/twofa-handoff.md).
+phone-gated logins get the same treatment instead of a dead end: 
+- an ephemeral android companion holds the phone's side of the scan,
+- the qr on the desktop is decoded on the machine itself (no cloud vision, no lens),
+- totp seeds go straight to the vault,
+- and a webauthn qr is refused honestly because no amount of decoding finishes a passkey handshake.
 
-so instead of pretending one size fits all, you bring the tool for the specific task: a [mint desktop](spawnables/linux/readme.md) when the work is human-ish, a [windows box](spawnables/windows/readme.md) when the app is a windows app, a [macos machine](spawnables/macos/readme.md) on real apple silicon for the apple-only ones (and [ipad apps via playcover](spawnables/ipad/readme.md)), an [android phone or tablet](spawnables/android/readme.md) when the work lives in phone apps. you customize what you think fits, before you spawn it up, down to the distro, the desktop, the apps, the rice, the network story. and every card says honestly what it can and cannot do.
+the pool behind it keeps [pre-warmed phones paused with one pinned identity](spec/warm-phone-pool.md), so the service sees your phone coming back, not a new one. see [the twofa lane](spec/twofa-handoff.md).
+
+so instead of pretending one size fits all, you bring the tool for the specific task: 
+- a [mint desktop](spawnables/linux/readme.md) when the work is human-ish
+- a [windows box](spawnables/windows/readme.md) when the app is a windows app,
+- a [macos machine](spawnables/macos/readme.md) on real apple silicon for the apple-only ones (and [ipad apps via playcover](spawnables/ipad/readme.md)),
+- an [android phone or tablet](spawnables/android/readme.md) when the work lives in phone apps.
+
+you customize what you think fits, before you spawn it up, down to the distro, the desktop, the apps, the rice, the network story. and every card says honestly what it can and cannot do.
 
 everything else lives in [directory.md](directory.md).

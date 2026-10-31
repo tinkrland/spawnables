@@ -1798,8 +1798,31 @@ class TestServiceRoster(unittest.TestCase):
         self.assertIn("not osi", lic)
 
     def test_planned_service_is_refused_at_order_time(self):
-        errors, warnings = validate_order(order(services=["affine"]), CATALOG)
+        # affine graduated to ready (community edition, pinned at v0.27.4), so
+        # the refusal is pinned on a service that still has no pinned boot path
+        errors, warnings = validate_order(order(services=["appflowy"]), CATALOG)
         self.assertTrue(any("planned" in e for e in errors), errors)
+
+    def test_affine_community_edition_is_ready_and_pinned(self):
+        svc = CATALOG.services["affine"]
+        self.assertEqual(svc["status"], "ready")
+        fetch = [s for s in svc["steps"] if s["label"] == "fetch"][0]["cmd"]
+        self.assertIn("v0.27.4", fetch)                 # pinned by reference
+        self.assertIn("selfhost/compose.yml", fetch)     # upstream's own file
+        pin = [s for s in svc["steps"] if s["label"] == "pin"][0]["cmd"]
+        self.assertIn("affine:stable", pin)              # the float it removes
+        self.assertIn("affine:v0.27.4", pin)
+        errors, _ = validate_order(order(services=["affine"]), CATALOG)
+        self.assertEqual([e for e in errors if "affine" in e], [])
+
+    def test_self_hosting_claims_are_not_hedged_into_doubt(self):
+        # the owner's correction: excalidraw is just self-hosted (no collab
+        # promise), and fair-code restricts resale, not an owner running n8n.
+        ex = CATALOG.services["excalidraw"]["notes"].lower()
+        self.assertNotIn("collab", ex)
+        n8 = CATALOG.services["n8n"]["notes"].lower()
+        self.assertIn("self-hosted", n8)
+        self.assertIn("reselling", n8)
 
     def test_not_offered_service_is_refused_with_a_reason(self):
         errors, _ = validate_order(order(services=["kinopio"]), CATALOG)

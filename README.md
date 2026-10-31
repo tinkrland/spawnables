@@ -83,7 +83,7 @@ and if you design, you do not have to rent adobe forever.
 and if you would rather own the whole pipeline for design,
 
 - [penpot](setup/services/readme.md) is self-hosted oss,
-- [affine](catalog/services/affine.json) is the notion-plus-whiteboard alternative (mit core, commercial enterprise edition beside it, so the card says which),
+- [affine](catalog/services/affine.json) is the notion-plus-whiteboard alternative from its community edition, mit core with the commercial enterprise tier beside it (the card says which),
 - [excalidraw](catalog/services/excalidraw.json) is the mit whiteboard for the days when a whole workspace is overkill,
 
 order any of them as a service and the machine spins it up on its own docker, on every boot, data in volumes that survive freezes. the catalog picks honest tools that do not hold your work hostage.
@@ -92,7 +92,7 @@ order any of them as a service and the machine spins it up on its own docker, on
 
 same deal, ordered on the card:
 
-- [n8n](catalog/services/n8n.json) and [langflow](catalog/services/langflow.json) for workflow automation. n8n is fair-code, not osi open source, and the entry says so rather than calling it oss.
+- [n8n](catalog/services/n8n.json) and [langflow](catalog/services/langflow.json) for workflow automation. n8n is fair-code, self-hosted, and free to run on your own machine: the licence restricts hosting it as a service for others, not owning it, and the entry says so rather than calling it oss.
 - [vaultwarden](catalog/services/vaultwarden.json) when you want a bitwarden-compatible vault on your own machine.
 - [appflowy](catalog/services/appflowy.json), [karakeep](catalog/services/karakeep.json) and [deepnotes](catalog/services/deepnotes.json) instead of a notion subscription: notes, bookmarks and an encrypted canvas you own.
 - [code-server](catalog/services/code-server.json) for vs code in the browser, [observable-framework](catalog/services/observable-framework.json) for data apps as static files.

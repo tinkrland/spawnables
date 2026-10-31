@@ -28,5 +28,5 @@
     }
   ],
   "verify": "curl -sf http://localhost:8080 -o /dev/null || curl -sf http://localhost:8080/ -o /dev/null",
-  "notes": "the whiteboard, self-hosted, no account and no telemetry. honest limit: collab rooms need a separate excalidraw-room container, so this is single-user drawing on localhost until that is added. version tag is 'latest' today and the card says so rather than pretending a pin."
+  "notes": "the whiteboard, self-hosted, no account and no telemetry. one container serving the official build behind localhost:8080, so the machine owns the tool instead of the tool owning the machine. honest gap: the image tag is latest at draft time, so the card says unpinned rather than pretending a version it has not checked."
 }

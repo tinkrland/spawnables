@@ -1,15 +1,36 @@
 {
   "service_id": "affine",
   "category": "design",
-  "version": "unpinned - official compose to be pinned at first provisioning",
-  "license": "mit core with a commercial enterprise edition (license file is mixed, not osi-clean)",
-  "status": "planned",
+  "version": "v0.27.4",
+  "license": "mit core, community edition self-hosted (enterprise features are commercial)",
+  "status": "ready",
   "os": [
     "linux"
   ],
   "port": 3010,
   "ram_mb_floor": 2048,
-  "steps": [],
+  "steps": [
+    {
+      "label": "docker",
+      "cmd": "apt-get update && apt-get install -y docker.io docker-compose-v2"
+    },
+    {
+      "label": "boot",
+      "cmd": "systemctl enable --now docker"
+    },
+    {
+      "label": "fetch",
+      "cmd": "mkdir -p /opt/spawnables-services/affine && curl -fsSL https://raw.githubusercontent.com/toeverything/AFFiNE/v0.27.4/.docker/selfhost/compose.yml -o /opt/spawnables-services/affine/compose.yaml"
+    },
+    {
+      "label": "pin",
+      "cmd": "cd /opt/spawnables-services/affine && sed -i 's|affine:stable|affine:v0.27.4|g' compose.yaml"
+    },
+    {
+      "label": "up",
+      "cmd": "cd /opt/spawnables-services/affine && docker compose up -d"
+    }
+  ],
   "verify": "curl -sf http://localhost:3010 -o /dev/null",
-  "notes": "the notion-plus-miro alternative: docs, whiteboards and databases in one workspace. multi-container (graphql server, postgres, redis), so it is planned rather than ready: the honest blocker is that we have not pinned upstream's compose file yet, and a half-fetched compose is worse than an absent service. same doctrine as penpot: local-first on localhost:3010, volumes survive freeze."
+  "notes": "the notion-plus-miro alternative, self-hosted from the community edition: docs, whiteboards and databases in one workspace. upstream publishes the compose we run, so it is pinned by reference: fetched from the AFFiNE v0.27.4 tag and its floating :stable image rewritten to :v0.27.4 by a sed step, so a rebuilt machine gets the same server. honest gaps: redis and pgvector still float (the compose names them untagged), the first admin account is created by hand at /admin, and upstream asks for ~4 vcpu and 2gb ram, more than a small order carries. storage and config sit in compose volumes, so a freeze carries the workspace with the machine."
 }

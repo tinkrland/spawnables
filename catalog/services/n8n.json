@@ -28,5 +28,5 @@
     }
   ],
   "verify": "curl -sf http://localhost:5678 -o /dev/null || curl -sf http://localhost:5678/ -o /dev/null",
-  "notes": "workflow automation, 400+ integrations, self-hosted. the license is the honest part: n8n is fair-code (sustainable use license), source-available but not osi-approved, and reselling it as a service is restricted. fine for an owner-run machine, worth knowing before anyone builds a product on it. workflows and credentials live in the volume, so freeze/thaw carries them."
+  "notes": "workflow automation, 400+ integrations, self-hosted and free to run on your own machine. the licence is the honest part: n8n is fair-code (sustainable use licence), source-available but not osi-approved, and what it restricts is reselling or hosting it as a service to others. an owner-run machine is exactly the case it permits, so this is ready, not hedged."
 }

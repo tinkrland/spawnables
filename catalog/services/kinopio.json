@@ -1,0 +1,15 @@
+{
+  "service_id": "kinopio",
+  "category": "design",
+  "version": "n/a",
+  "license": "client source-available (no spdx id); server is hosted-only",
+  "status": "not-offered",
+  "os": [
+    "linux"
+  ],
+  "port": null,
+  "ram_mb_floor": 0,
+  "steps": [],
+  "verify": "true",
+  "notes": "spatial thinking tool, genuinely nice, and we do not ship it: the client is on github without a clean osi license and the server is a hosted product, so 'self-hosted kinopio' would be a costume. it stays reachable the normal way, from a browser in the guest, against their service. recorded here so the absence is a decision with a reason instead of an oversight."
+}

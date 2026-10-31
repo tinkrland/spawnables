@@ -1,0 +1,32 @@
+{
+  "service_id": "n8n",
+  "category": "automation",
+  "version": "image 'latest' - pin at first provisioning",
+  "license": "fair-code: sustainable use license, NOT osi open source",
+  "status": "ready",
+  "os": [
+    "linux"
+  ],
+  "port": 5678,
+  "ram_mb_floor": 768,
+  "steps": [
+    {
+      "label": "docker",
+      "cmd": "apt-get update && apt-get install -y docker.io docker-compose-v2"
+    },
+    {
+      "label": "boot",
+      "cmd": "systemctl enable --now docker"
+    },
+    {
+      "label": "fetch",
+      "cmd": "docker pull docker.n8n.io/n8nio/n8n:latest"
+    },
+    {
+      "label": "up",
+      "cmd": "docker rm -f spawnables-n8n >/dev/null 2>&1; docker run -d --restart unless-stopped --name spawnables-n8n -p 5678:5678 -v /opt/spawnables-services/n8n:/home/node/.n8n docker.n8n.io/n8nio/n8n:latest"
+    }
+  ],
+  "verify": "curl -sf http://localhost:5678 -o /dev/null || curl -sf http://localhost:5678/ -o /dev/null",
+  "notes": "workflow automation, 400+ integrations, self-hosted. the license is the honest part: n8n is fair-code (sustainable use license), source-available but not osi-approved, and reselling it as a service is restricted. fine for an owner-run machine, worth knowing before anyone builds a product on it. workflows and credentials live in the volume, so freeze/thaw carries them."
+}

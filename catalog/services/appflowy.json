@@ -1,0 +1,15 @@
+{
+  "service_id": "appflowy",
+  "category": "notes",
+  "version": "unpinned - official compose to be pinned at first provisioning",
+  "license": "agpl-3.0 (oss)",
+  "status": "planned",
+  "os": [
+    "linux"
+  ],
+  "port": 8080,
+  "ram_mb_floor": 3072,
+  "steps": [],
+  "verify": "curl -sf http://localhost:8080 -o /dev/null",
+  "notes": "notion-shaped workspace you own outright (flutter + rust). explicitly the answer to notion dependence: databases, kanban, docs, local-first sync. multi-container (postgres, redis, minio, gotrue), hence planned. agpl means improvements stay open, which is the point."
+}

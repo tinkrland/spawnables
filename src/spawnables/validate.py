@@ -91,6 +91,20 @@ def validate_order(order, catalog):
         if svc is None:
             errors.append(f"unknown service: {sid}")
             continue
+        # a service is only offerable when its boot path is actually pinned.
+        # planned means the compose file is not pinned yet; not-offered means we
+        # decided against it (hosted-only server, no clean licence). both refuse
+        # here rather than half-provisioning something the card called ready.
+        status = svc.get("status", "ready")
+        if status == "not-offered":
+            errors.append(
+                f"service {sid} is not offered: {svc.get('notes', '')[:90]}")
+            continue
+        if status == "planned":
+            errors.append(
+                f"service {sid} is planned, not ready: its boot path is not pinned yet, "
+                f"so ordering it would be a promise we cannot keep")
+            continue
         if os_name not in svc.get("os", ["linux"]):
             errors.append(
                 f"service {sid}: self-hosted services are linux-guest-only; "

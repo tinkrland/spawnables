@@ -1,0 +1,32 @@
+{
+  "service_id": "langflow",
+  "category": "automation",
+  "version": "image 'latest' - pin at first provisioning",
+  "license": "mit (oss)",
+  "status": "ready",
+  "os": [
+    "linux"
+  ],
+  "port": 7860,
+  "ram_mb_floor": 1024,
+  "steps": [
+    {
+      "label": "docker",
+      "cmd": "apt-get update && apt-get install -y docker.io docker-compose-v2"
+    },
+    {
+      "label": "boot",
+      "cmd": "systemctl enable --now docker"
+    },
+    {
+      "label": "fetch",
+      "cmd": "docker pull langflowai/langflow:latest"
+    },
+    {
+      "label": "up",
+      "cmd": "docker rm -f spawnables-langflow >/dev/null 2>&1; docker run -d --restart unless-stopped --name spawnables-langflow -p 7860:7860 -v /opt/spawnables-services/langflow:/app/data langflowai/langflow:latest"
+    }
+  ],
+  "verify": "curl -sf http://localhost:7860 -o /dev/null || curl -sf http://localhost:7860/ -o /dev/null",
+  "notes": "visual builder for llm flows (python fastapi under the hood). runs with sqlite by default so a single container is honest here; pointing it at postgres is a compose change, not a promise. this is the low-code lane next to n8n's integration lane."
+}

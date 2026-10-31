@@ -1,0 +1,32 @@
+{
+  "service_id": "observable-framework",
+  "category": "data",
+  "version": "node 22 image, framework version from the project's package.json",
+  "license": "isc (oss) - the hosted notebook platform is not",
+  "status": "ready",
+  "os": [
+    "linux"
+  ],
+  "port": 8081,
+  "ram_mb_floor": 512,
+  "steps": [
+    {
+      "label": "docker",
+      "cmd": "apt-get update && apt-get install -y docker.io docker-compose-v2"
+    },
+    {
+      "label": "boot",
+      "cmd": "systemctl enable --now docker"
+    },
+    {
+      "label": "fetch",
+      "cmd": "docker pull node:22-alpine"
+    },
+    {
+      "label": "up",
+      "cmd": "docker rm -f spawnables-observable-framework >/dev/null 2>&1; docker run -d --restart unless-stopped --name spawnables-observable-framework -p 8081:8081 -v /opt/spawnables-services/observable-framework:/app node:22-alpine"
+    }
+  ],
+  "verify": "curl -sf http://localhost:8081 -o /dev/null || curl -sf http://localhost:8081/ -o /dev/null",
+  "notes": "observable's data apps as static files: the framework is isc and self-hostable, while the observablehq.com notebook platform is a commercial service. so this entry is the framework served from the guest at localhost:8081, and it deliberately does not pretend to be the platform. needs a build step in /opt/spawnables-services/observable before it serves anything."
+}

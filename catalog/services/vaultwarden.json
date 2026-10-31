@@ -1,0 +1,32 @@
+{
+  "service_id": "vaultwarden",
+  "category": "secrets",
+  "version": "image 'latest' - pin at first provisioning",
+  "license": "agpl-3.0 (oss)",
+  "status": "ready",
+  "os": [
+    "linux"
+  ],
+  "port": 8222,
+  "ram_mb_floor": 512,
+  "steps": [
+    {
+      "label": "docker",
+      "cmd": "apt-get update && apt-get install -y docker.io docker-compose-v2"
+    },
+    {
+      "label": "boot",
+      "cmd": "systemctl enable --now docker"
+    },
+    {
+      "label": "fetch",
+      "cmd": "docker pull vaultwarden/server:latest"
+    },
+    {
+      "label": "up",
+      "cmd": "docker rm -f spawnables-vaultwarden >/dev/null 2>&1; docker run -d --restart unless-stopped --name spawnables-vaultwarden -p 8222:8222 -v /opt/spawnables-services/vaultwarden:/data vaultwarden/server:latest"
+    }
+  ],
+  "verify": "curl -sf http://localhost:8222/alive -o /dev/null || curl -sf http://localhost:8222 -o /dev/null",
+  "notes": "bitwarden-compatible server in one container (rust, no bitwarden cloud account). this is the vault the credential plane points at: bw cli or the web vault lives behind localhost:8222, so an owner's logins never need to be typed into a guest by hand and the guest can reach them only through the proxy. signups are off by default in the image, so enabling a new account is an explicit step on the owner's card, not something a guest can do to itself."
+}

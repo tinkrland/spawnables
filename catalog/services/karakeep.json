@@ -1,0 +1,15 @@
+{
+  "service_id": "karakeep",
+  "category": "knowledge",
+  "version": "unpinned - official compose to be pinned at first provisioning",
+  "license": "agpl-3.0 (oss)",
+  "status": "planned",
+  "os": [
+    "linux"
+  ],
+  "port": 3000,
+  "ram_mb_floor": 2048,
+  "steps": [],
+  "verify": "curl -sf http://localhost:3000 -o /dev/null",
+  "notes": "bookmark-everything (formerly hoarder): links, notes, images, auto-tagging. multi-container because it wants meilisearch for search and headless chrome for page capture, which is also why it belongs on a machine with room. agpl-3.0."
+}

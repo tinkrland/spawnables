@@ -1,0 +1,32 @@
+{
+  "service_id": "excalidraw",
+  "category": "design",
+  "version": "image 'latest' - pin at first provisioning",
+  "license": "mit (oss)",
+  "status": "ready",
+  "os": [
+    "linux"
+  ],
+  "port": 8080,
+  "ram_mb_floor": 256,
+  "steps": [
+    {
+      "label": "docker",
+      "cmd": "apt-get update && apt-get install -y docker.io docker-compose-v2"
+    },
+    {
+      "label": "boot",
+      "cmd": "systemctl enable --now docker"
+    },
+    {
+      "label": "fetch",
+      "cmd": "docker pull excalidraw/excalidraw:latest"
+    },
+    {
+      "label": "up",
+      "cmd": "docker rm -f spawnables-excalidraw >/dev/null 2>&1; docker run -d --restart unless-stopped --name spawnables-excalidraw -p 8080:8080 -v /opt/spawnables-services/excalidraw:/data excalidraw/excalidraw:latest"
+    }
+  ],
+  "verify": "curl -sf http://localhost:8080 -o /dev/null || curl -sf http://localhost:8080/ -o /dev/null",
+  "notes": "the whiteboard, self-hosted, no account and no telemetry. honest limit: collab rooms need a separate excalidraw-room container, so this is single-user drawing on localhost until that is added. version tag is 'latest' today and the card says so rather than pretending a pin."
+}

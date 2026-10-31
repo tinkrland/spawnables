@@ -1221,7 +1221,7 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("one size fits all", readme)
         self.assertIn("before you spawn it up", readme)
         # no ecosystem hostages: privacy + browser + tooling stance
-        self.assertIn("no ecosystem hostages", readme)
+        self.assertIn("no ecosystem lock-in", readme)   # renamed by the owner in 9a1710a
         self.assertIn("brave", readme)          # chromium but privacy-first
         self.assertIn("zen", readme)            # not chromium at all
         self.assertIn("penpot", readme)         # self-hosted oss, not forced adobe
@@ -1770,6 +1770,49 @@ class TestMobileHardwareTells(unittest.TestCase):
                           "country_iso": "IN"}}
         issues = self.T.mobile_tells(device, {"exit_geo": {"country": "IN"}})
         self.assertEqual([i for i in issues if i[3] == "fail"], [])
+
+
+class TestServiceRoster(unittest.TestCase):
+    """the roster only counts if the labels are honest: fair-code is not oss,
+    a hosted-only server is not self-hostable, and an unpinned compose is not
+    ready."""
+
+    def test_every_service_states_a_licence_and_a_status(self):
+        for sid, svc in CATALOG.services.items():
+            self.assertTrue(svc.get("license"), sid)
+            self.assertIn(svc.get("status", "ready"),
+                          {"ready", "planned", "not-offered"}, sid)
+            self.assertTrue(svc.get("notes"), sid)
+
+    def test_ready_services_can_actually_boot(self):
+        for sid, svc in CATALOG.services.items():
+            if svc.get("status", "ready") != "ready":
+                continue
+            self.assertTrue(svc.get("steps"), sid)
+            self.assertTrue(svc.get("verify"), sid)
+            self.assertTrue(svc.get("port"), sid)
+
+    def test_fair_code_is_not_called_open_source(self):
+        lic = CATALOG.services["n8n"]["license"].lower()
+        self.assertIn("fair-code", lic)
+        self.assertIn("not osi", lic)
+
+    def test_planned_service_is_refused_at_order_time(self):
+        errors, warnings = validate_order(order(services=["affine"]), CATALOG)
+        self.assertTrue(any("planned" in e for e in errors), errors)
+
+    def test_not_offered_service_is_refused_with_a_reason(self):
+        errors, _ = validate_order(order(services=["kinopio"]), CATALOG)
+        self.assertTrue(any("not offered" in e for e in errors), errors)
+
+    def test_the_roster_the_owner_asked_for(self):
+        for sid in ("penpot", "affine", "excalidraw", "n8n", "langflow",
+                    "vaultwarden", "appflowy", "deepnotes", "karakeep",
+                    "code-server", "observable-framework"):
+            self.assertIn(sid, CATALOG.services, sid)
+        self.assertIn(CATALOG.services["affine"]["category"], {"design", "notes"})
+        self.assertEqual(CATALOG.services["n8n"]["category"], "automation")
+        self.assertEqual(CATALOG.services["vaultwarden"]["category"], "secrets")
 
 
 if __name__ == "__main__":

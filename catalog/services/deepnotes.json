@@ -1,0 +1,15 @@
+{
+  "service_id": "deepnotes",
+  "category": "notes",
+  "version": "unpinned - official compose to be pinned at first provisioning",
+  "license": "agpl-3.0 (oss)",
+  "status": "planned",
+  "os": [
+    "linux"
+  ],
+  "port": 3000,
+  "ram_mb_floor": 2048,
+  "steps": [],
+  "verify": "curl -sf http://localhost:3000 -o /dev/null",
+  "notes": "end-to-end encrypted notes with an infinite canvas (offline-first, sync when it can reach the server). agpl-3.0. multi-container (server, redis, mongo), hence planned. the e2ee part is a real fit for owner data on a machine somebody else's kernel is running."
+}

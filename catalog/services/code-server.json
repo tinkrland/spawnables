@@ -1,0 +1,32 @@
+{
+  "service_id": "code-server",
+  "category": "dev",
+  "version": "image 'latest' - pin at first provisioning",
+  "license": "mit (oss)",
+  "status": "ready",
+  "os": [
+    "linux"
+  ],
+  "port": 8080,
+  "ram_mb_floor": 768,
+  "steps": [
+    {
+      "label": "docker",
+      "cmd": "apt-get update && apt-get install -y docker.io docker-compose-v2"
+    },
+    {
+      "label": "boot",
+      "cmd": "systemctl enable --now docker"
+    },
+    {
+      "label": "fetch",
+      "cmd": "docker pull codercom/code-server:latest"
+    },
+    {
+      "label": "up",
+      "cmd": "docker rm -f spawnables-code-server >/dev/null 2>&1; docker run -d --restart unless-stopped --name spawnables-code-server -p 8080:8080 -v /opt/spawnables-services/code-server:/home/coder/.local codercom/code-server:latest"
+    }
+  ],
+  "verify": "curl -sf http://localhost:8080 -o /dev/null || curl -sf http://localhost:8080/ -o /dev/null",
+  "notes": "vs code in the guest's browser at localhost:8080, which is what we actually ship when someone says 'vscode': microsoft's own build is mit-licensed but its marketplace terms are not, so the oss editor (openvscode-server or code-server) is the honest default and the card says which one it is."
+}

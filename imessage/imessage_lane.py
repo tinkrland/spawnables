@@ -17,6 +17,8 @@ LANE = {
     "intake": "v0 signed webhook -> one envelope",
     "relay": "the provider's send endpoint, project creds gated",
     "gate": ("PHOTON_SIGNING_SECRET",),
+    "scope": ("not a beast: photon free tier for whitelisted people, rcs fallback, and plain sms "
+              "on the heyphony did underneath. no bridge of our own and no number ownership attempt"),
     "state": "designed",
     "evidence": "the v0 gate is ported and tested here; no real blue bubble has arrived",
 }

@@ -405,6 +405,16 @@ class TestGetters(unittest.TestCase):
 
     def test_the_signal_lane_names_the_same_command(self):
         self.assertEqual(lane("signal").LANE["bootstrap"], "heyphony get signal")
+
+    def test_imessage_is_thin_on_purpose(self):
+        # the owner's call: photon free tier + whitelist, rcs, then sms on our own did.
+        # written down so nobody later builds an apple bridge out of ambition.
+        scope = lane("imessage").LANE["scope"]
+        for needle in ("free tier", "rcs fallback", "heyphony did"):
+            self.assertIn(needle, scope)
+        readme = pathlib.Path("imessage/readme.md").read_text()
+        self.assertIn("not a beast, on purpose", readme)
+        self.assertIn("cannot register imessage", readme)
         self.assertEqual(lane("signal").registration_plan("phone-signup", env={})["one_command"],
                          "heyphony get signal")
 

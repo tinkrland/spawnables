@@ -56,13 +56,29 @@ not a feature of an app. we already decode the qr (`twofa.py`), so the agent's s
 decode the qr the service shows, seal the uri in the vault, compute codes at use time.
 the app choice matters only for the human holding the same seed later.
 
-correction on file (nov 2026): **proton authenticator** describes itself as open source for
-iphone, ipad, apple watch, mac, android, linux and windows, free and standalone, no account
-required, with encrypted backups and token import. i could not find its source repository
-under `github.com/ProtonMail` (organisation search returned none, and
-`github.com/ProtonMail/proton-authenticator` 404s), so the open-source claim is proton's own
-statement and the repo location is unverified. either way nothing here depends on it: it is
-the human's copy of the same seed, not a component.
+correction on file (nov 2026, twice): **proton authenticator** is open source, and the owner
+was right about where. the code is under the **protonpass** organisation, not protonmail:
+
+| repo | language | licence | note |
+| --- | --- | --- | --- |
+| `github.com/protonpass/android-authenticator` | kotlin | gpl-3.0 | "source code for the Proton Authenticator Android application" |
+| `github.com/protonpass/ios-authenticator` | swift | gpl-3.0 | "iOS client for Proton Authenticator" |
+
+verified from the github api on 2026-11-01 (both repos public, both LICENSE files say gpl-3.0
+or later). so the open-source claim is backed by source now, not by a marketing page, and my
+earlier "no repo found" note was wrong in a specific way worth recording: i searched
+`github.com/ProtonMail` and an org search that returns nothing when the org is wrong does not
+prove absence. the lesson is the same one this file keeps teaching: name the query, not the void.
+
+what is still unverified: the **desktop** clients. proton's site lists mac, linux and windows
+apps, and that organisation contains exactly two authenticator repos (github search,
+`authenticator user:protonpass`, total 2), so the desktop source is either elsewhere or not
+published. nothing here needs it either way.
+
+the practical consequence, now that the mobile source is public: if we ever have to hand a seed
+back to a person, the app's own import format is readable from the repo instead of guessed from
+a screenshot of a settings screen. that is the whole difference between "an app we trust" and
+"code we can check", and it is why proton authenticator stays the recommended human copy.
 
 three rules, because a seed is an identity: one seed per identity; never copy a seed to
 a second guest; seal backup codes beside the seed, they are the recovery lane and the
@@ -90,7 +106,7 @@ same person on two devices.
 - agent-vault licence text not read yet (repo has LICENSE; confirm before shipping).
 - the proxy needs its root ca trusted inside each guest; our provisioner can do that,
   but it is a provisioner step that must be written, not assumed.
-- kernel's bitwarden integration unconfirmed (1password is confirmed); proton authenticator's repo location unverified, its open-source claim is their own.
+- kernel's bitwarden integration unconfirmed (1password is confirmed); proton authenticator's mobile repos confirmed under `protonpass/`, desktop source not found.
 
 ## what exists, and what is still a spec
 
@@ -102,7 +118,7 @@ and the gap is worth stating so nobody plans around a rail that is not there.
 | --- | --- | --- |
 | totp decoding and code computation | **built** | `twofa.py`: `decode_command`, `extract_totp`, `classify`, `scan_gate`; seeds are referenced as `@@vault:` |
 | seed storage in the sealed vault | **built for totp uris** | the same vault path every other secret uses; one seed per identity, never copied to a second guest |
-| proton authenticator | **not integrated, by design** | no code; it is the human's copy of the seed. oss claim is proton's, repo unverified |
+| proton authenticator | **not integrated, by design** | no code; it is the human's copy of the seed. mobile clients public under `protonpass/` (kotlin + swift, gpl-3.0, verified 2026-11-01); desktop source unpublished |
 | 1password | **spec only** | `spec/credential-plane.md`; kernel ships an integration, we treat 1password as the owner's vault reached through a broker, never signed into a guest |
 | agent-vault (infisical) proxy | **spec only** | no `agent_vault` code in `src/` (checked). the design is written, the egress proxy is not |
 | vaultwarden | **provisionable app, no rail** | `catalog/services/vaultwarden.json`, agpl-3.0, port 8222, status ready. its notes now say the credential plane does not point at it yet |

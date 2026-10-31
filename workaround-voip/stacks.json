@@ -1,0 +1,53 @@
+{
+  "note": "licences read from each repository's own licence file (asterisk, freeswitch and kamailio are unclassifiable by github's licence api, so the family is stated as their files give it). capability fields describe the ordinary telephony role, not an agent feature.",
+  "stacks": [
+    {
+      "stack": "flexisip",
+      "role": "server",
+      "licence": "agpl-3.0",
+      "self_hostable": true,
+      "pstn": "via a trunk",
+      "notes": "the self-hosted sip server: registrar, proxy, presence. this is the piece that makes 'self hostable voip' true rather than aspirational, and agpl travels with a fork that serves others."
+    },
+    {
+      "stack": "linphone-sdk",
+      "role": "client",
+      "licence": "agpl-3.0",
+      "self_hostable": true,
+      "pstn": "via the server it registers to",
+      "notes": "registration, call control and media in a library, which is what lets a process be one endpoint among phones instead of a special case."
+    },
+    {
+      "stack": "linphone-desktop",
+      "role": "client",
+      "licence": "gpl-3.0",
+      "self_hostable": true,
+      "pstn": "via the server it registers to",
+      "notes": "the human-visible client: useful for watching a call happen while debugging an agent endpoint, and proof that the lane is ordinary telephony."
+    },
+    {
+      "stack": "asterisk",
+      "role": "server",
+      "licence": "gpl (per its licence file)",
+      "self_hostable": true,
+      "pstn": "via a trunk",
+      "notes": "the pbx: ivr, queues, recording, bridging. heavier than flexisip and better at being a switchboard."
+    },
+    {
+      "stack": "freeswitch",
+      "role": "server",
+      "licence": "mpl (per its licence file)",
+      "self_hostable": true,
+      "pstn": "via a trunk",
+      "notes": "softswitch with strong conferencing and media handling; mpl instead of gpl makes it the friendlier one to embed."
+    },
+    {
+      "stack": "kamailio",
+      "role": "server",
+      "licence": "gpl (per its licence file)",
+      "self_hostable": true,
+      "pstn": "via a trunk",
+      "notes": "edge proxy and registrar for scale. a single guest does not need it; a pool of endpoints behind one address does."
+    }
+  ]
+}

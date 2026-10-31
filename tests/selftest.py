@@ -3,6 +3,7 @@
 run: python3 tests/selftest.py
 """
 import sys
+import json
 import pathlib
 import unittest
 from pathlib import Path
@@ -1943,6 +1944,68 @@ class TestAdapterSelection(unittest.TestCase):
             a.boot(order(base_image="win11-24h2"), CATALOG.base_images["win11-24h2"])
         self.assertIn("ssh_user", str(ctx.exception))
 
+
+class TestWorkaroundVoip(unittest.TestCase):
+    """the voip lane is only honest if it keeps saying what it is not: a sip
+    number is ordinary telephony, and it is not a mobile identity."""
+
+    @classmethod
+    def setUpClass(cls):
+        from spawnables import voip
+        cls.voip = voip
+        root = pathlib.Path(__file__).resolve().parents[1]
+        cls.roster = json.loads((root / "workaround-voip" / "stacks.json").read_text())
+
+    def test_the_lane_needs_no_radio(self):
+        lane = self.voip.voice_lane()
+        self.assertFalse(lane["needs_radio"])
+        self.assertFalse(lane["needs_sim"])
+        self.assertIn("inbound and outbound pstn voice", lane["gives"])
+
+    def test_a_sip_number_is_never_a_mobile_identity(self):
+        ident = self.voip.mobile_identity()
+        self.assertIsNone(ident["imsi"])
+        self.assertFalse(ident["attach"])
+        self.assertFalse(ident["handset_seen_by_carrier"])
+
+    def test_otp_is_refused_for_a_voice_did(self):
+        self.assertEqual(self.voip.otp_viability("sip-did")["viable"], "no")
+        self.assertEqual(self.voip.otp_viability("sim")["viable"], "best")
+        with self.assertRaises(ValueError):
+            self.voip.otp_viability("telepathy")
+
+    def test_attestation_is_stated_for_both_origins(self):
+        self.assertEqual(self.voip.attestation_reality("carrier")["attestation"], "a")
+        self.assertIn("b or c", self.voip.attestation_reality("self-terminated")["attestation"])
+        self.assertTrue(self.voip.e911_requirement()["required"])
+
+    def test_every_stack_states_a_licence_and_a_role(self):
+        stacks = self.roster["stacks"]
+        self.assertGreaterEqual(len(stacks), 5)
+        for s in stacks:
+            self.assertTrue(s["licence"], s["stack"])
+            self.assertIn(s["role"], {"client", "server"}, s["stack"])
+            self.assertTrue(s["self_hostable"], s["stack"])
+
+    def test_the_belledonne_licences_are_the_ones_read_off_the_repo(self):
+        lic = {s["stack"]: s["licence"] for s in self.roster["stacks"]}
+        self.assertEqual(lic["flexisip"], "agpl-3.0")
+        self.assertEqual(lic["linphone-sdk"], "agpl-3.0")
+        self.assertEqual(lic["linphone-desktop"], "gpl-3.0")
+        # the three github cannot classify must say so rather than claim a neat spdx id
+        for uncertain in ("asterisk", "freeswitch", "kamailio"):
+            self.assertIn("per its licence file", lic[uncertain])
+
+    def test_the_readme_keeps_the_honest_limits(self):
+        text = (pathlib.Path(__file__).resolve().parents[1] / "workaround-voip" / "readme.md").read_text().lower()
+        for needle in ("no mobile identity", "no sms by default", "stir/shaken",
+                       "e911", "does not give you", "nothing here has placed a call yet"):
+            self.assertIn(needle, text)
+
+    def test_the_lane_is_not_marketed_as_agent_only(self):
+        text = (pathlib.Path(__file__).resolve().parents[1] / "workaround-voip" / "readme.md").read_text().lower()
+        self.assertIn("nothing in this folder is an agent-only product", text)
+        self.assertIn("an agent is just another sip endpoint", text)
 
 if __name__ == "__main__":
     suite = unittest.defaultTestLoader.loadTestsFromModule(sys.modules["__main__"])

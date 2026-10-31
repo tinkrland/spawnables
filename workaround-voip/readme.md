@@ -32,6 +32,14 @@ automated.
 origination and a registered business, and a self-hosted softphone behind a cheap did
 is the exact shape carriers and recipients block first.
 
+## getting a number for a dollar
+
+inbound first, because receiving is where a cheap did stops being a compromise. the did costs about a dollar a month and, from providers that enable sms on it (flowroute is the owner's example: free incoming messages; voip.ms on supported numbers), an occasional text arrives as an api event or webhook. no radio, no sim, no handset.
+
+the mark-up point, said plainly: most companies advertising "give your agent a phone number" hand over exactly this, a voip did, and then charge a wrapper for it. the convenience fee buys a dashboard, not a different number type, and not a different outcome at the sender's risk engine.
+
+the inbox is not the gate. verify the did is sms-capable before ordering it, and expect verification senders to refuse the number type long before your inbox matters.
+
 ## the price honesty
 
 agent-voice saas sells a voip number with a dashboard and a convenience fee on top.

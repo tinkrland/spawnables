@@ -142,3 +142,45 @@ def blocked_by():
                    "self-hosted softphone and an expensive agent-voice product are the same "
                    "classification and get refused by the same services."),
     }
+
+
+def inbound_messages():
+    """can the agent get an occasional text on a did? yes, and it is the best
+    use of the lane - but the inbox is not the gate. the sender is: a
+    verification flow that refuses voip number types never dials us, so a free
+    inbound inbox does not turn a did into an otp route."""
+    return {
+        "possible": True,
+        "how": "the provider delivers inbound sms as an api event or webhook; no radio involved",
+        "sms_by_default": False,
+        "needs_provider_support": True,
+        "otp_unaffected": "refused: the sender classifies the number before delivery, "
+                          "so nothing lands in an inbox that was never dialled",
+        "cost": "about a dollar a month for the did; inbound messages usually free "
+                "or a fraction of a cent, per provider",
+    }
+
+
+PROVIDERS = [
+    {"provider": "flowroute", "did_usd_month": 1.0, "sms_inbound": "yes (api/webhook)",
+     "sms_outbound": "yes, a2p rules apply", "verified": False,
+     "note": "the owner's example: cheap did, free incoming messages; confirm sms enablement per did"},
+    {"provider": "voip.ms", "did_usd_month": 1.0, "sms_inbound": "yes on supported dids",
+     "sms_outbound": "yes, a2p rules apply", "verified": False,
+     "note": "cheap and broad; confirm the did is sms-capable before ordering"},
+    {"provider": "telnyx", "did_usd_month": 1.0, "sms_inbound": "yes (api/webhook)",
+     "sms_outbound": "yes, 10dlc registration", "verified": False,
+     "note": "better api, more paperwork"},
+    {"provider": "twilio", "did_usd_month": 1.15, "sms_inbound": "yes (api/webhook)",
+     "sms_outbound": "yes, a2p 10dlc", "verified": False,
+     "note": "the default everyone reaches for, and the priciest of the four"},
+]
+
+
+def provider_plan(name):
+    """the honest floor for one provider: the cost, whether the inbox works,
+    and what none of that changes."""
+    p = next((x for x in PROVIDERS if x["provider"] == str(name).lower()), None)
+    if p is None:
+        raise KeyError(f"unknown provider: {name}")
+    return dict(p, still_voip=True, otp_still_refused=True)

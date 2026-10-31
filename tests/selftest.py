@@ -2000,7 +2000,8 @@ class TestWorkaroundVoip(unittest.TestCase):
         text = (pathlib.Path(__file__).resolve().parents[1] / "workaround-voip" / "readme.md").read_text().lower()
         for needle in ("no mobile identity", "no sms by default", "stir/shaken",
                        "e911", "does not give you", "nothing here has placed a call yet",
-                       "what the lane is for", "not bulk outbound", "the price honesty", "classified as voip"):
+                       "what the lane is for", "not bulk outbound", "the price honesty", "classified as voip",
+                       "getting a number for a dollar", "inbox is not the gate", "buys a dashboard"):
             self.assertIn(needle, text)
 
     def test_the_lane_is_for_receiving_and_refuses_bulk(self):
@@ -2021,6 +2022,26 @@ class TestWorkaroundVoip(unittest.TestCase):
         text = (pathlib.Path(__file__).resolve().parents[1] / "workaround-voip" / "readme.md").read_text().lower()
         self.assertIn("nothing in this folder is an agent-only product", text)
         self.assertIn("an agent is just another sip endpoint", text)
+
+    def test_inbound_texts_possible_but_not_an_otp_route(self):
+        m = self.voip.inbound_messages()
+        self.assertTrue(m["possible"])
+        self.assertFalse(m["sms_by_default"])
+        self.assertIn("refused", m["otp_unaffected"])
+
+    def test_providers_are_labelled_unverified_until_someone_checks(self):
+        self.assertTrue(self.voip.PROVIDERS)
+        for p in self.voip.PROVIDERS:
+            self.assertIn("did_usd_month", p)
+            self.assertIn("sms_inbound", p)
+            self.assertFalse(p["verified"], p["provider"])  # nobody has signed up yet
+
+    def test_provider_plan_keeps_the_invariant(self):
+        plan = self.voip.provider_plan("flowroute")
+        self.assertTrue(plan["still_voip"])
+        self.assertTrue(plan["otp_still_refused"])
+        with self.assertRaises(KeyError):
+            self.voip.provider_plan("nope")
 
 if __name__ == "__main__":
     suite = unittest.defaultTestLoader.loadTestsFromModule(sys.modules["__main__"])

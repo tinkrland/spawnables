@@ -28,5 +28,5 @@
     }
   ],
   "verify": "curl -sf http://localhost:8222/alive -o /dev/null || curl -sf http://localhost:8222 -o /dev/null",
-  "notes": "bitwarden-compatible server in one container (rust, no bitwarden cloud account). this is the vault the credential plane is meant to point at, and the rail is not built yet: provisioning it today gives a working vault behind localhost:8222 (web vault, or bw cli from the host) and nothing that wires it to a guest. spec/credential-plane.md keeps the honest list. signups are off by default in the image, so enabling a new account is an explicit step on the owner's card, not something a guest can do to itself."
+  "notes": "bitwarden-compatible server in one container (rust, no bitwarden cloud account). this is the vault the credential plane points at, and since nov 2026 the resolve rail exists: spawnables/vaults.py drives the same `bw` cli at SPAWNABLES_VAULTWARDEN_URL (this container, port 8222), so an agent can ask for one value or one totp code instead of holding anything. what is still missing is provisioning plus the owner's one-time `bw config server` + login on the control plane. signups are off by default in the image, so enabling an account stays an explicit step on the owner's card."
 }

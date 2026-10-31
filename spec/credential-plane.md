@@ -135,6 +135,39 @@ same person on two devices.
   but it is a provisioner step that must be written, not assumed.
 - kernel's bitwarden integration unconfirmed (1password is confirmed); proton authenticator's mobile repos confirmed under `protonpass/`, desktop source not found.
 
+## the four vaults, as sources (aug 2026 request: "like kernel.sh has")
+
+kernel's integration page does one thing well: it tells the agent the shape of the deal before
+it plans around a capability. `spawnables/vaults.py` is the same deal for the vaults we actually
+run into, and it is a **resolve** rail, not a sync rail: one value at use time, on the control
+plane, never cached, never signed into a guest.
+
+| source | binary | auth the owner sets once | resolve | code |
+| --- | --- | --- | --- | --- |
+| 1password | `op` | `OP_SERVICE_ACCOUNT_TOKEN` | `op read op://vault/item/field` | `op item get item --otp` |
+| bitwarden | `bw` | `BW_CLIENTID`, `BW_CLIENTSECRET`, `BW_PASSWORD` | `bw get password item --session …` | `bw get totp item` |
+| vaultwarden | `bw` | same, plus `SPAWNABLES_VAULTWARDEN_URL` | same cli, our server on 8222 | same |
+| proton pass | `pass-cli` | `PROTON_PASS_PERSONAL_ACCESS_TOKEN` + `PROTON_PASS_AGENT_REASON` | `pass-cli item view pass://v/i/f` | `…?totp=code` |
+
+three decisions inside that table, each with a reason:
+
+- **refs are native.** `op://`, `bw://`, `pass://` keep the semantics people already know instead
+  of inventing a fourth syntax. the scheme picks the source; nothing guesses.
+- **login is not in the resolve path.** `op signin`, `bw login`, `pass-cli login` are the owner's
+  one-time acts on the control plane. a resolve that could log in is a resolve that could strand a
+  live session on a machine that later gets burned. the suite asserts no resolve command logs in.
+- **proton pass wants a reason.** its cli audits agent reads against `PROTON_PASS_AGENT_REASON`, so
+  we require it too rather than silently passing an empty one. vaultwarden is the reverse case and
+  worth stating: it is our own server, there is no bitwarden account behind it, and the `bw` cli is
+  just the client.
+
+the code column is the answer to 2fa, again: six digits from whichever vault holds the seed, typed
+into the form by the agent. no app on our side, no proxy, no seed in a guest.
+
+`spawnables vaults check` reports installed / auth_missing / usable per source, because "the
+integration exists" and "the integration is authenticated" are different facts and an agent that
+conflates them plans around a capability that is not there.
+
 ## what exists, and what is still a spec
 
 asked plainly (nov 2026): did we pair an authenticator app, or build vaultwarden/bitwarden
@@ -146,10 +179,11 @@ and the gap is worth stating so nobody plans around a rail that is not there.
 | totp decoding and code computation | **built** | `twofa.py`: `decode_command`, `extract_totp`, `classify`, `scan_gate`; seeds are referenced as `@@vault:` |
 | seed storage in the sealed vault | **built for totp uris** | the same vault path every other secret uses; one seed per identity, never copied to a second guest |
 | proton authenticator | **not integrated, by design** | no code; it is the human's copy of the seed. mobile clients public under `protonpass/` (kotlin + swift, gpl-3.0, verified 2026-11-01); desktop source unpublished |
-| 1password | **spec only** | `spec/credential-plane.md`; kernel ships an integration, we treat 1password as the owner's vault reached through a broker, never signed into a guest |
+| 1password | **source wired** | `vaults.py` (`op read` / `--otp`), auth is the owner's service-account token; still never signed into a guest |
 | agent-vault (infisical) proxy | **spec only** | no `agent_vault` code in `src/` (checked). the design is written, the egress proxy is not |
-| vaultwarden | **provisionable app, no rail** | `catalog/services/vaultwarden.json`, agpl-3.0, port 8222, status ready. its notes now say the credential plane does not point at it yet |
-| bitwarden cli / api integration | **not built** | nothing in `src/` speaks `bw` |
+| vaultwarden | **app + resolve rail** | `catalog/services/vaultwarden.json` (agpl-3.0, port 8222, ready) plus `vaults.py` driving `bw` at that server; provisioning and the owner's one-time login are still manual |
+| bitwarden cli | **built** | `vaults.py` speaks `bw` (password + totp + session), and the same source serves vaultwarden |
+| proton pass cli | **built** | `vaults.py` drives `pass-cli item view`, reason required |
 
 so the honest ordering of work here: the proxy is the thing that makes a vault useful to a
 guest (it is what keeps the secret out of the guest at all), and until it exists, pointing at

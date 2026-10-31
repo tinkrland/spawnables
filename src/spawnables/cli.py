@@ -3,6 +3,7 @@
 stdlib only; celesto is imported lazily by the adapters on a real provision.
 """
 import argparse
+import json
 import sys
 
 from .catalog import Catalog
@@ -79,6 +80,22 @@ def cmd_verbs(args):
     return 0
 
 
+def cmd_vaults(args):
+    from . import vaults
+    if args.action == "check":
+        print(json.dumps(vaults.check(), indent=2, sort_keys=True))
+    elif args.action == "card":
+        print(json.dumps(vaults.agent_card(), indent=2, sort_keys=True))
+    elif args.action in ("resolve", "code"):
+        kind = "totp" if args.action == "code" else "field"
+        try:
+            print(vaults.resolve(args.ref, kind=kind))
+        except vaults.VaultSourceError as e:
+            print(f"error: {e}")
+            return 1
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="spawnables", description=__doc__)
     ap.add_argument("--catalog", default="catalog", help="catalog directory")
@@ -89,6 +106,11 @@ def main(argv=None):
         p = sub.add_parser(name)
         p.add_argument("order", help="machine order json file")
         p.set_defaults(fn=fn)
+    v = sub.add_parser("vaults", help="the owner's vaults as sources: check, card, resolve, code")
+    v.add_argument("action", choices=["check", "card", "resolve", "code"])
+    v.add_argument("ref", nargs="?", help="op://vault/item/field, bw://item/field, pass://vault/item/field")
+    v.set_defaults(fn=cmd_vaults)
+
     args = ap.parse_args(argv)
     return args.fn(args)
 

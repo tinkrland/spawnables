@@ -1905,6 +1905,101 @@ class TestTwoFactorCodes(unittest.TestCase):
         self.assertIn("two devices forever", model["the_phone_after"])
 
 
+class TestVaultSources(unittest.TestCase):
+    """four vaults, one shape: resolve on the control plane, never sign in a guest."""
+
+    @property
+    def vaults(self):
+        from spawnables import vaults
+        return vaults
+
+    def test_refs_map_to_providers_by_scheme(self):
+        self.assertEqual(self.vaults.source_for("op://work/github/pat"), "1password")
+        self.assertEqual(self.vaults.source_for("bw://github"), "bitwarden")
+        self.assertEqual(self.vaults.source_for("pass://Work/GitHub/password"), "protonpass")
+
+    def test_an_unknown_scheme_is_refused_with_the_shapes_we_accept(self):
+        with self.assertRaises(self.vaults.VaultSourceError) as ctx:
+            self.vaults.source_for("lastpass://x")
+        self.assertIn("op://vault/item/field", str(ctx.exception))
+
+    def test_one_password_reads_and_asks_for_codes(self):
+        self.assertEqual(self.vaults.command("op://work/github/pat"),
+                         ["op", "read", "op://work/github/pat"])
+        self.assertEqual(self.vaults.command("op://work/github/pat", kind="totp"),
+                         ["op", "item", "get", "pat", "--otp"])
+
+    def test_bitwarden_get_carries_the_session_but_not_the_password(self):
+        argv = self.vaults.command("bw://github", env={"BW_SESSION": "sess"})
+        self.assertEqual(argv, ["bw", "get", "password", "github", "--session", "sess"])
+        self.assertNotIn("BW_PASSWORD", argv)
+
+    def test_a_code_comes_from_all_three_clis(self):
+        self.assertEqual(self.vaults.command("bw://github", kind="totp")[:3], ["bw", "get", "totp"])
+        self.assertIn("?totp=code", self.vaults.command("pass://Work/GitHub/password", kind="totp")[3])
+
+    def test_vaultwarden_is_our_server_not_a_bitwarden_account(self):
+        spec = self.vaults.SOURCES["vaultwarden"]
+        self.assertIn("SPAWNABLES_VAULTWARDEN_URL", spec["auth_env"])
+        self.assertEqual(spec["kind"], "self-hosted")
+        self.assertEqual(spec["binary"], self.vaults.SOURCES["bitwarden"]["binary"])
+
+    def test_protonpass_needs_a_reason_because_the_cli_audits_reads(self):
+        env = {"PROTON_PASS_PERSONAL_ACCESS_TOKEN": "t"}
+        self.assertIn("PROTON_PASS_AGENT_REASON", self.vaults.missing_auth("protonpass", env))
+        env["PROTON_PASS_AGENT_REASON"] = "filling a login"
+        self.assertEqual(self.vaults.missing_auth("protonpass", env), [])
+
+    def test_missing_auth_is_named_before_any_binary_runs(self):
+        called = []
+        with self.assertRaises(self.vaults.VaultSourceError) as ctx:
+            self.vaults.resolve("op://work/github/pat", env={},
+                                run=lambda *a, **k: called.append(a))
+        self.assertEqual(called, [])
+        self.assertIn("OP_SERVICE_ACCOUNT_TOKEN", str(ctx.exception))
+
+    def test_a_missing_binary_names_the_install(self):
+        def boom(*a, **k):
+            raise FileNotFoundError()
+        with self.assertRaises(self.vaults.VaultSourceError) as ctx:
+            self.vaults.resolve("op://w/i/f", env={"OP_SERVICE_ACCOUNT_TOKEN": "t"}, run=boom)
+        self.assertIn("brew install 1password-cli", str(ctx.exception))
+
+    def test_the_value_strips_but_the_audit_never_sees_it(self):
+        seen = []
+        done = lambda argv, **kw: type("P", (), {"returncode": 0, "stdout": "hunter2\n", "stderr": ""})()
+        value = self.vaults.resolve("op://w/i/f", env={"OP_SERVICE_ACCOUNT_TOKEN": "t"},
+                                    run=done, audit=seen.append)
+        self.assertEqual(value, "hunter2")
+        self.assertNotIn("hunter2", repr(seen))
+        self.assertEqual(seen[0]["ref"], "op://w/i/f")
+
+    def test_a_refusing_cli_keeps_its_own_words(self):
+        done = lambda argv, **kw: type("P", (), {"returncode": 1, "stdout": "",
+                                                 "stderr": "session expired"})()
+        with self.assertRaises(self.vaults.VaultSourceError) as ctx:
+            self.vaults.resolve("bw://github", env={"BW_CLIENTID": "a", "BW_CLIENTSECRET": "b",
+                                                    "BW_PASSWORD": "c"}, run=done)
+        self.assertIn("session expired", str(ctx.exception))
+
+    def test_no_resolve_command_can_log_in(self):
+        # auth is the owner's one-time act; a resolve that logs in strands a session
+        for ref in ("op://w/i/f", "bw://i", "pass://V/I/f"):
+            for kind in ("field", "totp"):
+                self.assertNotIn("login", " ".join(self.vaults.command(ref, kind=kind)).lower())
+
+    def test_vaults_imports_stay_local(self):
+        import ast, pathlib
+        tree = ast.parse(pathlib.Path("src/spawnables/vaults.py").read_text())
+        imported = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported.update(a.name.split(".")[0] for a in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                imported.add((node.module or "").split(".")[0])
+        self.assertLessEqual(imported, {"os", "shutil", "subprocess", "urllib"})
+
+
 if __name__ == "__main__":
     suite = unittest.defaultTestLoader.loadTestsFromModule(sys.modules["__main__"])
     result = unittest.TextTestRunner(verbosity=0).run(suite)

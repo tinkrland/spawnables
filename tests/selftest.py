@@ -1998,6 +1998,69 @@ class TestVaultSources(unittest.TestCase):
             elif isinstance(node, ast.ImportFrom):
                 imported.add((node.module or "").split(".")[0])
         self.assertLessEqual(imported, {"os", "shutil", "subprocess", "urllib"})
+class TestDeviceSurface(unittest.TestCase):
+    """four verbs for a device with no dom, and the refusals that keep them honest."""
+
+    XML = ('<hierarchy><node text="compose" bounds="[0,0][100,50]"/>'
+           '<node text="send" bounds="[300,700][400,760]"/></hierarchy>')
+
+    def surface(self):
+        from spawnables import surface
+        return surface
+
+    def test_android_covers_all_four_verbs(self):
+        self.assertEqual(list(self.surface().BACKENDS["android-adb"]["verbs"]),
+                         ["open_app", "tap_text", "type_text", "screen"])
+
+    def test_open_app_is_a_launcher_intent(self):
+        argv = self.surface().open_app("com.example.app")
+        self.assertEqual(argv[:5], ["adb", "shell", "monkey", "-p", "com.example.app"])
+        self.assertIn("android.intent.category.LAUNCHER", argv)
+
+    def test_a_label_becomes_a_centre_point(self):
+        node = self.surface().find_node(self.XML, "send")
+        self.assertEqual((node["x"], node["y"]), (350, 730))
+        self.assertEqual(node["bounds"], (300, 700, 400, 760))
+
+    def test_a_missing_label_says_what_the_tree_does_offer(self):
+        with self.assertRaises(LookupError) as ctx:
+            self.surface().find_node(self.XML, "publish")
+        self.assertIn("compose", str(ctx.exception))
+
+    def test_tap_without_a_dump_asks_for_one_instead_of_guessing(self):
+        plan = self.surface().tap_text("send")
+        self.assertEqual(plan["needs"], ["dump_tree", "read_tree"])
+        self.assertIn("guess", plan["why"])
+
+    def test_a_tap_is_the_last_step_of_a_dump(self):
+        plan = self.surface().tap_text("send", xml_text=self.XML)
+        self.assertEqual(plan["argv"], ["adb", "shell", "input", "tap", "350", "730"])
+
+    def test_spaces_survive_the_adb_shell(self):
+        self.assertEqual(self.surface().type_text("hello world")[-1], "hello%sworld")
+
+    def test_ios_mirroring_gives_eyes_only(self):
+        self.assertEqual(self.surface().BACKENDS["ios-mirroring"]["verbs"], ["screen"])
+        refusal = self.surface().plan("tap_text", label="send", backend="ios-mirroring")
+        self.assertTrue(refusal["refused"])
+        self.assertIn("vision reads", refusal["reason"])
+
+    def test_an_ios_guest_has_no_verb_at_all(self):
+        refusal = self.surface().plan("open_app", pkg="a.b", backend="ios-guest")
+        self.assertTrue(refusal["refused"])
+        self.assertEqual(refusal["alternatives"], ["android-adb"])
+
+    def test_the_cloud_farm_works_and_is_still_not_adopted(self):
+        card = self.surface().agent_card()
+        self.assertIn("tap_text", card["backends"]["cloud-farm"]["verbs"])
+        self.assertIn("it is borrowing", card["adopted_from"])
+        self.assertIn("farm-borrowed-identity", card["refused"])
+
+    def test_no_cloud_endpoint_hides_in_this_module(self):
+        import pathlib
+        text = pathlib.Path("src/spawnables/surface.py").read_text()
+        self.assertNotIn("phone-harness.com", text)
+        self.assertNotIn("requests", text)
 
 
 if __name__ == "__main__":

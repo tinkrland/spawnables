@@ -96,6 +96,17 @@ def cmd_vaults(args):
     return 0
 
 
+def cmd_surface(args):
+    """the four verbs an agent gets on a device with no dom, and who offers which."""
+    from . import surface
+    if args.verb:
+        plan = surface.plan(args.verb, backend=args.backend, **({} if args.verb != "open_app" else {"pkg": args.arg or ""}))
+        print(json.dumps(plan, indent=2, default=str))
+    else:
+        print(json.dumps(surface.agent_card(), indent=2))
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="spawnables", description=__doc__)
     ap.add_argument("--catalog", default="catalog", help="catalog directory")
@@ -110,7 +121,12 @@ def main(argv=None):
     v.add_argument("action", choices=["check", "card", "resolve", "code"])
     v.add_argument("ref", nargs="?", help="op://vault/item/field, bw://item/field, pass://vault/item/field")
     v.set_defaults(fn=cmd_vaults)
-
+    sf = sub.add_parser("surface", help="the device verb set: open_app, tap_text, type_text, screen")
+    sf.add_argument("verb", nargs="?")
+    sf.add_argument("--backend", default="android-adb",
+                    choices=["android-adb", "ios-mirroring", "ios-guest", "cloud-farm"])
+    sf.add_argument("--arg", default=None, help="package name for open_app")
+    sf.set_defaults(fn=cmd_surface)
     args = ap.parse_args(argv)
     return args.fn(args)
 

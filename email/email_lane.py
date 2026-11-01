@@ -26,8 +26,10 @@ LANE = {
 }
 
 PROVIDERS = {
-    "agentmail": {"free": "1000 messages, 3 inboxes on custom domains, per month", "signature": "plain header secret"},
-    "carlyemail": {"free": "1000 messages, 3 inboxes on custom domains, per month", "signature": "svix (v1 over id.timestamp.body)"},
+    "agentmail": {"free": "custom domains and subdomains per their docs; the plan figure is not recorded here",
+                  "signature": "plain header secret", "verified": False},
+    "carlyemail": {"free": "3 inboxes and 1000 emails a month, custom domain included, no card",
+                   "signature": "svix (v1 over id.timestamp.body)", "verified": True},
 }
 
 

@@ -12,29 +12,58 @@ a human act, and that is correct: it is their account).
 
 gate: `WAHA_HMAC_KEY`, `HEYPHONY_WHATSAPP_WHITELIST`.
 
-## the number problem, and the one workaround that is not a trick
+## the number problem, and the one path that works
 
-whatsapp is the strictest of the nine about the number behind the account, and it is strict in a way that is not about you: a `+1` did, an esim data line, a softphone and a cloud service all arrive in the same bucket, get looked at once, and get refused or banned later. the tempting fixes are all worse than the problem. buying a warmed `+1` number is somebody else's identity, a vpn changes where the packets come from and nothing about what the number is, and either route means the account can vanish with the conversations in it.
+whatsapp is the strictest of the nine about the number behind the account, and it is strict about a
+property the number either has or does not: whether the country you bought it in treats a cloud number
+as a mobile number. nothing about the app, the client or the vpn changes that answer.
 
-the workaround that actually holds up is a regulatory accident, and it is worth understanding before using it, because the reason it works is the reason it is not a bypass.
+two different questions hide in that sentence, and keeping them apart is the whole trick:
 
-**the uk and australia treat cloud telephony as telephony.** ofcom has a category for it, a virtual mobile number, and a service like fanytel is not a sip trunk wearing a costume: it is a number that receives sms, from a provider the regulator expects to behave like a carrier. `+44` and `+61` numbers are, for this purpose, mobile numbers. in the us and canada the same service is a did, a voip number, `+1` with a flag on it, and everything that is not a mobile carrier's own sim is mush together.
+- **can a machine hold it?** that is a sip question. a did from voip.ms, anveo, bulkvs or jmp.chat is
+  real sip: the host registers it, heyphony catches its texts, and it rings while the machine is up.
+- **will whatsapp accept it?** that is a legal question about the number's class in the country that
+  issued it, and it is the one that gets refused.
 
-so the path, in full:
+in the uk the class has a name, a virtual mobile number, and the category exists because the
+regulator expects the provider to behave like a carrier.
 
-1. get a uk (or australian) virtual mobile number from fanytel. it is more expensive than a dollar a month, and the price is the honest part: this is a number that behaves like a phone.
-2. do the one otp when you set it up. that is the only code whatsapp wants that needs to reach a number.
-3. finish the account setup from the app on a warmed up mobile, so the signup looks like a signup and not like a script. the phone is the device of record and it can then be parked.
-4. on the agent's desktop, open `web.whatsapp.com` rather than reaching for an api. connect with the qr code or the login code.
-5. it works the way whatsapp works: messages sync while the phone is offline, and calls can be received and made from the linked desktop.
+**fanytel answers only the second.** it is a web-hosted service, not a sip endpoint: the number lives
+in their app and receives its codes there, and it cannot be registered in baresip or linphone. that
+is fine for what it is used for here, signing an account up once, and useless as a softphone line. a
+provider did in the same country is the other way round.
 
-that last step is the one that matters for this folder, and it is worth saying clearly: **whatsapp web is a supported surface, not a workaround.** a browser session in the guest, on a machine whose clock, locale and exit agree with each other, is closer to what whatsapp expects than any unofficial bridge. the waha session above is the automated path; `web.whatsapp.com` is the path for an agent that mostly needs to read and occasionally reply as the person it belongs to.
+```mermaid
+flowchart TD
+    A["a vmn in a country that issues them<br/>uk, australia, sweden, lithuania, poland"] --> B["one otp, read in fanytel's web app"]
+    B --> C["finish account setup in whatsapp<br/>on a warmed up mobile"]
+    C --> D["the phone is the device of record, then it can be parked"]
+    D --> E["on the agent's desktop open web.whatsapp.com"]
+    E --> F["connect by qr, or by login code"]
+    F --> G["messages sync while the phone is offline<br/>calls in and out work"]
+    D -.->|"a sip did would register here instead"| H["heyphony holds the line<br/>if the job is answering a phone, not signing up"]
+```
 
-what this is not, said plainly because the internet is full of the opposite claim:
+### the countries, and why the list is short
 
-- not an esim, and not a `+1` number. if the number is american, none of the above applies.
-- not a vpn, not a second identity, not a way around a ban. a new number after a ban is the same person wearing a second face, and whatsapp is good at noticing.
-- not a loophole in whatsapp's rules. it is a difference in how the uk and australia classify a cloud number, and the classification is the regulator's, not a trick.
-- still bannable for spam, exactly like any other account. the number being legitimate buys you the right to be treated as legitimate, nothing more.
+a cloud number is a mobile number in exactly the places where the numbering plan gives cloud providers
+mobile ranges and expects them to behave like carriers. **the uk and australia** do it, **sweden,
+lithuania and poland** do it, and **the netherlands** does it too at a price that only makes sense if
+the workflow is already paying for itself. in **the us, canada and the +1 countries** the same service
+is a did, a voip number, and everything that is not a carrier's own sim is one bucket, which is why a
+`+1` number is the wrong tool no matter who sells it.
 
-the same logic applies to google accounts, mostly, for the same reason: `+44` and `+61` cloud numbers are mobile numbers there too, and `+1` ones are not.
+that difference is not a disguise and not a workaround for a rule. nothing here spoofs a number, a
+location or a device: the number is a mobile number because the country says it is, and the account is
+an ordinary account on an ordinary number.
+
+the cost follows the same logic and is worth stating plainly: a uk number costs more than a us one,
+and an australian one more again, so which country to buy in is a question about the agent's workload
+rather than a preference.
+
+### the same reasoning, for google
+
+google accounts land the same way and for the same reason, which is why they are noted here rather than
+in their own folder: a uk or australian number tends to work, and it is the price question again
+rather than a technical one. if an agent's week includes google, buying the number in a country that
+issues them is the decision that makes both work.

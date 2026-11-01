@@ -60,6 +60,19 @@ flowchart TD
 
 the two branches matter because the vendor is chosen for different reasons on each. when the agent buys its own, the question is stock and price in an area code, and only anveo answers that over an api today, so it is the one path a cli can finish. when the owner hands over a did they already own, the question is only where the password lives, and that is one command.
 
+### the area lookup
+
+the one place setup is allowed to ask a question after the number exists: which area code, before the order.
+
+```mermaid
+flowchart LR
+    A["heyphony setup areas"] --> B{"anveo keys set"}
+    B -- "no" --> C["closed: names the three env vars<br/>and never invents a list"]
+    B -- "yes" --> D["areas with stock and price per rate plan"]
+    D --> E["deepest stock first, cheapest plan named"]
+    E --> F["heyphony setup provision --area-code n<br/>--purchase when the number is the decision"]
+```
+
 ### the manage flow
 
 ```mermaid

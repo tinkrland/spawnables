@@ -43,6 +43,8 @@ def _out(obj):
 
 
 def cmd_setup(args):
+    if getattr(args, "what", None) == "areas":
+        return cmd_setup_areas(args)
     if getattr(args, "what", None) == "select":
         return cmd_setup_select(args)
     _out(SETUP)
@@ -198,6 +200,16 @@ def cmd_hooks(args):
         return 1
 
 
+def cmd_setup_areas(args):
+    """which area codes have stock, and what a month of each costs: the choice before the order."""
+    from heyphony.src.setup import provision
+    answer = provision.areas_menu(area_code=args.area_code, area_name=args.area_name,
+                                  country_id=args.country_id, state_id=args.state_id,
+                                  did_type=args.did_type)
+    _out(answer)
+    return 0 if answer.get("ok") else 1
+
+
 def cmd_status(args):
     _out({"rc": str(sip.rc_path()), "rc_present": sip.rc_path().is_file(),
           "provider": providers.profile("voip.ms")["provider"],
@@ -275,14 +287,20 @@ def build_parser():
     p = argparse.ArgumentParser(prog="heyphony", description="telephony an agent can hold")
     p.add_argument("--setup", action="store_true", help="print the telephony setup plan as json and stop")
     sub = p.add_subparsers(dest="cmd")
-    s = sub.add_parser("setup", help="the plan, or `setup select sip` to walk it")
-    s.add_argument("what", nargs="?", choices=["select", "plan"])
+    s = sub.add_parser("setup", help="the plan, `setup select sip` to walk it, or `setup areas` to choose one")
+    s.add_argument("what", nargs="?", choices=["select", "plan", "areas"])
     s.add_argument("rail", nargs="?")
     s.add_argument("--provider")
     s.add_argument("--did", help="a did you already hold, in e164")
     s.add_argument("--new", "--get-new", dest="new", action="store_true",
                    help="order one in the browser instead")
     s.add_argument("--json", action="store_true", help="json even on a terminal")
+    s.add_argument("--area-code", help="with `setup areas`: the area code an agent wants to see")
+    s.add_argument("--area-name", help="with `setup areas`: a city or region fragment")
+    s.add_argument("--country-id", help="with `setup areas`: anveo's country id")
+    s.add_argument("--state-id", help="with `setup areas`: anveo's state id")
+    s.add_argument("--did-type", default="GEOGRAPHIC",
+                   choices=["GEOGRAPHIC", "NATIONAL", "TOLLFREE", "MOBILE"])
     s.set_defaults(func=cmd_setup)
     st = sub.add_parser("status"); st.set_defaults(func=cmd_status)
     c = sub.add_parser("connect")

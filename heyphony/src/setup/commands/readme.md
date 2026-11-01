@@ -5,6 +5,7 @@ one table, because the most common confusion in this package was not knowing whi
 | command | flow | what it settles | safe to run twice |
 | --- | --- | --- | --- |
 | `heyphony setup` | setup | prints the whole plan for this host as json | yes, it only reads |
+| `heyphony setup areas --area-code 212` | setup (buy) | which area codes have stock, the price per rate plan, and the order command it implies | yes, and it is closed rather than guessed without the anveo keys |
 | `heyphony setup select sip` | setup | vendor, then existing or new did, then the plan | yes |
 | `heyphony setup provision --provider anveo` | setup (buy) | area stock and price, and a prepared order | yes, dry by default |
 | `heyphony provision --purchase` | setup (buy) | the order itself | not written on purpose: it spends money |

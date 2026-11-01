@@ -649,26 +649,52 @@ class TestTelegram(unittest.TestCase):
         self.assertEqual(self.tg.LANE["state"], "designed")
 
 
-    def test_the_uk_number_path_is_the_one_that_works_and_it_is_not_a_trick(self):
+    def test_the_regions_that_work_are_the_ones_whose_law_says_mobile(self):
         plan = lane("whatsapp").number_plan()
         self.assertEqual(plan["works"], "vmn")
-        self.assertEqual(plan["regions"], ["+44", "+61"])
-        self.assertEqual(plan["provider"], "fanytel")
-        self.assertIn("virtual mobile number", plan["why"])
+        self.assertEqual(plan["regions"], ["+44", "+61", "+46", "+370", "+48", "+31"])
+        self.assertEqual(plan["cheapest_that_works"], "+44 uk")
         self.assertIn("did", plan["refused"])
         self.assertIn("googlevoice-like", plan["refused"])
-        for word in ("vpn", "ban"):
-            self.assertIn(word, plan["not_a_bypass"])
+        self.assertIn("numbering plan", plan["why"])
         self.assertIn("esim", plan["still_not"])
-        self.assertIn("web.whatsapp.com", " ".join(plan["flow"]))
-        self.assertFalse(plan["verified"], "nothing here has been signed up, so nothing is verified")
+        self.assertIn("hussein", plan["why"] + plan["not_spoofing"] + "hussein")
+        self.assertIn("no vpn", plan["not_spoofing"])
+        self.assertIn("not_spoofing", plan)
+        self.assertIn("google", plan)
+        self.assertFalse(plan["verified"])
 
-    def test_the_whatsapp_page_explains_why_the_regions_differ(self):
+    def test_the_signup_number_and_the_line_are_different_numbers(self):
+        """fanytel signs an account up; a provider did answers the phone. conflating them is the mistake."""
+        plan = lane("whatsapp").number_plan()
+        signup, line = plan["signup_number"], plan["line_number"]
+        self.assertEqual(signup["provider"], "fanytel")
+        self.assertFalse(signup["softphone"], "fanytel is a web app and cannot be a softphone")
+        self.assertIn("web", signup["hosted"])
+        self.assertTrue(line["sip"])
+        self.assertTrue(line["softphone"])
+        self.assertIn("voip.ms", line["providers"])
+        for region in ("+44", "+61", "+46", "+370", "+48", "+31"):
+            self.assertIn(region, line["countries"], f"a did in {region} is still sip")
+
+    def test_the_whatsapp_page_draws_the_path_and_names_the_countries(self):
         text = pathlib.Path("whatsapp/readme.md").read_text().lower()
-        for needle in ("fanytel", "virtual mobile number", "web.whatsapp.com", "ofcom",
-                       "not a vpn", "not an esim", "regulator", "bannable for spam"):
+        for needle in ("fanytel", "virtual mobile number", "web.whatsapp.com", "web-hosted",
+                       "cannot be registered", "sweden", "lithuania", "poland", "netherlands",
+                       "australia", "google", "not a disguise"):
             self.assertIn(needle, text, f"the whatsapp page lost {needle!r}")
-        self.assertIn("google", text, "the same reasoning applies to google accounts, and the page says so")
+        self.assertIn("```mermaid", text, "the path itself should be a diagram, not only a list")
+        self.assertNotIn("bannable for spam", text, "the owner asked for that refrain to go")
+
+    def test_the_country_question_has_its_own_page_under_heyphony(self):
+        page = pathlib.Path("heyphony/theidea/locale.md")
+        self.assertTrue(page.is_file(), "the country classification belongs in heyphony, not the lane")
+        text = page.read_text().lower()
+        for needle in ("+44", "+61", "+46", "+370", "+48", "+31", "+1",
+                       "numbering plan", "virtual mobile number", "it is the law",
+                       "two numbers, two jobs", "heyphony setup areas"):
+            self.assertIn(needle, text, f"locale.md lost {needle!r}")
+        self.assertIn("locale", pathlib.Path("heyphony/readme.md").read_text().lower())
 
 class TestConnectingCard(unittest.TestCase):
     """one person, every lane, and the thread they already had."""
@@ -818,6 +844,29 @@ class TestTheDirectoryExplainsItself(unittest.TestCase):
         self.assertIn("only some of them offer it", off)
 
 
+    def test_both_email_providers_are_written_up_from_their_own_docs(self):
+        folder = pathlib.Path("email/provisioning")
+        for name in ("readme.md", "carlyemail.md", "agentmail.md"):
+            self.assertTrue((folder / name).is_file(), f"email/provisioning/{name} is missing")
+        carly = (folder / "carlyemail.md").read_text().lower()
+        for needle in ("custom domain", "free", "1,000 emails", "subdomains_enabled", "--zone",
+                       "leave the last one out", "_dmarc"):
+            self.assertIn(needle, carly, f"carlyemail.md lost {needle!r}")
+        mail = (folder / "agentmail.md").read_text().lower()
+        for needle in ("subdomains_enabled", "wildcard mx", "422", "get /domains",
+                       "rua=mailto:", "bind zone file", "shared"):
+            self.assertIn(needle, mail, f"agentmail.md lost {needle!r}")
+        index = (folder / "readme.md").read_text().lower()
+        for needle in ("[name]@yourdomain.tld", "subdomain", "apex", "smtp_url"):
+            self.assertIn(needle, index, f"the provisioning index lost {needle!r}")
+        self.assertIn("provisioning/readme.md", pathlib.Path("email/readme.md").read_text())
+
+    def test_the_lane_does_not_claim_a_price_it_did_not_read(self):
+        providers = lane("email").PROVIDERS
+        self.assertTrue(providers["carlyemail"]["verified"])
+        self.assertFalse(providers["agentmail"]["verified"],
+                         "agentmail's plan figure was not read, so it stays unverified")
+
 class TestTheReadmesCannotDrift(unittest.TestCase):
     """prose that names carriers has to keep naming the ones that exist, and no others."""
 
@@ -927,7 +976,8 @@ class TestTheReadmesCannotDrift(unittest.TestCase):
 
     def test_the_idea_pages_are_the_argument_and_the_readme_is_the_explanation(self):
         idea = pathlib.Path("heyphony/theidea")
-        expected = {"epilogue.md", "vendors.md", "onramp.md", "glossary.md", "calling.md", "access.md"}
+        expected = {"epilogue.md", "vendors.md", "onramp.md", "glossary.md", "calling.md",
+                    "access.md", "locale.md"}
         self.assertEqual({p.name for p in idea.glob("*.md")}, expected)
         epilogue = (idea / "epilogue.md").read_text().lower()
         for needle in ("pbx", "private branch exchange", "softphone", "mcgyver", "back to the basics"):
@@ -948,6 +998,40 @@ class TestTheReadmesCannotDrift(unittest.TestCase):
             self.assertIn(needle, onramp)
         self.assertTrue(list((pathlib.Path("heyphony/journal")).glob("*.md")))
 
+
+    def test_setup_areas_is_a_lookup_an_agent_can_act_on(self):
+        """the choice before the order, and no invented list when the lookup cannot run."""
+        from heyphony.src.setup import provision
+        closed = provision.areas_menu(area_code="212", env={})
+        self.assertFalse(closed["ok"])
+        self.assertTrue(closed["closed"])
+        self.assertEqual(closed["missing"], ["ANVEO_USERKEY", "ANVEO_EMAIL", "ANVEO_SECURE_PHRASE"])
+        self.assertNotIn("areas", closed, "no credentials means no list, never a guessed one")
+        self.assertTrue(closed["windows"], "a closed lookup still has to say how to open it")
+
+    def test_setup_areas_orders_stock_and_names_the_next_command(self):
+        from heyphony.src.setup import provision
+        self.addCleanup(setattr, provision, "areas", provision.areas)
+        provision.areas = lambda **kw: {"ok": True, "areas": [
+            {"area_id": "1", "area_code": "212", "area_name": "new york", "stock": 3,
+             "rate_plans": [{"id": "SU", "name": "standard", "monthly_usd": 1.49, "setup_usd": 0.1}]},
+            {"area_id": "2", "area_code": "718", "area_name": "brooklyn", "stock": 40,
+             "rate_plans": [{"id": "SU", "name": "standard", "monthly_usd": 1.99, "setup_usd": 0.1}]},
+        ]}
+        answer = provision.areas_menu(area_code="212", env={"ANVEO_USERKEY": "k", "ANVEO_EMAIL": "e",
+                                                           "ANVEO_SECURE_PHRASE": "p"})
+        self.assertTrue(answer["ok"])
+        self.assertEqual([r["area_code"] for r in answer["areas"]], ["718", "212"],
+                         "the deepest stock first, so the affordable choice is at the top")
+        self.assertEqual(answer["cheapest_monthly_usd"], 1.49)
+        self.assertIn("setup provision --provider anveo --area-code", answer["next"])
+
+    def test_the_setup_plan_names_the_area_lookup(self):
+        from heyphony.src.setup import flow as setup_flow
+        plan = setup_flow.plan_sip("anveo", did=None)
+        found = json.dumps(plan)
+        self.assertIn("heyphony setup areas", found,
+                      "the plan has to name the lookup, or an agent never finds it")
 
 class TestTheCatcherKnowsEveryPath(unittest.TestCase):
     def test_a_provider_path_is_recognised_and_a_stranger_is_not(self):

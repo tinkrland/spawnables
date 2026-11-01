@@ -111,6 +111,45 @@ def areas(did_type="GEOGRAPHIC", country_id=None, state_id=None, area_code=None,
     return answer
 
 
+def areas_menu(area_code=None, area_name=None, country_id=None, state_id=None,
+               did_type="GEOGRAPHIC", env=None):
+    """the lookup an agent runs before it can be asked which area code it wants.
+
+    it never invents a list: without credentials the answer is closed and names what is missing,
+    which is the same rule every other lane follows. with credentials it is a filtered list of
+    area codes with stock and a price per rate plan, ordered so the affordable stock is first.
+    """
+    import os
+    env = env if env is not None else os.environ
+    missing_keys = [k for k in ("ANVEO_USERKEY", "ANVEO_EMAIL", "ANVEO_SECURE_PHRASE") if not env.get(k)]
+    filters = {"area_code": area_code, "area_name": area_name, "country_id": country_id,
+               "state_id": state_id, "did_type": did_type}
+    if missing_keys:
+        return {"ok": False, "closed": True, "missing": missing_keys, "filters": filters,
+                "why": "anveo's area lookup is an authenticated call, so no list is shown until it can be made",
+                "windows": ["call it with ANVEO_USERKEY, ANVEO_EMAIL and ANVEO_SECURE_PHRASE set "
+                            "to see area codes with stock and price",
+                            "anveo's portal lists the same areas if you would rather look at a table"]}
+    answer = areas(did_type=did_type, country_id=country_id, state_id=state_id,
+                   area_code=area_code, area_name=area_name)
+    if not answer.get("ok"):
+        return answer
+    rows = answer.get("areas", [])
+    rows = sorted(rows, key=lambda r: (r.get("stock") is None, -(r.get("stock") or 0),
+                                       str(r.get("area_code"))))
+    cheapest = None
+    for row in rows:
+        for plan in row.get("rate_plans", []):
+            if plan.get("monthly_usd") is not None:
+                cheapest = plan["monthly_usd"] if cheapest is None else min(cheapest, plan["monthly_usd"])
+    answer["areas"] = rows
+    answer["count"] = len(rows)
+    answer["cheapest_monthly_usd"] = cheapest
+    answer["next"] = ("heyphony setup provision --provider anveo --area-code <code> --apply"
+                      if rows else "no stock for that filter: widen it, or try a neighbouring area name")
+    return answer
+
+
 def _area_row(area):
     """one area, with its rate plans as cents-a-month integers rather than strings."""
     plans = []

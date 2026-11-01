@@ -226,6 +226,8 @@ def plan_sip(provider, did=None, new=False):
                                      f"--sms-url {routes.paste_url('anveo')} --apply",
                           "why": "anveo publishes areas, order and sms url as three api actions, so the same cli "
                                  "can buy the number and point its texts at the catcher without a browser",
+                          "lookup": "heyphony setup areas --area-code <n>  (stock and price per rate plan, "
+                                    "so the area is a choice rather than a guess)",
                           "stops_before": "DID.ORDER", "spends_money": False,
                           "why_money_wait": "area stock and prices are free to ask for, an order bills the "
                                             "account, and no payment rail is wired here on purpose",

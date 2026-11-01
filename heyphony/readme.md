@@ -86,6 +86,7 @@ the reasoning that did not fit in a readme lives beside it, on purpose, because 
 - [vendors](theidea/vendors.md): ten number shops, what each one really does with a text, and which ones cannot be an inbox
 - [onramp](theidea/onramp.md): the ramp for signal and whatever else only wants a phone, and the boundary between onramping a rail and becoming one
 - [calling](theidea/calling.md): text first is not voice never, and the rails a call can ride
+- [locale](theidea/locale.md): where a number is bought changes what it is, why six countries issue cloud numbers as mobiles and the +1 countries do not, and why that is law rather than a trick
 - [glossary](theidea/glossary.md): did, sip, pstn, trunk, codec, catcher, getter, and the rest of the words
 - [access](theidea/access.md): turnkey today, open source eventually, the licence question we have not answered, and the four planned surfaces
 - [journal](journal/): the dated record of decisions, so six months from now the reasoning is still findable

@@ -6,9 +6,10 @@ renamed a field is the worse failure.
 """
 import json
 import time
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from heyphony import inbox
+from heyphony import inbox, routes
 
 
 def pick(payload, *keys):
@@ -27,7 +28,17 @@ def pick(payload, *keys):
     return walk(payload)
 
 
-def normalize(payload):
+def provider_of(path):
+    """the provider named in /sms/<provider>, when it is one we have a route for."""
+    parts = [p for p in urllib.parse.urlparse(path).path.strip("/").split("/") if p]
+    if len(parts) >= 2 and parts[0] == "sms" and parts[1] in routes.ROUTES:
+        return parts[1]
+    return None
+
+
+def normalize(payload, provider=None):
+    if provider:
+        return routes.normalize(provider, payload)
     entry = {"id": pick(payload, "id", "message_id", "guid"), "channel": "sms",
              "direction": "inbound", "sender": pick(payload, "from", "source", "origination_number", "msisdn"),
              "recipient": pick(payload, "to", "destination", "destination_number"),
@@ -39,19 +50,41 @@ def normalize(payload):
 
 def make_handler(token=None, path=None):
     class Handler(BaseHTTPRequestHandler):
-        def do_POST(self):
-            if token and self.headers.get("X-Heyphony-Token") != token:
-                self.send_response(401); self.end_headers(); self.wfile.write(b"no"); return
-            length = int(self.headers.get("Content-Length") or 0)
-            raw = self.rfile.read(length) if length else b"{}"
-            try:
-                payload = json.loads(raw or b"{}")
-            except ValueError:
-                payload = {"unparsed": raw.decode("utf-8", "replace")}
-            stored, reason = inbox.append(normalize(payload), path)
+        def _store(self, payload, provider):
+            stored, reason = inbox.append(normalize(payload, provider), path)
             body = json.dumps({"stored": stored, "reason": reason}).encode()
             self.send_response(200 if stored or reason == "duplicate" else 500)
             self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(body)
+
+        def _closed(self):
+            if token and self.headers.get("X-Heyphony-Token") != token:
+                self.send_response(401); self.end_headers(); self.wfile.write(b"no")
+                return True
+            return False
+
+        def do_POST(self):
+            if self._closed():
+                return
+            length = int(self.headers.get("Content-Length") or 0)
+            raw = self.rfile.read(length) if length else b"{}"
+            provider = provider_of(self.path)
+            try:
+                payload = json.loads(raw or b"{}")
+            except ValueError:
+                form = urllib.parse.parse_qs(raw.decode("utf-8", "replace"))
+                payload = {k: v[0] for k, v in form.items()} if form else {"unparsed": raw.decode("utf-8", "replace")}
+            if not isinstance(payload, dict):
+                payload = {"unparsed": payload}
+            self._store(payload, provider)
+
+        def do_GET(self):
+            """anveo calls a url with the message spliced into the query string, so a get is a delivery."""
+            if self._closed():
+                return
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            if not query:
+                self.send_response(404); self.end_headers(); self.wfile.write(b"nothing here"); return
+            self._store({k: v[0] for k, v in query.items()}, provider_of(self.path))
 
         def log_message(self, *a):
             pass

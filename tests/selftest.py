@@ -696,10 +696,22 @@ class TestTheReadmesCannotDrift(unittest.TestCase):
         for needle in ("a jerryrigged workaround", "a **phone number of its own**",
                        "one you can actually reach", "what it gives you, turnkey",
                        "setup select sip", "**device on**", "**device off**",
+                       "ten providers, and not all of them receive a text",
+                       "bulkvs", "jmp.chat", "voice only",
                        "onramp", "inbound first", "baresip", "ctrl_tcp",
                        "packages alone", "refused for otp"):
             self.assertIn(needle, text.lower(), f"heyphony readme lost {needle!r}")
         self.assertNotIn("—", text)
+
+
+class TestTheCatcherKnowsEveryPath(unittest.TestCase):
+    def test_a_provider_path_is_recognised_and_a_stranger_is_not(self):
+        from heyphony import catcher
+        for name in ("flowroute", "anveo", "signalwire", "questblue", "bulkvs"):
+            self.assertEqual(catcher.provider_of(f"/sms/{name}?x=1"), name)
+        self.assertIsNone(catcher.provider_of("/sms/twilio"))
+        self.assertIsNone(catcher.provider_of("/sms"))
+        self.assertIsNone(catcher.provider_of("/email"))
 
 
 class TestTheGuidedSetup(unittest.TestCase):
@@ -711,8 +723,15 @@ class TestTheGuidedSetup(unittest.TestCase):
             code = telephony_cli.main(argv)
         return code, out.getvalue()
 
-    def test_the_menu_is_the_two_providers_and_nothing_else(self):
-        self.assertEqual([c["key"] for c in setup_flow.PROVIDER_CHOICES], ["voip.ms", "flowroute"])
+    def test_the_menu_is_every_provider_the_routes_know_about(self):
+        from heyphony import routes
+        keys = [c["key"] for c in setup_flow.PROVIDER_CHOICES]
+        self.assertEqual(keys, ["voip.ms", "flowroute", "anveo", "signalwire", "questblue",
+                                "bulkvs", "jmp.chat", "voyced", "voxacall", "bitcall"])
+        self.assertEqual(sorted(keys), sorted(routes.ROUTES), "the menu and the routes cannot drift")
+        self.assertTrue(all(c.get("group") for c in setup_flow.PROVIDER_CHOICES))
+        groups = {c["group"] for c in setup_flow.PROVIDER_CHOICES}
+        self.assertEqual(groups, {"texts reach an inbox", "voice only, no inbox"})
         self.assertEqual([c["key"] for c in setup_flow.DID_CHOICES], ["existing", "new"])
 
     def test_a_piped_answer_picks_by_number_and_enter_takes_the_default(self):
@@ -762,7 +781,8 @@ class TestTheGuidedSetup(unittest.TestCase):
         answer = json.loads(text)
         self.assertFalse(answer["ok"])
         self.assertEqual(answer["needs"], "provider")
-        self.assertEqual([o["key"] for o in answer["options"]], ["voip.ms", "flowroute"])
+        self.assertIn("bulkvs", [o["key"] for o in answer["options"]])
+        self.assertIn("jmp.chat", [o["key"] for o in answer["options"]])
 
     def test_a_process_with_the_flags_gets_the_plan(self):
         code, text = self.run_cli(["setup", "select", "sip", "--provider", "voipms",
@@ -772,10 +792,67 @@ class TestTheGuidedSetup(unittest.TestCase):
         self.assertIn("+15551234567", plan["connect"])
         self.assertEqual(plan["rail"], "sip")
 
-    def test_a_third_provider_is_refused_with_the_two_that_exist(self):
+    def test_a_provider_we_do_not_hold_is_refused_with_the_ones_we_do(self):
         code, text = self.run_cli(["setup", "select", "sip", "--provider", "twilio"])
         self.assertEqual(code, 1)
-        self.assertEqual(json.loads(text)["options"], ["voip.ms", "flowroute"])
+        options = json.loads(text)["options"]
+        self.assertIn("bulkvs", options)
+        self.assertNotIn("twilio", options)
+
+    def test_only_the_providers_that_can_receive_are_called_an_inbox(self):
+        inbox = set(providers.inbox_providers())
+        self.assertEqual(inbox, {"voip.ms", "flowroute", "anveo", "signalwire", "questblue",
+                                 "bulkvs", "jmp.chat"})
+        for name, needle in (("voyced", "voice number until a real text lands"),
+                             ("voxacall", "not an inbox"),
+                             ("bitcall", "cannot be the inbox")):
+            entry = providers.profile(name)
+            self.assertEqual(entry["text_style"], "none", name)
+            self.assertFalse(entry["works_while_off"]["texts"], name)
+            self.assertIn(needle, entry["note"], name)
+        self.assertEqual(providers.profile("jmp.chat")["text_style"], "xmpp")
+        self.assertEqual(providers.profile("jmp.chat")["did_usd_month"], 4.99)
+        self.assertEqual(providers.profile("bulkvs")["did_usd_month"], 0.06)
+
+    def test_every_route_says_what_a_person_pastes_and_what_to_do_when_nothing_can_be_pasted(self):
+        from heyphony import routes
+        for name in routes.ROUTES:
+            hook = routes.hook(name, "https://host:8099")
+            self.assertIn(hook["kind"], ("email", "webhook-json", "url-forward", "post-to-url", "xmpp", "none"))
+            self.assertIn("evidence", hook)
+            self.assertFalse(hook["verified"])
+            if hook["kind"] in ("none", "xmpp", "email"):
+                self.assertIsNone(hook["paste_url"], name)
+            else:
+                self.assertTrue(hook["paste_url"].startswith("https://host:8099/sms/"), name)
+        anveo = routes.hook("anveo", "https://host:8099")["paste_url"]
+        self.assertIn("$[from]$", anveo)
+        self.assertIn("$[message]$", anveo)
+
+    def test_bulkvs_registers_one_webhook_over_its_api_and_needs_credentials_first(self):
+        from heyphony import routes
+        dry = routes.apply_hook("bulkvs", "https://host:8099")
+        self.assertFalse(dry["applied"])
+        self.assertEqual(sorted(dry["missing"]), ["BULKVS_API_PASS", "BULKVS_API_USER"])
+        self.assertIn("https://host:8099/sms/bulkvs", dry["as_curl"])
+        self.assertIn("webHooks", dry["as_curl"])
+        self.assertIn('"Webhook": "comms"', dry["as_curl"])
+
+    def test_one_envelope_out_of_five_more_shapes(self):
+        from heyphony import routes
+        bulk = routes.normalize("bulkvs", {"From": "+1555", "To": "+1666", "Message": "yo", "RefId": "r1"})
+        self.assertEqual((bulk["sender"], bulk["recipient"], bulk["body"], bulk["id"]), ("+1555", "+1666", "yo", "r1"))
+        questblue = routes.normalize("questblue", {"from": "+1555", "to": "+1666", "msg": "hey"})
+        self.assertEqual(questblue["body"], "hey")
+        signalwire = routes.normalize("signalwire", {"message": {"from": "+1", "to": "+2", "body": "hi", "message_id": "m1"}})
+        self.assertEqual(signalwire["id"], "m1")
+        anveo = routes.normalize("anveo", {"from": "+1", "to": "+2", "message": "hello"})
+        self.assertTrue(anveo["id"].startswith("anveo:"))
+        # a provider that posts nothing still cannot crash the catcher
+        self.assertEqual(routes.normalize("voyced", {"surprise": True})["id"], "voyced:unexpected")
+        self.assertEqual(routes.normalize("jmp.chat", {"surprise": True})["id"], "jmp.chat:unexpected")
+        with self.assertRaises(KeyError):
+            routes.normalize("twilio", {})
 
     def test_an_unknown_rail_is_refused(self):
         code, text = self.run_cli(["setup", "select", "carrier-pigeon"])

@@ -4,7 +4,7 @@ two commands, two scopes. `bin/heyphony` gives an agent a number; `bin/comms` te
 
 ```
 git checkout comms
-python3 tests/selftest.py       # 116 tests, stdlib only, no network
+python3 tests/selftest.py       # 121 tests, stdlib only, no network
 bin/heyphony --setup            # telephony: the number, the client, the proof
 bin/comms --setup               # every lane, its gate, its honest state
 ```
@@ -13,12 +13,14 @@ bin/comms --setup               # every lane, its gate, its honest state
 
 a number is the lane that unlocks the others: signal needs one to register, and a meetings lane is more useful when people can also call.
 
-`bin/heyphony --setup` prints the plan. `bin/heyphony setup select sip` walks it as menus (provider, then whether the did already exists, then the number), and the same three questions have flags so a process can answer them without a terminal: `--provider voipms|flowroute`, `--did +1...` or `--new`, `--json`. with no terminal and no flags it prints the next question instead of blocking. in short: buy a did (flowroute or voip.ms, about a dollar a month), then
+`bin/heyphony --setup` prints the plan. `bin/heyphony setup select sip` walks it as menus (provider, then whether the did already exists, then the number), and the same three questions have flags so a process can answer them without a terminal: `--provider voipms|flowroute`, `--did +1...` or `--new`, `--json`. with no terminal and no flags it prints the next question instead of blocking. in short: pick from ten providers (`--provider voip.ms|flowroute|anveo|signalwire|questblue|bulkvs|jmp.chat|voyced|voxacall|bitcall`), seven of which can receive a text and three of which are voice only, then buy a did (from six cents at bulkvs to about five dollars at jmp.chat), and
 
 ```
 export HEYPHONY_SIP_DID=+1...
 bin/heyphony connect sip --voipms --did +1... --username ... --password ...
 bin/heyphony serve --port 8099 --token ...     # provider sms webhook
+bin/heyphony hooks <provider>              # what to paste, and the api call that arms it
+bin/heyphony hooks bulkvs --apply          # arms it when the credentials are in the environment
 ```
 
 point the client at the generated rc on the host (baresip is the chosen client: json over tcp via `ctrl_tcp`), dial the provider echo test, text the number, and confirm both with `bin/heyphony calls` and `bin/heyphony inbox`.

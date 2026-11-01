@@ -10,7 +10,7 @@ of blocking on a prompt. that is what makes setup operatable by an agent, not ju
 """
 import sys
 
-from heyphony import providers
+from heyphony import providers, routes
 
 RAILS = {
     "sip": {
@@ -22,12 +22,27 @@ RAILS = {
 }
 
 PROVIDER_CHOICES = [
-    {"key": "voip.ms", "label": "voip.ms",
-     "detail": "carrier side voicemail and texts land in email, so the inbox keeps working with the machine off"},
-    {"key": "flowroute", "label": "flowroute",
-     "detail": "one dollar a month, texts by webhook or smpp, no voicemail fallback at the carrier"},
+    {"key": "voip.ms", "label": "voip.ms", "group": "texts reach an inbox",
+     "detail": "a dollar a month, carrier voicemail and texts land in email, so the inbox keeps working with the machine off"},
+    {"key": "flowroute", "label": "flowroute", "group": "texts reach an inbox",
+     "detail": "a dollar a month, texts by webhook or smpp, no voicemail fallback at the carrier"},
+    {"key": "anveo", "label": "anveo", "group": "texts reach an inbox",
+     "detail": "99 cents, texts forwarded to a url with placeholders, call flow voicemail, sms on us/ca/uk numbers"},
+    {"key": "signalwire", "label": "signalwire", "group": "texts reach an inbox",
+     "detail": "50 cents, a swml message handler posts json, sip credentials you choose, ordering over an api"},
+    {"key": "questblue", "label": "questblue", "group": "texts reach an inbox",
+     "detail": "70 cents, a trunk provider: the number routes at your trunk and sms posts to a url you set over their api"},
+    {"key": "bulkvs", "label": "bulkvs", "group": "texts reach an inbox",
+     "detail": "six cents a month wholesale, one webhook in the api and a webhook field per number, US and Canada numbers"},
+    {"key": "jmp.chat", "label": "jmp.chat", "group": "texts reach an inbox",
+     "detail": "4.99, unlimited texts and transcribed voicemail, arriving as jabber messages instead of a webhook"},
+    {"key": "voyced", "label": "voyced", "group": "voice only, no inbox",
+     "detail": "EU and worldwide numbers from about 2.50, per-minute inbound, but no sms claim and an api still in testing"},
+    {"key": "voxacall", "label": "voxacall", "group": "voice only, no inbox",
+     "detail": "no-kyc crypto-paid trunking, fast to open, no public sms story and the shape risk engines block first"},
+    {"key": "bitcall", "label": "bitcall", "group": "voice only, no inbox",
+     "detail": "cheap international termination and a real api, but inbound numbers are on their roadmap, so it cannot be the inbox"},
 ]
-
 DID_CHOICES = [
     {"key": "existing", "label": "i already have a sip did",
      "detail": "paste the number, then the sip username and password from the provider dashboard"},
@@ -38,6 +53,9 @@ DID_CHOICES = [
 PORTALS = {
     "voip.ms": "https://voip.ms",
     "flowroute": "https://manage.flowroute.com",
+    "anveo": "https://www.anveo.com",
+    "signalwire": "https://signalwire.com",
+    "questblue": "https://customer.questblue.com",
 }
 
 
@@ -157,6 +175,9 @@ def plan_sip(provider, did=None, new=False):
     else:
         steps.append("confirm the did is sms capable; an inbound inbox is not a verification route")
 
+    if profile.get("sip_style") == "trunk-route":
+        steps.append("create the sip trunk first, then point this number at it (route2trunk in the portal "
+                     "or `PUT /did`): the credentials belong to the trunk, not to the number")
     steps += [
         "fetch the sip username and password for that number from the provider dashboard",
         "run the connect command below on the host, not in a burnable guest",
@@ -178,6 +199,12 @@ def plan_sip(provider, did=None, new=False):
         "provisioning": {"now": "browser", "later": "programmatic ordering from the cli",
                          "why": "ordering a number is a purchase, and a purchase is a person's act until it is a lane"},
         "works_while_off": profile["works_while_off"],
+        "sip_style": profile.get("sip_style"),
+        "pricing": {"did_usd_month": profile["did_usd_month"],
+                    "inbound_texts": profile["inbound_texts"],
+                    "inbound_text_usd": profile.get("inbound_text_usd"),
+                    "note": profile["note"]},
+        "text_hook": routes.hook(key, did=None if new else did),
         "number_type": "voip",
         "verified": False,
         "evidence": "the flow is tested against stored answers; no did has been ordered through it",
@@ -199,6 +226,16 @@ def render(plan):
                   f"  {plan['browser']['why']}", ""]
     lines += ["what happens next:"]
     lines += [f"  {i}. {step}" for i, step in enumerate(plan["steps"], 1)]
+    hook = plan.get("text_hook") or {}
+    if hook.get("paste_url"):
+        lines += ["", f"texts land here: {hook['paste_url']}  ({hook['kind']})"]
+        lines += [f"  wire it with: {hook['cli']}"]
+    elif hook.get("kind") == "email":
+        lines += ["", "texts arrive by email on this provider, so the email lane is their home, not the catcher"]
+    elif hook.get("kind") == "xmpp":
+        lines += ["", "texts arrive as jabber messages: a client on the host is the receiver, so there is no url to paste"]
+    elif hook.get("kind") == "none":
+        lines += ["", "this number cannot receive a text yet, so it is a voice number and not an inbox"]
     lines += ["", f"then: {plan['connect']}", "",
               f"proves it: {plan['proves']}",
               "state: designed. this becomes real when one live call or text carries."]

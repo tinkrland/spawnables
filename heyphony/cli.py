@@ -92,6 +92,28 @@ def cmd_setup_select(args):
     return 0
 
 
+def cmd_hooks(args):
+    """the url to paste, and for providers with an api, the call that sets it."""
+    from heyphony import routes
+    if not getattr(args, "provider", None):
+        _out({"providers": [{"provider": name, "kind": v["kind"],
+                             "paste_url": routes.hook(name, args.base)["paste_url"] or "email"}
+                            for name, v in routes.ROUTES.items()],
+              "base": args.base,
+              "how": "heyphony hooks <provider> --base https://your-host:8099"})
+        return 0
+    try:
+        if getattr(args, "apply", False):
+            answer = routes.apply_hook(args.provider, args.base, getattr(args, "did", None))
+            _out(answer)
+            return 0 if answer.get("applied") else 1
+        _out(routes.hook(args.provider, args.base, getattr(args, "did", None)))
+        return 0
+    except KeyError as exc:
+        _out({"ok": False, "why": str(exc).strip("'\"")})
+        return 1
+
+
 def cmd_status(args):
     _out({"rc": str(sip.rc_path()), "rc_present": sip.rc_path().is_file(),
           "provider": providers.profile("voip.ms")["provider"],
@@ -155,6 +177,11 @@ def cmd_doctor(args):
           "note": "nothing here has placed a call yet. a lane with credentials and no live call is designed, not verified"})
 
 
+def routes_base():
+    from heyphony import routes
+    return routes.BASE
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="heyphony", description="telephony an agent can hold")
     p.add_argument("--setup", action="store_true", help="print the telephony setup plan as json and stop")
@@ -200,6 +227,12 @@ def build_parser():
     g.add_argument("--run", action="store_true", help="actually execute the install steps")
     g.add_argument("--list", action="store_true")
     g.set_defaults(func=cmd_get)
+    hk = sub.add_parser("hooks", help="the url and the setting that makes one provider's texts arrive")
+    hk.add_argument("provider", nargs="?")
+    hk.add_argument("--base", default=routes_base())
+    hk.add_argument("--did")
+    hk.add_argument("--apply", action="store_true", help="set it over the provider's api, when that exists")
+    hk.set_defaults(func=cmd_hooks)
     d = sub.add_parser("doctor"); d.set_defaults(func=cmd_doctor)
     return p
 

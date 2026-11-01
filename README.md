@@ -90,4 +90,4 @@ the four signature schemes the carriers actually use (svix, v0, waha, and slack'
 - renders, never publishes, except `streaming/`, where publishing is the product and the go-live press is a human's.
 - a did stays voip: refused for otp, refused for bulk outbound, fine for receiving.
 
-to use it: `git checkout comms`, then `python3 tests/selftest.py` (116 tests, stdlib only, no network).
+to use it: `git checkout comms`, then `python3 tests/selftest.py` (121 tests, stdlib only, no network).

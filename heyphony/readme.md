@@ -46,6 +46,29 @@ that split is the whole reason the flow is written this way. an agent cannot cli
 
 ordering a number is still a browser act, and the plan says so rather than pretending otherwise: `provisioning: {now: "browser", later: "programmatic ordering from the cli"}`. a purchase is a person's act until it is a lane.
 
+### ten providers, and not all of them receive a text
+
+the number shops fall into two piles, and the pile is decided by one question: when someone texts this number, does anything arrive, and can a process read it.
+
+| provider | numbers | a month | how a text reaches us | api |
+| -------- | ------- | ------- | --------------------- | --- |
+| voip.ms | us, ca | $1.00 | email, carrier side sms-to-email | yes |
+| flowroute | us, ca | $1.00 | a json webhook, and never sip | yes |
+| anveo | us, ca, uk | $0.99 | a url with `$[from]$` and `$[message]$` spliced into it | dids only |
+| signalwire | us | $0.50 | a swml message handler posts json | yes |
+| questblue | us | $0.70 | per number post to url, fields from, to, msg | yes |
+| bulkvs | us, ca | $0.06 | one webhook registered in the api, attached per number | yes |
+| jmp.chat | us, ca | $4.99 | a jabber message to your jid | ad-hoc commands |
+| voyced | eu, worldwide | about 2.50 | nothing: no sms on a geographic number | in testing |
+| voxacall | global | ask | nothing: trunking and dids, no sms story | behind a login |
+| bitcall | global | ask | nothing yet: inbound numbers are on their roadmap | otp, esim, hlr |
+
+`heyphony hooks <provider>` prints the thing to paste, the steps around it, and for the ones with a real api the exact call that sets it. `--apply` makes that call, and refuses with the missing environment names when there are no credentials, because half a configuration is worse than none.
+
+five of those rows were added because someone asked for them, and three of the five fail the same test. `voyced` sells eu numbers, voice only, with per-minute inbound and a genuinely useful coverage map, but nothing they publish claims sms on a geographic number, and their own knowledgebase says the api is in active development and controlled testing. `voxacall` is no-kyc, crypto-paid trunking aimed at call centres: quick to open, no public sms story, and the exact shape a recipient's risk engine blocks first. `bitcall` has the cleanest api of the three and the cleanest answer, which is that inbound numbers are coming soon, and an outbound trunk cannot be an inbox.
+
+two corrections worth writing down rather than remembering. `bulkvs` was described to us as doing uk numbers, and nothing on their site backs that: their number search is npa and nxx, their pricing says us and canadian, and their api orders telephone numbers from north american inventory. it is still the cheapest row here by an order of magnitude, so if uk coverage turns out to exist behind the login, this table changes. and `jmp.chat` is the odd one in a way that matters: texts arrive as jabber messages, so the receiver is a client on the host rather than a url, and that is the one row here whose wiring is a small piece of work rather than a paste.
+
 ### what survives the machine being off
 
 the honest shape of a phone number is that half of it is somebody else's computer. so the interesting question is not what happens while everything is up, it is what happens when the host is asleep.
@@ -61,6 +84,11 @@ the asymmetry in that table is the whole design of the lane. texts are patient: 
 | -------- | --------------- | ------------------- | -------------------- |
 | voip.ms | yes, sms to email | yes, carrier voicemail to email | no |
 | flowroute | yes, our webhook stores them | no fallback at the carrier | no |
+| anveo | yes, a url forward at the carrier | yes, call flow voicemail | no |
+| signalwire | yes, the swml handler posts | no mailbox we rely on | no |
+| questblue | yes, the number posts to a url | no fallback | no |
+| bulkvs | yes, one api webhook | no fallback | no |
+| jmp.chat | yes, jabber holds it | yes, transcribed to jabber | no |
 
 every value in that table is marked `verified: false` in `providers.py` until one real delivery proves it, because a phone number that has never received a message is not a phone number that works. texts are also the reason to check that a did is sms capable **before** paying for it: an inbound inbox is not a verification route, and a number type that a sender refuses never dials us at all.
 

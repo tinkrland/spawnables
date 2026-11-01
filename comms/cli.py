@@ -90,12 +90,45 @@ def cmd_signup(args):
         _out(signup.plan(args.service))
 
 
+def cmd_recognica(args):
+    """the book itself: which shelf holds the owner, who is a person, who is another agent."""
+    from comms.recognica import cards as cardbook, roles
+    cards = cardbook.load()
+    if args.owner:
+        handles = []
+        for item in args.owner:
+            if ":" not in item:
+                _out({"ok": False, "why": "say which handle: email:you@example.com or phone:+1555...",
+                      "got": item})
+                return 1
+            channel, value = item.split(":", 1)
+            handles.append((channel.strip(), value.strip()))
+        cards, result = roles.make_owner(cards, handles=handles, name=args.name)
+        if result.get("ok"):
+            cardbook.save(cards)
+        _out(result)
+        return 0 if result.get("ok") else 1
+    if args.agent:
+        cards, result = roles.add_agent(cards, args.agent, {"email": args.email} if args.email else {})
+        cardbook.save(cards)
+        _out(result)
+        return 0
+    summary = roles.summary(cards)
+    summary["cards"] = [{"id": c["id"], "name": c["name"], "shelf": cardbook.shelf(c),
+                         "role": c.get("role"), "kind": c.get("kind"),
+                         "channels": sorted(c.get("handles", {}))} for c in cards]
+    summary["refused"] = cardbook.REFUSED
+    _out(summary)
+    return 0
+
+
 def cmd_card(args):
     """the connecting card: one person, every lane, and the conversation they already had."""
-    from comms import cards as cardbook
+    from comms.recognica import cards as cardbook
     cards = cardbook.load()
     if args.new:
-        card = cardbook.new(args.new, note=args.note or "")
+        card = cardbook.new(args.new, note=args.note or "",
+                            kind=cardbook.KIND_AGENT if args.agent else cardbook.KIND_HUMAN)
         cards.append(card)
         cardbook.save(cards)
         _out({"created": card["id"], "card": card})
@@ -158,8 +191,16 @@ def build_parser():
     su.add_argument("--list", action="store_true")
     su.add_argument("--devices", action="store_true", help="what we concluded about driving a phone")
     su.set_defaults(func=cmd_signup)
+    rg = sub.add_parser("recognica", help="the contact book: owner, people, agents")
+    rg.add_argument("--owner", action="append", metavar="CHANNEL:HANDLE",
+                    help="name the owner, repeatable, e.g. email:you@example.com")
+    rg.add_argument("--name", help="the owner's name, when you are naming one")
+    rg.add_argument("--agent", metavar="NAME", help="add another agent as an entry on the agents shelf")
+    rg.add_argument("--email", help="that agent's email handle")
+    rg.set_defaults(func=cmd_recognica)
     ca = sub.add_parser("card", help="one person, every lane: the connecting card")
     ca.add_argument("--new"); ca.add_argument("--note")
+    ca.add_argument("--agent", action="store_true", help="this entry is software, so it goes on the agents shelf")
     ca.add_argument("--link", nargs=3, metavar=("ID", "CHANNEL", "HANDLE"))
     ca.add_argument("--merge", nargs=2, metavar=("KEEP", "DROP")); ca.add_argument("--confirm")
     ca.add_argument("--show"); ca.add_argument("--digest")

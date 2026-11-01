@@ -88,14 +88,51 @@ def call(action, params=None, test=False, timeout=25):
         return {"ok": False, "action": action, "why": f"anveo refused: {exc}"}
 
 
-def areas(did_type="GEOGRAPHIC", country_id=None, state_id=None, area_code=None):
-    """which area codes have stock, and what each rate plan costs in cents a month."""
+def areas(did_type="GEOGRAPHIC", country_id=None, state_id=None, area_code=None, area_name=None):
+    """which area codes have stock, and what each rate plan costs in cents a month.
+
+    "some number in your country" is not good enough for a number a human will be called back on, so
+    area code and area name are first class filters rather than something to grep out of a list.
+    """
     answer = call("ANVEO.AREAS.LIST", {"DID_TYPE": did_type, "COUNTRY_ID": country_id,
                                        "STATE_ID": state_id})
-    if answer.get("ok") and area_code:
-        answer["areas"] = [a for a in answer.get("areas", []) if a.get("AREA_CODE") == str(area_code)]
-        answer["filtered_by"] = str(area_code)
+    if not answer.get("ok"):
+        return answer
+    rows = answer.get("areas", [])
+    if area_code:
+        rows = [a for a in rows if str(a.get("AREA_CODE")) == str(area_code)]
+    if area_name:
+        want = str(area_name).strip().lower()
+        rows = [a for a in rows if want in str(a.get("AREA_NAME", "")).lower()]
+    answer["areas"] = [_area_row(a) for a in rows]
+    answer["filters"] = {"area_code": area_code, "area_name": area_name,
+                         "country_id": country_id, "state_id": state_id, "did_type": did_type}
+    answer["count"] = len(answer["areas"])
     return answer
+
+
+def _area_row(area):
+    """one area, with its rate plans as cents-a-month integers rather than strings."""
+    plans = []
+    for plan in area.get("rate_plans", []):
+        plans.append({"id": plan.get("RATE_PLAN_ID"), "name": plan.get("RATE_PLAN_NAME"),
+                      "monthly_usd": _cents(plan.get("MONTHLY100")), "setup_usd": _cents(plan.get("SETUP100"))})
+    return {"area_id": area.get("AREA_ID"), "area_code": area.get("AREA_CODE"),
+            "area_name": area.get("AREA_NAME"), "stock": _int(area.get("STOCK")), "rate_plans": plans}
+
+
+def _cents(value):
+    try:
+        return round(int(value) / 100, 2)
+    except (TypeError, ValueError):
+        return None
+
+
+def _int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def order(did_type="GEOGRAPHIC", area_id=None, rate_plan="SU", title="heyphony", quantity=1, test=False):
@@ -113,57 +150,69 @@ def list_dids(did=None):
     return call("DID.LIST", {"FILTER.E164": str(did).lstrip("+")} if did else {})
 
 
-def plan(area_code, did_type="GEOGRAPHIC", rate_plan="SU", sms_url=None, title="heyphony",
-         apply=False, test=False, country_id=None, state_id=None):
-    """the whole chain, as either a plan an agent can read or the three calls it would make."""
+def plan(area_code=None, did_type="GEOGRAPHIC", rate_plan="SU", sms_url=None, title="heyphony",
+         apply=False, test=False, country_id=None, state_id=None, area_name=None, purchase=False):
+    """the whole chain, as a plan an agent can read, or as the free steps it would actually run.
+
+    apply stops at the last step on purpose: area stock and prices are free to ask for, DID.ORDER bills
+    the account, and an agent that can spend money is a different product with a different consent
+    story. so the order is *prepared* rather than placed, and purchase is parked rather than forgotten.
+    """
     if str(did_type).upper() not in DID_TYPES:
-        return {"ok": False, "why": f"did_type must be one of {', '.join(DID_TYPES)}",
-                "provider": "anveo"}
+        return {"ok": False, "why": f"did_type must be one of {', '.join(DID_TYPES)}", "provider": "anveo"}
+    dtype = str(did_type).upper()
+    filters = {"DID_TYPE": dtype, "COUNTRY_ID": country_id, "STATE_ID": state_id}
+    order_params = {"DID_TYPE": dtype, "AREA_ID": "<from the first step>", "RATE_PLAN_ID": rate_plan,
+                    "QUANTITY": 1, "TITLE": title}
     steps = [
-        {"step": "find an area with stock", "action": "ANVEO.AREAS.LIST",
-         "params": {"DID_TYPE": str(did_type).upper(), "COUNTRY_ID": country_id, "STATE_ID": state_id},
-         "as_curl": as_curl("ANVEO.AREAS.LIST", {"DID_TYPE": str(did_type).upper(),
-                                                 "COUNTRY_ID": country_id, "STATE_ID": state_id})},
-        {"step": "buy one number", "action": "DID.ORDER",
-         "params": {"DID_TYPE": str(did_type).upper(), "AREA_ID": "<from the first step>",
-                    "RATE_PLAN_ID": rate_plan, "QUANTITY": 1, "TITLE": title},
-         "as_curl": as_curl("DID.ORDER", {"DID_TYPE": str(did_type).upper(), "AREA_ID": "<area id>",
-                                          "RATE_PLAN_ID": rate_plan, "QUANTITY": 1, "TITLE": title},
-                            test)},
-        {"step": "point its texts at the catcher", "action": "DID.UPDATE",
+        {"step": "find an area with stock", "action": "ANVEO.AREAS.LIST", "free": True,
+         "params": filters, "as_curl": as_curl("ANVEO.AREAS.LIST", filters)},
+        {"step": "buy one number", "action": "DID.ORDER", "free": False,
+         "params": order_params, "as_curl": as_curl("DID.ORDER", order_params, test)},
+        {"step": "point its texts at the catcher", "action": "DID.UPDATE", "free": True,
          "params": {"FILTER.E164": "<the did the order answered with>", "SMS_URL": sms_url or "<paste url>"},
          "as_curl": as_curl("DID.UPDATE", {"FILTER.E164": "<did>", "SMS_URL": sms_url or "<paste url>"})},
     ]
-    answer = {"provider": "anveo", "did_type": str(did_type).upper(), "area_code": str(area_code),
-              "rate_plan": rate_plan, "rate_plan_name": RATE_PLANS.get(str(rate_plan).upper()),
+    answer = {"provider": "anveo", "did_type": dtype, "area_code": str(area_code) if area_code else None,
+              "area_name": area_name, "rate_plan": rate_plan, "rate_plan_name": RATE_PLANS.get(str(rate_plan).upper()),
               "sms_url": sms_url, "steps": steps, "test_mode": bool(test),
               "missing": missing(), "applied": False, "verified": False,
               "note": "anveo is the one provider here whose whole chain is a documented api, which is why this "
                       "is a cli path and not a browser errand"}
+    if purchase:
+        return {**answer, "ok": False, "purchase": "parked",
+                "why": "the order is the payment step, and no payment rail is wired here on purpose: an agent "
+                       "that can spend money is a different product with a different consent story",
+                "instead": "run the DID.ORDER call yourself, or order in the portal, then "
+                           "`heyphony hooks anveo --apply --did <the number>`"}
     if not apply:
-        answer["next"] = f"heyphony setup provision --provider anveo --area-code {area_code} --apply"
+        answer["next"] = (f"heyphony setup provision --provider anveo"
+                          f"{' --area-code ' + str(area_code) if area_code else ' --areas --country-id US'}"
+                          " --apply    # free steps only: stock and prices, then the prepared order")
         return answer
 
     gaps = missing()
     if gaps:
         return {**answer, "ok": False, "missing": gaps,
-                "why": "no anveo credentials in the environment, so nothing was ordered"}
-    found = areas(did_type=did_type, country_id=country_id, state_id=state_id, area_code=area_code)
-    if not found.get("ok") or not found.get("areas"):
-        return {**answer, "ok": False, "why": "no area with that code came back, so nothing was ordered",
+                "why": "no anveo credentials in the environment, so nothing was asked of them"}
+    found = areas(did_type=dtype, country_id=country_id, state_id=state_id,
+                  area_code=area_code, area_name=area_name)
+    if not found.get("ok"):
+        return {**answer, "ok": False, "why": "the area lookup failed",
                 "areas_answer": {k: v for k, v in found.items() if k != "areas"}}
-    area = found["areas"][0]
-    bought = order(did_type=did_type, area_id=area.get("AREA_ID"), rate_plan=rate_plan,
-                   title=title, test=test)
-    if not bought.get("ok") or not bought.get("dids"):
-        return {**answer, "ok": False, "why": "the order did not come back with a number",
-                "area": area, "order_answer": bought}
-    did = bought["dids"][0].get("E164")
-    armed = arm_sms(did, sms_url, test=test) if sms_url else {"ok": False,
-                                                             "why": "no sms url was given, so texts have nowhere to go"}
-    return {**answer, "ok": bool(armed.get("ok")), "applied": True, "area": area,
-            "did": f"+{did}" if did and not str(did).startswith("+") else did,
-            "order": bought.get("result"), "armed": armed.get("ok"),
-            "arm_answer": {k: v for k, v in armed.items() if k != "as_curl"},
-            "verified": False,
-            "still_to_do": "the sip half: a device or trunk credential from the dashboard, then heyphony connect sip"}
+    picked = found["areas"][0] if found.get("areas") else None
+    answer.update({"ok": bool(picked), "areas": found["areas"][:25], "count": found.get("count"),
+                   "matches": found.get("areas", [])[:25] if area_name or area_code else None})
+    if not picked:
+        answer["why"] = "no area matched that filter, so there was nothing to prepare an order for"
+        return answer
+    order_params = {"DID_TYPE": dtype, "AREA_ID": picked["area_id"], "RATE_PLAN_ID": rate_plan,
+                    "QUANTITY": 1, "TITLE": title}
+    answer.update({"ok": True, "picked": picked, "applied": True, "did": None,
+                   "stopped_before": "DID.ORDER",
+                   "why": "the order bills the account, so it is prepared here and not placed",
+                   "order_call": as_curl("DID.ORDER", order_params, test),
+                   "order_params": order_params,
+                   "then": "run that call with your own key, or order the same area in the portal, then "
+                           "`heyphony hooks anveo --apply --did <the number>` to arm its texts"})
+    return answer

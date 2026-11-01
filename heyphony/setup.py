@@ -178,10 +178,14 @@ def plan_sip(provider, did=None, new=False):
     if profile.get("sip_style") == "trunk-route":
         steps.append("create the sip trunk first, then point this number at it (route2trunk in the portal "
                      "or `PUT /did`): the credentials belong to the trunk, not to the number")
+    hook = routes.hook(key, did=None if new else did)
     steps += [
         "fetch the sip username and password for that number from the provider dashboard",
         "run the connect command below on the host, not in a burnable guest",
+        "arm the text hook below, or the provider's carrier side email forwarding, so texts have a home",
+        "point voicemail at a folder the views can read, or accept that this provider has no fallback",
         "start the host client, then `heyphony calls` after one real call",
+        "open `heyphony app` and read the caught messages and voicemail as one thread per person",
     ]
     connect = (f"heyphony connect sip --provider {key} --did {did or '+1...'}"
                " --username <sip username> --password <sip password>")
@@ -195,13 +199,36 @@ def plan_sip(provider, did=None, new=False):
         "steps": steps,
         "connect": connect,
         "from_owner": ["the did", "the sip username", "the sip password"],
-        "proves": "one inbound text in `heyphony open messages`, and one call in `heyphony calls`",
+        "proves": "one inbound text in `heyphony open messages` (or in `heyphony app`), one voicemail "
+                  "in the voicemail tab, and one call in `heyphony calls`",
+        "catching": {"kind": hook["kind"], "paste_url": hook.get("paste_url"),
+                     "serve": "heyphony serve --port 8099 --token <token>",
+                     "arm": hook["cli"],
+                     "where_texts_land": ("the catcher, then ~/.local/share/telephony/inbox.jsonl"
+                                          if hook["kind"] != "email" else
+                                          "email on this provider, so the email lane is their home"),
+                     "why": "texts never travel over sip: what makes them reliable is that a provider holds "
+                            "them and posts or emails them, so the inbox works with the machine asleep"},
+        "voicemail": {"where": ("the carrier answers and emails the recording (voip.ms), or call flow "
+                                "voicemail (anveo)" if profile["works_while_off"]["voicemail"] else
+                                "no carrier fallback: a caller who reaches nothing gets nothing"),
+                      "land": "HEYPHONY_VOICEMAIL_DIR, default ~/.local/share/telephony/voicemail, "
+                              "audio plus a <name>.json sidecar for sender, seconds and transcript",
+                      "read": "heyphony open voicemail  |  heyphony app (voicemail tab)",
+                      "why": "voicemail is a carrier feature, so it exists when the provider has one and "
+                             "not otherwise; a missing sidecar means no transcript rather than an invented one"},
+        "launcher": {"command": "heyphony app --port 8790",
+                     "tabs": ["caught messages", "voicemail", "calls"],
+                     "reply": "drafts in the thread and shows the route; it never sends on your behalf"},
         "provisioning": ({"now": "cli", "browser": browser,
                           "command": f"heyphony setup provision --provider anveo --area-code <n> "
                                      f"--sms-url {routes.paste_url('anveo')} --apply",
                           "why": "anveo publishes areas, order and sms url as three api actions, so the same cli "
                                  "can buy the number and point its texts at the catcher without a browser",
-                          "spends_money": True, "test_flag": "anveo's TEST parameter sandboxes the request"}
+                          "stops_before": "DID.ORDER", "spends_money": False,
+                          "why_money_wait": "area stock and prices are free to ask for, an order bills the "
+                                            "account, and no payment rail is wired here on purpose",
+                          "test_flag": "anveo's TEST parameter sandboxes the request"}
                          if key == "anveo" else
                          {"now": "browser", "later": "programmatic ordering from the cli",
                           "why": "ordering a number is a purchase, and a purchase is a person's act until the "
@@ -212,7 +239,7 @@ def plan_sip(provider, did=None, new=False):
                     "inbound_texts": profile["inbound_texts"],
                     "inbound_text_usd": profile.get("inbound_text_usd"),
                     "note": profile["note"]},
-        "text_hook": routes.hook(key, did=None if new else did),
+        "text_hook": hook,
         "number_type": "voip",
         "verified": False,
         "evidence": "the flow is tested against stored answers; no did has been ordered through it",

@@ -12,10 +12,12 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+import urllib.parse
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from comms import cards as cardbook
+from comms.recognica import cards as recognica_cards, roles as recognica_roles
 from comms import catcher, envelope, gates, registry
 from comms import cli as comms_cli
 from heyphony import cli as telephony_cli
@@ -700,16 +702,77 @@ class TestTheReadmesCannotDrift(unittest.TestCase):
         self.assertIn("an unknown sender is stored, not stitched", text)
 
     def test_heyphony_explains_itself_in_the_same_voice(self):
-        text = pathlib.Path("heyphony/readme.md").read_text()
+        """the folder explains itself across the readme, the idea pages and the journal."""
+        folder = pathlib.Path("heyphony")
+        pages = [folder / "readme.md", *sorted((folder / "theidea").glob("*.md")),
+                 *sorted((folder / "journal").glob("*.md"))]
+        text = "\n".join(page.read_text() for page in pages).lower()
         for needle in ("a jerryrigged workaround", "a **phone number of its own**",
                        "one you can actually reach", "what it gives you, turnkey",
                        "setup select sip", "**device on**", "**device off**",
-                       "ten providers, and not all of them receive a text",
+                       "ten providers, and one question that sorts them",
                        "bulkvs", "jmp.chat", "voice only",
                        "onramp", "inbound first", "baresip", "ctrl_tcp",
                        "packages alone", "refused for otp"):
-            self.assertIn(needle, text.lower(), f"heyphony readme lost {needle!r}")
-        self.assertNotIn("—", text)
+            self.assertIn(needle, text, f"the heyphony folder lost {needle!r}")
+        for page in pages:
+            self.assertNotIn("—", page.read_text(), f"{page} picked up an em dash")
+
+    def test_the_heyphony_readme_reads_like_the_branch_readme(self):
+        """the owner's ask: same shape as main's readme, prose first, sections rather than a wall."""
+        text = pathlib.Path("heyphony/readme.md").read_text()
+        for heading in ("## the problem", "## the point", "### ", "## where it is honest about itself"):
+            self.assertIn(heading, text)
+        self.assertLess(text.index("## the problem"), text.index("## the point"))
+        # a long intro paragraph before the first heading, the way the branch readme opens
+        intro = text.split("## the problem")[0]
+        self.assertGreater(len(intro.split()), 80, "the intro shrank to a caption")
+
+    def test_the_journal_explains_softphones_step_by_step(self):
+        journal = pathlib.Path("heyphony/journal")
+        walk = (journal / "softphones.md").read_text().lower()
+        for step in ("step 0", "step 1", "step 2", "step 3", "step 4", "step 5", "step 6", "step 7"):
+            self.assertIn(step, walk, f"the walk lost {step}")
+        for term in ("registration", "invite", "codec", "rtp", "pbx", "cdr", "did"):
+            self.assertIn(term, walk, f"the walk never explains {term}")
+        self.assertIn("register", walk)
+
+    def test_the_softphone_table_compares_what_it_was_built_for(self):
+        table = (pathlib.Path("heyphony/journal/pbx-vs-softphone.md")).read_text().lower()
+        self.assertIn("| | what a softphone was made to do, next to a pbx |", table)
+        self.assertIn("what heyphony adapted it to", table)
+        rows = [line for line in table.splitlines() if line.startswith("| ") and line.count("|") == 4]
+        self.assertGreaterEqual(len(rows), 12, "the table collapsed to a few rows")
+        for needle in ("voicemail", "call history", "registration", "the pbx itself", "texting"):
+            self.assertIn(needle, table)
+        self.assertIn("attention became storage", table)
+        # the two journal explainers are linked from the index, not orphaned
+        index = (pathlib.Path("heyphony/journal/readme.md")).read_text()
+        self.assertIn("softphones.md", index)
+        self.assertIn("pbx-vs-softphone.md", index)
+
+    def test_the_idea_pages_are_the_argument_and_the_readme_is_the_explanation(self):
+        idea = pathlib.Path("heyphony/theidea")
+        expected = {"epilogue.md", "vendors.md", "onramp.md", "glossary.md", "calling.md", "access.md"}
+        self.assertEqual({p.name for p in idea.glob("*.md")}, expected)
+        epilogue = (idea / "epilogue.md").read_text().lower()
+        for needle in ("pbx", "private branch exchange", "softphone", "mcgyver", "back to the basics"):
+            self.assertIn(needle, epilogue)
+        calling = (idea / "calling.md").read_text().lower()
+        for needle in ("livekit", "call-e", "heycall-e.com", "planned", "parked for v3"):
+            self.assertIn(needle, calling)
+        access = (idea / "access.md").read_text().lower()
+        for needle in ("bsl 1.1", "fsl 1.1", "agpl", "linphone", "separate commercial agreement",
+                       "publicly available under an open-source licence", "mcp server",
+                       "npm installable package", "cloud hosted", "api"):
+            self.assertIn(needle, access)
+        glossary = (idea / "glossary.md").read_text().lower()
+        for needle in ("did", "e164", "sip", "rtp", "pstn", "trunk", "codec", "catcher", "getter"):
+            self.assertIn(needle, glossary)
+        onramp = (idea / "onramp.md").read_text().lower()
+        for needle in ("signal", "onramp is not", "lane"):
+            self.assertIn(needle, onramp)
+        self.assertTrue(list((pathlib.Path("heyphony/journal")).glob("*.md")))
 
 
 class TestTheCatcherKnowsEveryPath(unittest.TestCase):
@@ -720,6 +783,218 @@ class TestTheCatcherKnowsEveryPath(unittest.TestCase):
         self.assertIsNone(catcher.provider_of("/sms/twilio"))
         self.assertIsNone(catcher.provider_of("/sms"))
         self.assertIsNone(catcher.provider_of("/email"))
+
+
+class TestTheProvisioningChainStopsBeforeItSpends(unittest.TestCase):
+    def run_cli(self, argv):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = telephony_cli.main(argv)
+        return code, out.getvalue()
+
+    def test_areas_carry_stock_and_prices_in_dollars(self):
+        from heyphony import provision
+        row = provision._area_row({"AREA_ID": "191.195.165.31.230", "AREA_CODE": "256",
+                                   "AREA_NAME": "ALBERTVILLE", "STOCK": "49",
+                                   "rate_plans": [{"RATE_PLAN_ID": "SU", "RATE_PLAN_NAME": "Service Unlimited",
+                                                   "MONTHLY100": "149", "SETUP100": "249"}]})
+        self.assertEqual((row["area_code"], row["stock"]), ("256", 49))
+        self.assertEqual(row["rate_plans"][0]["monthly_usd"], 1.49)
+        self.assertEqual(row["rate_plans"][0]["setup_usd"], 2.49)
+
+    def test_apply_asks_for_stock_and_stops_at_the_order(self):
+        from heyphony import provision
+        saved = {k: os.environ.pop(v, None) for k, v in provision.ENV.items()}
+        try:
+            answer = provision.plan("212", apply=True)
+            self.assertFalse(answer["applied"])
+            self.assertEqual(answer["missing"], ["userkey", "email", "phrase"])
+            self.assertIn("nothing was asked", answer["why"])
+        finally:
+            for key, value in saved.items():
+                if value is not None:
+                    os.environ[provision.ENV[key]] = value
+        steps = provision.plan("212")["steps"]
+        self.assertEqual([(s["action"], s["free"]) for s in steps],
+                         [("ANVEO.AREAS.LIST", True), ("DID.ORDER", False), ("DID.UPDATE", True)])
+
+    def test_the_purchase_step_is_parked_rather_than_forgotten(self):
+        from heyphony import provision
+        parked = provision.plan("212", purchase=True)
+        self.assertFalse(parked["ok"])
+        self.assertEqual(parked["purchase"], "parked")
+        self.assertIn("payment rail", parked["why"])
+        self.assertIn("hooks anveo --apply", parked["instead"])
+
+    def test_area_selection_is_first_class(self):
+        from heyphony import provision
+        self.assertEqual(sorted(provision.DID_TYPES), ["GEOGRAPHIC", "MOBILE", "NATIONAL", "TOLLFREE"])
+        plan = provision.plan("212", area_name="new york", country_id="US")
+        self.assertEqual(plan["area_name"], "new york")
+        self.assertIn("param[COUNTRY_ID]=US", urllib.parse.unquote(plan["steps"][0]["as_curl"]))
+
+
+class TestTheSetupPlanCoversVoicemailAndCatching(unittest.TestCase):
+    def test_a_connect_line_is_not_the_whole_errand(self):
+        from heyphony import setup as flow
+        plan = flow.plan_sip("voip.ms", "+12125551234")
+        self.assertEqual(plan["catching"]["kind"], "email")
+        self.assertIn("heyphony serve", plan["catching"]["serve"])
+        self.assertIn("carrier", plan["voicemail"]["where"])
+        self.assertEqual(plan["launcher"]["tabs"], ["caught messages", "voicemail", "calls"])
+        for step in ("arm the text hook", "point voicemail", "heyphony app"):
+            self.assertTrue(any(step in s for s in plan["steps"]), step)
+        anveo = flow.plan_sip("anveo", "+12125551234")
+        self.assertIn("url-forward", anveo["catching"]["kind"])
+        flowroute = flow.plan_sip("flowroute", "+12125551234")
+        self.assertIn("no carrier fallback", flowroute["voicemail"]["where"])
+
+
+class TestTheLauncher(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.tmp = pathlib.Path(tempfile.mkdtemp())
+        self.inbox = self.tmp / "inbox.jsonl"
+        self.voice = self.tmp / "voicemail"
+        self.voice.mkdir()
+        for entry in ({"id": "sms:1", "channel": "sms", "direction": "inbound",
+                       "sender": "+15551230000", "recipient": "+15559990000", "subject": None,
+                       "body": "are you free at 3?", "at": 1793500000, "thread": "+15551230000",
+                       "reply_to": None, "raw": {"provider": "voip.ms"}},
+                      {"id": "sms:2", "channel": "sms", "direction": "inbound",
+                       "sender": "+15554440000", "recipient": "+15559990000", "subject": None,
+                       "body": "invoice attached", "at": 1793400000, "thread": "+15554440000",
+                       "reply_to": None, "raw": {"provider": "flowroute"}}):
+            inbox.append(entry, path=self.inbox)
+
+    def test_texts_and_voicemail_merge_into_one_thread_per_person(self):
+        from heyphony import launcher
+        raw = ("From: voipms@voip.ms\nSubject: VOICEMAIL from 15551230000\n"
+               "Date: Sun, 01 Nov 2026 09:00:00 +0000\nContent-Type: text/plain\n\n"
+               "new voicemail, 14 seconds. transcript: call me back about the invoice.\n")
+        stored = launcher.import_email(raw, save_dir=self.voice, path=self.inbox)
+        self.assertTrue(stored["stored"])
+        self.assertEqual(stored["kind"], "voicemail")
+        threads = launcher.threads(path=self.inbox, voicemail_dir=self.voice)["threads"]
+        self.assertEqual([t["peer"] for t in threads], ["+15551230000", "+15554440000"])
+        first = threads[0]
+        self.assertEqual(first["kinds"], ["sms", "voicemail"])
+        self.assertEqual(first["count"], 2)
+        detail = launcher.thread("+15551230000", path=self.inbox, voicemail_dir=self.voice)
+        self.assertEqual([i["kind"] for i in detail["items"]], ["sms", "voicemail"])
+
+    def test_a_reply_is_a_draft_with_a_route_and_never_a_send(self):
+        from heyphony import launcher
+        answer = launcher.draft("+15551230000", "sure, 3 works", path=self.inbox)
+        self.assertFalse(answer["applied"])
+        self.assertEqual(answer["provider"], "voip.ms")
+        self.assertFalse(answer["outbound"]["now"])
+        self.assertIn("no outbound api path", answer["outbound"]["why"])
+        self.assertIn("draft", answer["note"])
+
+    def test_the_page_serves_tabs_and_json(self):
+        import threading
+        import urllib.request
+        from heyphony import launcher
+        server = launcher.serve(port=0, path=self.inbox, voicemail_dir=self.voice)
+        port = server.server_address[1]
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/") as page:
+                html = page.read().decode()
+            for tab in ("caught messages", "voicemail", "calls"):
+                self.assertIn(tab, html)
+            self.assertIn("drafts only", launcher.providers_seen(path=self.inbox)["reply"])
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/threads") as answer:
+                self.assertEqual(len(json.load(answer)["threads"]), 2)
+            body = json.dumps({"peer": "+15551230000", "body": "hi"}).encode()
+            request = urllib.request.Request(f"http://127.0.0.1:{port}/api/reply", data=body,
+                                            headers={"content-type": "application/json"})
+            with urllib.request.urlopen(request) as answer:
+                self.assertFalse(json.load(answer)["applied"])
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_a_carrier_email_keeps_its_audio_and_never_guesses_a_sender(self):
+        from heyphony import mailparse
+        raw = ("From: voipms@voip.ms\nSubject: VOICEMAIL from 12125550123\n"
+               "Date: Sun, 01 Nov 2026 10:00:00 +0000\nMIME-Version: 1.0\n"
+               "Content-Type: multipart/mixed; boundary=B\n\n--B\n"
+               "Content-Type: text/plain\n\nvoicemail, 9 seconds\n--B\n"
+               "Content-Type: audio/wav\nContent-Transfer-Encoding: base64\n"
+               "Content-Disposition: attachment; filename=\"vm.wav\"\n\n"
+               "UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA=\n--B--\n")
+        item = mailparse.parse(raw, save_dir=self.voice)
+        self.assertEqual(item["kind"], "voicemail")
+        self.assertEqual(item["sender"], "+12125550123")
+        self.assertTrue(pathlib.Path(item["audio"]["path"]).is_file())
+        self.assertTrue(pathlib.Path(mailparse.sidecar_for(item)).is_file())
+        anon = mailparse.parse("From: x@y\nSubject: hello\n\nno number in here\n")
+        self.assertIsNone(anon["sender"])
+        self.assertEqual(anon["kind"], "email")
+
+
+class TestRecognicaIsTheContactBook(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.root = pathlib.Path(tempfile.mkdtemp()) / "recognica"
+        self.env = {"COMMS_RECOGNICA_PATH": str(self.root)}
+
+    def test_the_shelves_are_the_point(self):
+        cards = [recognica_cards.new("ada", {"email": "ada@example.com"})]
+        cards, made = recognica_roles.make_owner(cards, handles=[("email", "me@example.com")])
+        cards, agent = recognica_roles.add_agent(cards, "peer bot", {"email": "bot@example.com"})
+        self.assertEqual(made["shelf"], "humans/owner")
+        self.assertEqual(agent["shelf"], "agents")
+        self.assertEqual(recognica_cards.shelf(cards[0]), "humans/people")
+        recognica_cards.save(cards, self.env)
+        files = sorted(str(p.relative_to(self.root)) for p in self.root.rglob("*.json"))
+        self.assertEqual(files, ["agents/peer-bot.json", "humans/owner/owner.json", "humans/people/ada.json"])
+        loaded = recognica_cards.load(self.env)
+        self.assertEqual(len(loaded), 3)
+        self.assertEqual(recognica_roles.role_of(loaded, "email", "me@example.com")["role"], "owner")
+        self.assertEqual(recognica_roles.role_of(loaded, "email", "ada@example.com")["role"], "contact")
+        self.assertEqual(recognica_roles.role_of(loaded, "email", "bot@example.com")["role"], "agent")
+        self.assertEqual(recognica_roles.role_of(loaded, "email", "who@example.com")["role"], "unknown")
+        tree = recognica_cards.tree(loaded)
+        self.assertEqual(tree["counts"], {"owner": 1, "people": 1, "agents": 1})
+
+    def test_a_new_card_is_never_the_owner(self):
+        card = recognica_cards.new("ada", {"email": "ada@example.com"})
+        self.assertEqual(card["role"], "contact")
+        self.assertIsNone(recognica_roles.owner([card]))
+        self.assertFalse(recognica_roles.summary([card], env={})["knows_owner"])
+
+    def test_the_owner_can_be_seeded_from_the_environment_without_being_guessed(self):
+        cards = [recognica_cards.new("ada", {"email": "ada@example.com"})]
+        cards, made = recognica_roles.make_owner(cards, env={"RECOGNICA_OWNER_EMAIL": "me@example.com"})
+        self.assertTrue(made["ok"])
+        self.assertEqual(recognica_roles.role_of(cards, "email", "me@example.com")["role"], "owner")
+        # a second call updates the same card instead of adding a second owner
+        cards, again = recognica_roles.make_owner(cards, handles=[("phone", "+15550001111")])
+        self.assertEqual(len([c for c in cards if c["role"] == "owner"]), 1)
+        self.assertTrue(again["ok"])
+        nothing = recognica_roles.make_owner(cards, env={})[1]
+        self.assertFalse(nothing["ok"])
+        self.assertIn("RECOGNICA_OWNER", nothing["why"])
+
+    def test_the_old_single_file_is_still_readable_after_the_move(self):
+        self.root.mkdir(parents=True)
+        (self.root / "cards.json").write_text(json.dumps([recognica_cards.new("ada")]))
+        self.assertEqual([c["id"] for c in recognica_cards.load(self.env)], ["ada"])
+        self.assertEqual([c["id"] for c in cardbook.load(self.env)], ["ada"])
+
+    def test_saving_drops_a_card_that_moved_shelves(self):
+        cards = [recognica_cards.new("ada", {"email": "ada@example.com"})]
+        recognica_cards.save(cards, self.env)
+        self.assertTrue((self.root / "humans/people/ada.json").is_file())
+        cards, _ = recognica_roles.make_owner(cards + [], handles=[("email", "me@example.com")])
+        cards[0]["role"] = "owner"
+        recognica_cards.save(cards, self.env)
+        self.assertFalse((self.root / "humans/people/ada.json").exists())
+        self.assertTrue((self.root / "humans/owner/ada.json").is_file())
 
 
 class TestProvisioningIsACliWhereTheProviderAllowsIt(unittest.TestCase):
@@ -779,7 +1054,8 @@ class TestProvisioningIsACliWhereTheProviderAllowsIt(unittest.TestCase):
         anveo = flow.plan_sip("anveo", "+12125551234")
         self.assertEqual(anveo["provisioning"]["now"], "cli")
         self.assertIn("setup provision", anveo["provisioning"]["command"])
-        self.assertTrue(anveo["provisioning"]["spends_money"])
+        self.assertEqual(anveo["provisioning"]["stops_before"], "DID.ORDER")
+        self.assertFalse(anveo["provisioning"]["spends_money"])
         flowroute = flow.plan_sip("flowroute", "+12125551234")
         self.assertEqual(flowroute["provisioning"]["now"], "browser")
 

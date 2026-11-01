@@ -8,7 +8,8 @@ import json
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from comms import cards as cardbook, envelope, gates
+from comms import envelope, gates
+from comms.recognica import cards as cardbook
 from heyphony import inbox
 
 ROUTES = {"email": "email", "mail": "email", "imessage": "imessage",

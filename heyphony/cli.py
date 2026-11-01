@@ -6,6 +6,7 @@ packageable on its own.
 """
 import argparse
 import json
+import pathlib
 import sys
 
 from heyphony import getters, inbox, providers, sip, views
@@ -92,9 +93,50 @@ def cmd_setup_select(args):
     return 0
 
 
+def cmd_app(args):
+    """the launcher: tabs for caught texts, voicemail and calls, and one thread per person."""
+    from heyphony import launcher
+    server = launcher.serve(port=args.port, host=args.host, voicemail_dir=args.voicemail_dir)
+    url = f"http://{args.host}:{args.port}/"
+    if args.json:
+        _out({"launcher": url, "tabs": list(launcher.TABS),
+              "reply": "drafts only", "state": "serving until interrupted",
+              "voicemail_dir": args.voicemail_dir})
+    else:
+        print(f"heyphony app on {url}")
+        print("tabs: caught messages, voicemail, calls. replies are drafted, never sent. ctrl-c to stop.")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("")
+    finally:
+        server.server_close()
+    return 0
+
+
+def cmd_import(args):
+    """a forwarded carrier email becomes a caught message, audio and sidecar included."""
+    from heyphony import launcher, views
+    raw = pathlib.Path(args.file).read_text(errors="replace") if args.file else sys.stdin.read()
+    answer = launcher.import_email(raw, save_dir=args.voicemail_dir or views.voicemail_dir())
+    _out(answer)
+    return 0 if answer.get("stored") else 1
+
+
 def cmd_provision(args):
     """buy and arm a number from the cli, where a provider documents enough to script it."""
     from heyphony import provision
+    if args.areas and args.provider != "anveo":
+        _out({"ok": False, "why": "only anveo publishes a stock and price lookup we can call",
+              "can_provision": ["anveo"]})
+        return 1
+    if args.areas:
+        from heyphony import provision
+        answer = provision.areas(did_type=args.did_type, country_id=args.country_id,
+                                 state_id=args.state_id, area_code=args.area_code,
+                                 area_name=args.area_name)
+        _out(answer)
+        return 0 if answer.get("ok") else 1
     if args.provider not in ("anveo",):
         _out({"ok": False, "provider": args.provider,
               "why": "only anveo documents a whole chain we can call: areas, order, and arming sms by e164",
@@ -107,9 +149,10 @@ def cmd_provision(args):
         sms_url = routes.paste_url("anveo", args.base)
     answer = provision.plan(args.area_code, did_type=args.did_type, rate_plan=args.rate_plan,
                             sms_url=sms_url, title=args.title, apply=args.apply,
-                            test=args.test, country_id=args.country_id, state_id=args.state_id)
+                            test=args.test, country_id=args.country_id, state_id=args.state_id,
+                            area_name=args.area_name, purchase=args.purchase)
     _out(answer)
-    if not args.apply:
+    if not (args.apply or args.purchase):
         return 0
     return 0 if answer.get("ok") else 1
 
@@ -249,9 +292,23 @@ def build_parser():
     g.add_argument("--run", action="store_true", help="actually execute the install steps")
     g.add_argument("--list", action="store_true")
     g.set_defaults(func=cmd_get)
+    ap = sub.add_parser("app", help="the launcher: caught messages, voicemail and calls as tabs")
+    ap.add_argument("--port", type=int, default=8790)
+    ap.add_argument("--host", default="127.0.0.1")
+    ap.add_argument("--voicemail-dir")
+    ap.add_argument("--json", action="store_true")
+    ap.set_defaults(func=cmd_app)
+    im = sub.add_parser("import", help="turn a forwarded carrier email into a caught message")
+    im.add_argument("--file", help="an .eml or raw message; stdin when omitted")
+    im.add_argument("--voicemail-dir")
+    im.set_defaults(func=cmd_import)
     pv = sub.add_parser("provision", help="order a number and arm its texts, where the provider is scriptable")
     pv.add_argument("--provider", default="anveo", choices=["anveo"])
-    pv.add_argument("--area-code", required=True)
+    pv.add_argument("--area-code")
+    pv.add_argument("--area-name")
+    pv.add_argument("--areas", action="store_true", help="list areas with stock and prices, then stop")
+    pv.add_argument("--purchase", action="store_true",
+                    help="parked: the order is the payment step, and no payment rail is wired")
     pv.add_argument("--did-type", default="GEOGRAPHIC")
     pv.add_argument("--rate-plan", default="SU")
     pv.add_argument("--country-id")
@@ -260,7 +317,8 @@ def build_parser():
     pv.add_argument("--sms-url", help="defaults to the anveo paste url for this host")
     pv.add_argument("--base", default=routes_base(), help="the host a provider will post texts to")
     pv.add_argument("--test", action="store_true", help="anveo's TEST flag: sandbox the request")
-    pv.add_argument("--apply", action="store_true", help="actually spend money")
+    pv.add_argument("--apply", action="store_true",
+                    help="run the free steps: area stock and prices, and the prepared order")
     pv.set_defaults(func=cmd_provision)
     hk = sub.add_parser("hooks", help="the url and the setting that makes one provider's texts arrive")
     hk.add_argument("provider", nargs="?")

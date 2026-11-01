@@ -33,11 +33,47 @@ def _rows(path=None):
     return rows
 
 
+def _claimed_audio(rows):
+    """voicemail files an inbox entry already accounts for.
+
+    a carrier email that arrives as a forwarded message keeps its recording in the voicemail folder,
+    so the same voicemail exists twice: once as the message, once as the file. a person wants to see
+    it once, in its thread, and this is the set that says which file is already spoken for.
+    """
+    claimed = set()
+    for row in rows:
+        audio = row.get("audio") or {}
+        name = audio.get("name") or audio.get("path")
+        if name:
+            claimed.add(pathlib.Path(name).name)
+            claimed.add(str(name))
+    return claimed
+
+
+def voicemails(voicemail_dir=None, path=None, limit=200):
+    """voicemail rows with a human timestamp, because an epoch in a list is a bug a person sees.
+
+    voicemail_dir is the folder; path is accepted so a caller holding one location can pass it in
+    either position without quietly reading the default folder instead.
+    """
+    answer = views.voicemail(path=voicemail_dir or path, limit=limit)
+    for row in answer.get("rows", []):
+        row["when"] = _when(row.get("at"))
+    return answer
+
+
+_voice = voicemails
+
+
 def threads(path=None, voicemail_dir=None, limit=50):
     """one thread per peer, with texts and voicemail merged: what a person sees, not what arrived."""
-    items = [dict(row, kind=row.get("kind") or "sms") for row in _rows(path)]
-    voice = views.voicemail(path=voicemail_dir, limit=200)
+    rows = _rows(path)
+    claimed = _claimed_audio(rows)
+    items = [dict(row, kind=row.get("kind") or "sms") for row in rows]
+    voice = _voice(path=path, voicemail_dir=voicemail_dir)
     for row in voice.get("rows", []):
+        if pathlib.Path(str(row.get("id"))).name in claimed:
+            continue
         items.append({"id": f"vm:{row['id']}", "channel": "voicemail", "kind": "voicemail",
                       "sender": row.get("from"), "body": row.get("transcript"),
                       "at": row.get("at"), "thread": row.get("from"),
@@ -67,14 +103,18 @@ def threads(path=None, voicemail_dir=None, limit=50):
 
 def thread(peer, path=None, voicemail_dir=None):
     """everything said with one person, in order, whichever door it came through."""
+    rows = _rows(path)
+    claimed = _claimed_audio(rows)
     items = []
-    for row in _rows(path):
+    for row in rows:
         if str(row.get("sender") or row.get("thread")) == str(peer):
             items.append({"id": row.get("id"), "kind": row.get("kind") or "sms",
                           "channel": row.get("channel"), "at": row.get("at"),
                           "body": row.get("body"), "subject": row.get("subject"),
                           "direction": row.get("direction") or "inbound"})
-    for row in views.voicemail(path=voicemail_dir, limit=200).get("rows", []):
+    for row in _voice(path=path, voicemail_dir=voicemail_dir).get("rows", []):
+        if pathlib.Path(str(row.get("id"))).name in claimed:
+            continue
         if str(row.get("from")) == str(peer):
             items.append({"id": f"vm:{row['id']}", "kind": "voicemail", "channel": "voicemail",
                           "at": row.get("at"), "body": row.get("transcript"),
@@ -296,7 +336,7 @@ def make_handler(home=None, path=None, voicemail_dir=None, audio_dir=None):
             if parsed.path == "/api/thread":
                 return self._json(thread((query.get("peer") or [""])[0], path=path, voicemail_dir=voicemail_dir))
             if parsed.path == "/api/voicemail":
-                return self._json(views.voicemail(path=voicemail_dir, limit=100))
+                return self._json(_voice(path=path, voicemail_dir=voicemail_dir, limit=100))
             if parsed.path == "/api/calls":
                 return self._json(calls())
             if parsed.path == "/api/tabs":

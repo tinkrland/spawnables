@@ -902,6 +902,26 @@ class TestTheLauncher(unittest.TestCase):
         detail = launcher.thread("+15551230000", path=self.inbox, voicemail_dir=self.voice)
         self.assertEqual([i["kind"] for i in detail["items"]], ["sms", "voicemail"])
 
+    def test_a_forwarded_voicemail_is_not_counted_twice(self):
+        """the message and its recording are one thing to a person, so the thread shows it once."""
+        from heyphony import launcher
+        raw = ("From: voipms@voip.ms\nSubject: VOICEMAIL from 15559998888\n"
+               "Date: Sun, 01 Nov 2026 09:00:00 +0000\nMIME-Version: 1.0\n"
+               "Content-Type: multipart/mixed; boundary=B\n\n--B\nContent-Type: text/plain\n\n"
+               "voicemail, 14 seconds\n--B\nContent-Type: audio/wav\n"
+               "Content-Transfer-Encoding: base64\n"
+               "Content-Disposition: attachment; filename=\"vm.wav\"\n\n"
+               "UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA=\n--B--\n")
+        stored = launcher.import_email(raw, save_dir=self.voice, path=self.inbox)
+        self.assertTrue(stored["stored"])
+        detail = launcher.thread("+15559998888", path=self.inbox, voicemail_dir=self.voice)
+        self.assertEqual([i["kind"] for i in detail["items"]], ["voicemail"])
+        bucket = next(t for t in launcher.threads(path=self.inbox, voicemail_dir=self.voice)["threads"]
+                      if t["peer"] == "+15559998888")
+        self.assertEqual(bucket["count"], 1)
+        # the audio is still readable in the voicemail tab, which is where a recording belongs
+        self.assertEqual(launcher.views.voicemail(path=self.voice)["count"], 1)
+
     def test_a_reply_is_a_draft_with_a_route_and_never_a_send(self):
         from heyphony import launcher
         answer = launcher.draft("+15551230000", "sure, 3 works", path=self.inbox)
@@ -910,6 +930,19 @@ class TestTheLauncher(unittest.TestCase):
         self.assertFalse(answer["outbound"]["now"])
         self.assertIn("no outbound api path", answer["outbound"]["why"])
         self.assertIn("draft", answer["note"])
+
+    def test_voicemail_rows_carry_a_time_a_person_can_read(self):
+        from heyphony import launcher
+        raw = ("From: voipms@voip.ms\nSubject: VOICEMAIL from 15557776666\n"
+               "Date: Sun, 01 Nov 2026 09:00:00 +0000\nMIME-Version: 1.0\n"
+               "Content-Type: multipart/mixed; boundary=B\n\n--B\nContent-Type: text/plain\n\n"
+               "voicemail, 8 seconds\n--B\nContent-Type: audio/wav\n"
+               "Content-Transfer-Encoding: base64\n"
+               "Content-Disposition: attachment; filename=\"vm2.wav\"\n\n"
+               "UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA=\n--B--\n")
+        launcher.import_email(raw, save_dir=self.voice, path=self.inbox)
+        row = launcher.voicemails(path=self.inbox, voicemail_dir=self.voice)["rows"][0]
+        self.assertRegex(row["when"], r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
 
     def test_the_page_serves_tabs_and_json(self):
         import threading

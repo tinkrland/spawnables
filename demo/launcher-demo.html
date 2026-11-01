@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>heyphony</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+ :root { color-scheme: light dark; --line: #d8d5cd; --muted: #6d6a63; --bg: #fbfaf7; --ink: #23211d; --accent: #1f6f4a; }
+ @media (prefers-color-scheme: dark) { :root { --line: #33312d; --muted: #9a968d; --bg: #191815; --ink: #eceae4; --accent: #5fbf8c; } }
+ * { box-sizing: border-box; }
+ body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 ui-sans-serif, system-ui, sans-serif; }
+ header { display: flex; align-items: baseline; gap: 16px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+ header h1 { font-size: 15px; margin: 0; letter-spacing: .02em; }
+ header .note { color: var(--muted); font-size: 12px; }
+ nav { display: flex; gap: 4px; padding: 10px 18px 0; }
+ nav button { background: none; border: 1px solid transparent; border-bottom: none; color: var(--muted);
+              padding: 7px 12px; border-radius: 6px 6px 0 0; cursor: pointer; font: inherit; font-size: 13px; }
+ nav button[aria-selected="true"] { color: var(--ink); border-color: var(--line); background: var(--bg); }
+ main { display: grid; grid-template-columns: 300px 1fr; gap: 0; border-top: 1px solid var(--line); min-height: 70vh; }
+ .list { border-right: 1px solid var(--line); overflow: auto; max-height: 76vh; }
+ .list .row { padding: 10px 14px; border-bottom: 1px solid var(--line); cursor: pointer; }
+ .list .row:hover, .list .row[aria-current="true"] { background: rgba(127,127,127,.08); }
+ .list .peer { font-weight: 600; font-size: 13px; }
+ .list .prev { color: var(--muted); font-size: 12px; }
+ .pane { padding: 16px 20px; overflow: auto; max-height: 76vh; }
+ .msg { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; max-width: 46em; }
+ .msg .meta { color: var(--muted); font-size: 11px; margin-bottom: 4px; }
+ .msg.voicemail { border-left: 3px solid var(--accent); }
+ textarea { width: 100%; max-width: 46em; min-height: 84px; padding: 10px; border: 1px solid var(--line);
+            border-radius: 10px; background: transparent; color: inherit; font: inherit; }
+ .actions { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+ button.primary { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 8px 14px; cursor: pointer; font: inherit; }
+ .plan { color: var(--muted); font-size: 12px; max-width: 46em; }
+ .empty { color: var(--muted); font-size: 13px; padding: 20px; }
+</style></head>
+<body>
+<header><h1>heyphony</h1><span class="note">what a number caught. a viewer, not a sender.</span></header>
+<nav role="tablist">
+  <button role="tab" data-tab="messages" aria-selected="true">caught messages</button>
+  <button role="tab" data-tab="voicemail" aria-selected="false">voicemail</button>
+  <button role="tab" data-tab="calls" aria-selected="false">calls</button>
+</nav>
+<main>
+  <div class="list" id="list"></div>
+  <div class="pane" id="pane"><p class="empty">pick a thread on the left.</p></div>
+</main>
+<script>window.__DEMO__ = {"threads": {"applied": false, "shape": "one thread per person", "count": 3, "threads": [{"peer": "+12125550143", "count": 4, "kinds": ["sms", "voicemail"], "last": 1793543600.0, "preview": "also: the 14th works better if that helps", "channels": ["sms", "voicemail"], "when": "2026-11-01 14:33"}, {"peer": "+447700900123", "count": 1, "kinds": ["sms"], "last": 1793530000.0, "preview": "landed, will text when I'm at the office", "channels": ["sms"], "when": "2026-11-01 10:46"}, {"peer": "+15550001111", "count": 1, "kinds": ["sms"], "last": 1793500000.0, "preview": "Your verification code is 428193", "channels": ["sms"], "when": "2026-11-01 02:26"}]}, "detail": {"peer": "+12125550143", "count": 4, "items": [{"id": "mail:1233c923c7d58fdc", "kind": "voicemail", "channel": "voicemail", "at": 1793523600, "body": "new voicemail, 22 seconds. transcript: it's me, calling about the invoice, give me a ring back.", "subject": "VOICEMAIL from 12125550143", "direction": "inbound", "when": "2026-11-01 09:00"}, {"id": "vm:1793533438-vm-ba584a37.wav", "kind": "voicemail", "channel": "voicemail", "at": 1793523600, "body": "new voicemail, 22 seconds. transcript: it's me, calling about th", "audio": "/tmp/tmpxjwmt_iq/voicemail/1793533438-vm-ba584a37.wav", "direction": "inbound", "seconds": null, "when": "2026-11-01 09:00"}, {"id": "sms:1", "kind": "sms", "channel": "sms", "at": 1793540000, "body": "hey, are you free at 3 for a quick call about the invoice?", "subject": null, "direction": "inbound", "when": "2026-11-01 13:33"}, {"id": "sms:3", "kind": "sms", "channel": "sms", "at": 1793543600, "body": "also: the 14th works better if that helps", "subject": null, "direction": "inbound", "when": "2026-11-01 14:33"}], "reply": {"applied": false, "peer": "+12125550143", "body": null, "channel": "sms", "provider": "voip.ms", "thread_has": 3, "last_inbound": "2026-11-01 14:33", "outbound": {"now": false, "via": "voip.ms", "why": "this thread arrived by provider event, and no outbound api path is wired: compose here, send from the provider's own console or a configured smtp relay", "would_use": "the provider's send endpoint"}, "note": "a draft, not a send. the text you write is what would go out once a send path is configured."}}, "voicemail": {"inbox": "voicemail", "dir": "/tmp/tmpxjwmt_iq/voicemail", "count": 1, "rows": [{"n": 1, "id": "1793533438-vm-ba584a37.wav", "from": "+12125550143", "at": 1793523600, "seconds": null, "transcript": "new voicemail, 22 seconds. transcript: it's me, calling about th", "file": "/tmp/tmpxjwmt_iq/voicemail/1793533438-vm-ba584a37.wav"}], "carrier_note": "voip.ms emails voicemail; flowroute does not answer. a provider that emails it arrives through the email lane, and this view reads what was put here.", "hint": "open --show N for the full transcript; --play N to hear it if a player exists"}, "calls": {"count": 3, "missed": 1, "rows": [{"n": 1, "caller": "+12125550143", "callee": "+12125550100", "direction": "incoming", "status": "missed", "started": "2026-11-01 09:41", "who": "+12125550143", "when": "2026-11-01 09:41", "missed": true}, {"n": 2, "caller": "+447700900123", "callee": "+12125550100", "direction": "incoming", "status": "answered", "started": "2026-11-01 08:12", "who": "+447700900123", "when": "2026-11-01 08:12", "missed": false}, {"n": 3, "caller": "+12125550100", "callee": "+12125550143", "direction": "outgoing", "status": "answered", "started": "2026-10-31 17:03", "who": "+12125550143", "when": "2026-10-31 17:03", "missed": false}]}}
+<script>
+const list = document.getElementById('list'), pane = document.getElementById('pane');
+let tab = 'messages', peer = null;
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+async function get(path) {
+  const d = window.__DEMO__;
+  if (path === '/api/threads') return d.threads;
+  if (path.startsWith('/api/thread?')) return d.detail;
+  if (path === '/api/voicemail') return d.voicemail;
+  if (path === '/api/calls') return d.calls;
+  return {};
+}
+function select(name) { peer = name; document.querySelectorAll('.row').forEach(r => r.setAttribute('aria-current', r.dataset.peer === name ? 'true' : 'false')); showThread(name); }
+async function loadList() {
+  list.innerHTML = '';
+  if (tab === 'calls') {
+    const data = await get('/api/calls');
+    if (!data.rows.length) { list.append(el('p', 'empty', 'no calls in the log yet.')); return; }
+    for (const row of data.rows) {
+      const rowEl = el('div', 'row'); rowEl.dataset.peer = row.who || '';
+      rowEl.append(el('div', 'peer', (row.who || 'unknown') + (row.missed ? '  missed' : '')));
+      rowEl.append(el('div', 'prev', (row.when || '') + '  ' + (row.direction || '')));
+      rowEl.onclick = () => select(row.who || '');
+      list.append(rowEl);
+    }
+    return;
+  }
+  const data = await get(tab === 'voicemail' ? '/api/voicemail' : '/api/threads');
+  const rows = data.threads || data.rows || [];
+  if (!rows.length) { list.append(el('p', 'empty', 'nothing caught yet. text the number, or forward a carrier email in.')); return; }
+  for (const row of rows) {
+    const rowEl = el('div', 'row');
+    const who = row.peer || row.from || 'unknown';
+    rowEl.dataset.peer = who;
+    rowEl.append(el('div', 'peer', who + (row.kinds && row.kinds.includes('voicemail') ? '  vm' : '')));
+    rowEl.append(el('div', 'prev', (row.when || row.at || '') + '  ' + (row.preview || row.transcript || '')));
+    rowEl.onclick = () => select(who);
+    list.append(rowEl);
+  }
+}
+async function showThread(name) {
+  pane.innerHTML = '';
+  if (!name) { pane.append(el('p', 'empty', 'pick a thread on the left.')); return; }
+  const data = await get('/api/thread?peer=' + encodeURIComponent(name));
+  if (!data.items || !data.items.length) { pane.append(el('p', 'empty', 'nothing on this thread yet.')); return; }
+  for (const item of data.items) {
+    const box = el('div', 'msg' + (item.kind === 'voicemail' ? ' voicemail' : ''));
+    box.append(el('div', 'meta', [item.kind, item.when || '', item.seconds ? item.seconds + 's' : ''].filter(Boolean).join('  ')));
+    box.append(el('div', null, item.body || '(no transcript for this one)'));
+    if (item.audio) { const a = el('audio', null); a.controls = true; a.src = '/audio?file=' + encodeURIComponent(item.audio); a.style.width = '100%'; a.style.marginTop = '8px'; box.append(a); }
+    pane.append(box);
+  }
+  const area = el('textarea'); area.placeholder = 'reply to ' + name;
+  const actions = el('div', 'actions');
+  const send = el('button', 'primary', 'draft reply');
+  const plan = el('div', 'plan');
+  send.onclick = async () => {
+    const answer = { outbound: { why: 'this thread arrived by provider event, and no outbound api path is wired' } };
+    plan.textContent = 'draft kept, not sent. ' + (answer.outbound ? (answer.outbound.why || '') : '');
+  };
+  actions.append(send, plan);
+  pane.append(area, actions);
+}
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll('nav button').forEach(x => x.setAttribute('aria-selected', x === b ? 'true' : 'false'));
+  pane.innerHTML = ''; pane.append(el('p', 'empty', 'pick a thread on the left.'));
+  loadList();
+});
+loadList();
+</script></body></html>

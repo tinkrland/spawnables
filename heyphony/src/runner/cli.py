@@ -249,8 +249,13 @@ def cmd_open(args):
 def cmd_get(args):
     """the one command an agent runs once it has a number: heyphony get signal."""
     if args.list or not args.name:
-        _out({"getters": {n: r["state"] for n, r in getters.available().items()},
-              "usage": "heyphony get <name> [--path link-device|register-number] [--run]"})
+        recipes = getters.available()
+        _out({"getters": {n: {"state": r["state"],
+                              "paths": {p: {"needs_number": bool(v.get("needs_number")),
+                                            "gate_env": v.get("gate_env")}
+                                        for p, v in r["paths"].items()}}
+                          for n, r in recipes.items()},
+              "usage": "heyphony get <name> [--path <one of that getter's paths>] [--run]"})
         return
     _out(getters.run(args.name, path=args.path, dry=not args.run))
 

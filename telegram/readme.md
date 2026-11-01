@@ -2,6 +2,8 @@
 
 the easiest lane in the branch, and it is worth saying why rather than being suspicious of it.
 
+the bot is the half of telegram that needs no number, and it is also the half this lane reads. if the number half is ever wanted (an account rather than a bot), the recipe is `heyphony get telegram --path user-account` in the heyphony package, which holds the did and catches the signup code.
+
 ## one endpoint, one header
 
 a telegram bot is an https webhook with a secret token in a header that telegram echoes back on every

@@ -438,6 +438,45 @@ class TestGetters(unittest.TestCase):
         self.assertIn("heyphony get signal", telephony_cli.SETUP["get"]["commands"])
 
 
+    def test_telegram_is_the_second_ramp_and_it_is_two_rails(self):
+        recipe = getters.available()["telegram"]
+        self.assertEqual(list(recipe["paths"]), ["bot", "user-account"])
+        self.assertEqual(getters.plan("telegram", None, {})["path"], "bot",
+                         "the bot is the rail telegram supports, so it is the default")
+        bot = getters.plan("telegram", "bot", env={})
+        self.assertTrue(bot["gettable"], "the bot rail needs no number, so it needs no did")
+        self.assertFalse(recipe["paths"]["bot"]["needs_number"])
+        self.assertFalse(getters.plan("telegram", "user-account", {})["gettable"])
+        self.assertTrue(getters.plan("telegram", "user-account", {"HEYPHONY_SIP_DID": "+1555"})["gettable"])
+        self.assertEqual(recipe["state"], "designed")
+        for refused in ("user-api-id-as-a-bot", "bulk-broadcast", "second-account-after-a-ban"):
+            self.assertIn(refused, recipe["refused"])
+        self.assertIn("refusal", recipe["paths"]["user-account"]["why_risky"],
+                      "the account path has to say it can be refused, not imply it will work")
+
+    def test_get_list_says_what_each_path_needs(self):
+        """the list is the first thing an agent reads, so it must not need a second command to be useful."""
+        from heyphony.src.runner import cli as telephony_cli
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            telephony_cli.main(["get", "--list"])
+        answer = json.loads(buffer.getvalue())
+        self.assertEqual(set(answer["getters"]), {"signal", "telegram"})
+        bot = answer["getters"]["telegram"]["paths"]["bot"]
+        self.assertFalse(bot["needs_number"])
+        self.assertEqual(bot["gate_env"], "TELEGRAM_BOT_TOKEN")
+        user = answer["getters"]["telegram"]["paths"]["user-account"]
+        self.assertTrue(user["needs_number"])
+        self.assertNotIn("link-device", answer["usage"],
+                         "the usage line must not name one getter's paths as if they were all of them")
+
+    def test_the_onramp_page_names_both_ramps(self):
+        text = pathlib.Path("heyphony/src/onramp/readme.md").read_text()
+        for needle in ("## signal, which is built", "## telegram, which is two rails",
+                       "webhook", "botfather", "heyphony get telegram"):
+            self.assertIn(needle, text, f"the onramp page lost {needle!r}")
+        self.assertIn("telegram.json", str(list(pathlib.Path("heyphony/src/onramp").glob("*.json"))))
+
 class TestOpeningTheInboxes(unittest.TestCase):
     def setUp(self):
         import tempfile
@@ -609,6 +648,27 @@ class TestTelegram(unittest.TestCase):
         self.assertIn("telegram", registry.lanes())
         self.assertEqual(self.tg.LANE["state"], "designed")
 
+
+    def test_the_uk_number_path_is_the_one_that_works_and_it_is_not_a_trick(self):
+        plan = lane("whatsapp").number_plan()
+        self.assertEqual(plan["works"], "vmn")
+        self.assertEqual(plan["regions"], ["+44", "+61"])
+        self.assertEqual(plan["provider"], "fanytel")
+        self.assertIn("virtual mobile number", plan["why"])
+        self.assertIn("did", plan["refused"])
+        self.assertIn("googlevoice-like", plan["refused"])
+        for word in ("vpn", "ban"):
+            self.assertIn(word, plan["not_a_bypass"])
+        self.assertIn("esim", plan["still_not"])
+        self.assertIn("web.whatsapp.com", " ".join(plan["flow"]))
+        self.assertFalse(plan["verified"], "nothing here has been signed up, so nothing is verified")
+
+    def test_the_whatsapp_page_explains_why_the_regions_differ(self):
+        text = pathlib.Path("whatsapp/readme.md").read_text().lower()
+        for needle in ("fanytel", "virtual mobile number", "web.whatsapp.com", "ofcom",
+                       "not a vpn", "not an esim", "regulator", "bannable for spam"):
+            self.assertIn(needle, text, f"the whatsapp page lost {needle!r}")
+        self.assertIn("google", text, "the same reasoning applies to google accounts, and the page says so")
 
 class TestConnectingCard(unittest.TestCase):
     """one person, every lane, and the thread they already had."""

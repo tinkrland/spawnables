@@ -30,7 +30,7 @@ each folder at the branch root is a lane. it knows its carrier, its gate and its
 | [email](email/readme.md) | agentmail or carlyemail on a domain you own, svix-signed, caught while the machine sleeps | `CARLYEMAIL_SIGNING_SECRET` |
 | [imessage](imessage/readme.md) | blue bubbles and rcs fallback through photon / spectrum, v0-signed, number whitelist | `PHOTON_SIGNING_SECRET` |
 | [telegram](telegram/readme.md) | one bot, one webhook, one secret header: the easiest lane in the branch | `TELEGRAM_WEBHOOK_SECRET` |
-| [whatsapp](whatsapp/readme.md) | a waha session on the owner's own number, hmac-gated, groups never whitelisted | `WAHA_HMAC_KEY` |
+| [whatsapp](whatsapp/readme.md) | a waha session on the owner's own number, hmac-gated, groups never whitelisted; a `+44` or `+61` virtual mobile number is the one number type whatsapp accepts as a phone | `WAHA_HMAC_KEY` |
 | [slack](slack/readme.md) | the events api, the same v0 scheme as imessage, url verification answered first | `SLACK_SIGNING_SECRET` |
 | [discord](discord/readme.md) | one gateway watcher, answering only when addressed | `DISCORD_BOT_TOKEN` |
 | [signal](signal/readme.md) | the lane that gets cheap once a number exists: link a device, or register with the did heyphony holds | `SIGNAL_CLI_URL` |

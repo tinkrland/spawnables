@@ -11,7 +11,7 @@ import os
 
 LEGS = {
     "address": {
-        "have": "a custom domain on carlyemail or agentmail (1000 messages + 3 inboxes/month)",
+        "have": "a custom domain on carlyemail, free (1000 messages + 3 inboxes/month); agentmail wants a paid plan for a domain",
         "state": "built",
         "note": "inbound works while the host is idle; sending is narrow (SMTP_URL) and gated",
     },

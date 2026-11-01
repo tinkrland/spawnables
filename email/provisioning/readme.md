@@ -9,9 +9,9 @@ the short version, because the choice is small:
 
 | | carlyemail | agentmail |
 | --- | --- | --- |
-| free tier | 3 inboxes and 1,000 emails a month, no card | not recorded here: their docs pages cover domains and inboxes, the plan page does not; check it before relying on a number |
-| custom domain on the free tier | yes | yes |
-| address shape | `[name]@yourdomain.tld`, or `[name]@subdomain.yourdomain.tld` | the same, with the same subdomain option |
+| free tier | 3 inboxes and 1,000 emails a month, no card | free for `@agentmail.to` addresses; a paid plan for a custom domain, and the figures are not recorded here |
+| custom domain on the free tier | **yes** | **no**: a custom domain is a paid-plan feature, so the free tier is `@agentmail.to` addresses only |
+| address shape | `[name]@yourdomain.tld`, or `[name]@subdomain.yourdomain.tld`, free | the same shape, on a paid plan; free is `[name]@agentmail.to` |
 | inbound signature | svix, `whsec_` secret, `v1` over `id.timestamp.body` | a plain shared header, `x-agentmail-secret` |
 | our gate | `CARLYEMAIL_SIGNING_SECRET` | `HEYPHONY_MAIL_SECRET` |
 | subdomains | `subdomains_enabled`, one wildcard MX on `*` | `subdomains_enabled`, one wildcard MX on `*` |
@@ -19,6 +19,11 @@ the short version, because the choice is small:
 | zone import | `carlyemail domain <name> --zone` | download the bind zone file from the console |
 
 ## why the custom domain is the part that matters
+
+the free tier is where the two providers stop being one decision. carlyemail puts a custom domain on
+it; agentmail does not, so an agent on agentmail's free plan sends from `@agentmail.to` and the
+agent's own name is a paid feature. that single line is why the recommendation is carlyemail first and
+agentmail later, if at all.
 
 an address on a shared domain is fine until the day it is not: the reputation belongs to everyone else
 using that domain, and there is nothing to retire if something goes wrong. an address on a domain you

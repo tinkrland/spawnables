@@ -4,6 +4,18 @@ read from `docs.agentmail.to` in november 2026, mainly `custom-domains` and `inb
 written for someone deploying many agents, which is why they are worth reading even for one: the
 questions a single inbox avoids are the questions that bite at the tenth.
 
+## the free tier does not include a custom domain
+
+the correction that decides the comparison: **a custom domain on agentmail is a paid-plan feature.** on
+the free tier the address is `[name]@agentmail.to`, which is the same shape every shared-domain
+provider gives you and the same problem: the reputation is shared with every other tenant, and there is
+no domain of your own to retire if something goes wrong.
+
+everything below still holds and is still worth reading, because the domain mechanics are what you get
+on the paid plan and they are the pickiest part of this whole folder. it just means agentmail is the
+second choice here: carlyemail puts a custom domain on the free tier, so an agent that needs
+`[name]@yourdomain.tld` today goes there.
+
 ## what the docs establish
 
 - **`@agentmail.to` by default**, and a custom domain for production, because each domain builds its
@@ -55,6 +67,7 @@ error that it is worth testing before writing the loop that makes ten of them.
 
 ## what is not recorded here
 
-the plan. their docs pages document domains, inboxes and the api; the pricing page did not load when
-this was written, so this page does not claim a free tier figure. check it before deciding, and prefer
-whichever provider the workflow can hold a domain with.
+the plan's figures. their docs pages document domains, inboxes and the api; the pricing page did not
+load when this was written, so this page does not claim a price. what it does claim, because the owner
+established it and it is the line that matters: a custom domain needs the paid plan, and the free tier
+gives `@agentmail.to` addresses only.

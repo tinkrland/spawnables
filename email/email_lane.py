@@ -26,10 +26,12 @@ LANE = {
 }
 
 PROVIDERS = {
-    "agentmail": {"free": "custom domains and subdomains per their docs; the plan figure is not recorded here",
-                  "signature": "plain header secret", "verified": False},
+    "agentmail": {"free": "agentmail.to addresses only: a custom domain is a paid-plan feature",
+                  "signature": "plain header secret", "verified": True,
+                  "verified_what": "the domain paywall, per the owner; the plan's figures are still unread"},
     "carlyemail": {"free": "3 inboxes and 1000 emails a month, custom domain included, no card",
-                   "signature": "svix (v1 over id.timestamp.body)", "verified": True},
+                   "signature": "svix (v1 over id.timestamp.body)", "verified": True,
+                   "verified_what": "the free tier and the custom domain, from their own page"},
 }
 
 

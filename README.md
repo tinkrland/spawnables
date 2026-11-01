@@ -27,7 +27,7 @@ each folder at the branch root is a lane. it knows its carrier, its gate and its
 | folder | what it is | gate |
 | --- | --- | --- |
 | [heyphony](heyphony/readme.md) | **the number**: a jerryrigged workaround for giving your agent a phone number of its own you can reach, through a sip did from voip.ms or flowroute and a client on the host. also onramps signal, because signal wants a phone | `HEYPHONY_SIP_DID` |
-| [email](email/readme.md) | agentmail or carlyemail on a domain you own, svix-signed, caught while the machine sleeps | `CARLYEMAIL_SIGNING_SECRET` |
+| [email](email/readme.md) | carlyemail on a domain of your own for free (agentmail wants a paid plan for one), svix-signed, caught while the machine sleeps | `CARLYEMAIL_SIGNING_SECRET` |
 | [imessage](imessage/readme.md) | blue bubbles and rcs fallback through photon / spectrum, v0-signed, number whitelist | `PHOTON_SIGNING_SECRET` |
 | [telegram](telegram/readme.md) | one bot, one webhook, one secret header: the easiest lane in the branch | `TELEGRAM_WEBHOOK_SECRET` |
 | [whatsapp](whatsapp/readme.md) | a waha session on the owner's own number, hmac-gated, groups never whitelisted; a `+44` or `+61` virtual mobile number is the one number type whatsapp accepts as a phone | `WAHA_HMAC_KEY` |

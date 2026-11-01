@@ -856,6 +856,9 @@ class TestTheDirectoryExplainsItself(unittest.TestCase):
         for needle in ("subdomains_enabled", "wildcard mx", "422", "get /domains",
                        "rua=mailto:", "bind zone file", "shared"):
             self.assertIn(needle, mail, f"agentmail.md lost {needle!r}")
+        self.assertIn("paid-plan feature", mail,
+                      "agentmail's free tier has no custom domain, and the page has to say so")
+        self.assertIn("agentmail.to` addresses only", mail)
         index = (folder / "readme.md").read_text().lower()
         for needle in ("[name]@yourdomain.tld", "subdomain", "apex", "smtp_url"):
             self.assertIn(needle, index, f"the provisioning index lost {needle!r}")
@@ -864,8 +867,14 @@ class TestTheDirectoryExplainsItself(unittest.TestCase):
     def test_the_lane_does_not_claim_a_price_it_did_not_read(self):
         providers = lane("email").PROVIDERS
         self.assertTrue(providers["carlyemail"]["verified"])
-        self.assertFalse(providers["agentmail"]["verified"],
-                         "agentmail's plan figure was not read, so it stays unverified")
+        self.assertTrue(providers["agentmail"]["verified"],
+                        "the domain paywall is established even though the figures are not")
+        self.assertIn("paid-plan", providers["agentmail"]["free"])
+        self.assertFalse(providers["agentmail"].get("verified_what", "").startswith("the plan"),
+                         "what was verified is the paywall, not the price")
+        index = pathlib.Path("email/provisioning/readme.md").read_text().lower()
+        self.assertIn("**no**: a custom domain is a paid-plan feature", index,
+                      "the comparison table must not imply both free tiers include a domain")
 
 class TestTheReadmesCannotDrift(unittest.TestCase):
     """prose that names carriers has to keep naming the ones that exist, and no others."""

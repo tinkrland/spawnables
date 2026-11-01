@@ -70,6 +70,18 @@ bin/heyphony --setup           # telephony alone, because it packages alone
 
 that is the whole shape of it: one umbrella that discovers the folders instead of hardcoding them, and one telephony package that stands by itself. adding a carrier is adding a folder with a readme and a lane module, and nothing central needs editing.
 
+### ai-operatable, which is the honest word
+
+nothing here is ai-native telecom, and it does not want to be called that. the rails underneath are decades old and stay that way: sip, smtp, imap, the events apis that were already there. what is new is only the surface, which is a cli that emits json, a setup that is a runbook, credentials that live in environment gates, and a registry that lets the agent ask what is open. that is one day of jerryrigging rather than a round of funding and a new phone network, and the claim worth making is the accurate one: this is **ai-operatable**, not a reinvention of the phone industry. an agent can be handed a machine and end up with a working communications stack, which is more than most humans manage without a helpdesk.
+
+the shape of work it is built for follows from that, and the shape it is not built for follows just as directly. receive first, answer when a person writes, book the meeting, keep the threads straight: yes. a call centre, an ad campaign, an outbound marketing machine, a reception desk handling a queue: no, and not because it would be hard to build but because bulk outbound is consent and attestation territory and a cheap did is the shape every risk engine blocks first. the honest sentence is that this is for the agent that gets an occasional message and occasionally needs to say one.
+
+because outgoing is priced on the number while receiving is nearly free, the preferred way for the owner to reach the agent is not the number at all: it is [photon / spectrum](imessage/readme.md), imessage with rcs fallback, free for the ten whitelisted numbers or emails. the did faces the world and eats everything that arrives; photon is the short path between the person and their agent, and for a solo developer that split is the whole budget conversation.
+
+### join as you, not as a bot
+
+meetings are the other half of the same idea. a zoom, meet or teams link can be forwarded to any lane, and the agent joins it from that link, listens, talks, shares a screen, answers in the meeting chat and reacts, and comes out with a transcript rather than a vague memory of having been there. it joins as you, with your name on the tile, because a bot badge changes how a room behaves and most of the point of being in the room is that nobody changes.
+
 ## what arrived from the family
 
 prixie and clawtel solved most of the carrier plumbing already, so the load bearing parts are ported with the source named in each module's docstring rather than reinvented from memory:

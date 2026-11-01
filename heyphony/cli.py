@@ -92,6 +92,28 @@ def cmd_setup_select(args):
     return 0
 
 
+def cmd_provision(args):
+    """buy and arm a number from the cli, where a provider documents enough to script it."""
+    from heyphony import provision
+    if args.provider not in ("anveo",):
+        _out({"ok": False, "provider": args.provider,
+              "why": "only anveo documents a whole chain we can call: areas, order, and arming sms by e164",
+              "elsewhere": "the others order in a browser, then their hook is `heyphony hooks <provider>`",
+              "can_provision": ["anveo"]})
+        return 1
+    from heyphony import routes
+    sms_url = args.sms_url
+    if sms_url in (None, "auto"):
+        sms_url = routes.paste_url("anveo", args.base)
+    answer = provision.plan(args.area_code, did_type=args.did_type, rate_plan=args.rate_plan,
+                            sms_url=sms_url, title=args.title, apply=args.apply,
+                            test=args.test, country_id=args.country_id, state_id=args.state_id)
+    _out(answer)
+    if not args.apply:
+        return 0
+    return 0 if answer.get("ok") else 1
+
+
 def cmd_hooks(args):
     """the url to paste, and for providers with an api, the call that sets it."""
     from heyphony import routes
@@ -227,6 +249,19 @@ def build_parser():
     g.add_argument("--run", action="store_true", help="actually execute the install steps")
     g.add_argument("--list", action="store_true")
     g.set_defaults(func=cmd_get)
+    pv = sub.add_parser("provision", help="order a number and arm its texts, where the provider is scriptable")
+    pv.add_argument("--provider", default="anveo", choices=["anveo"])
+    pv.add_argument("--area-code", required=True)
+    pv.add_argument("--did-type", default="GEOGRAPHIC")
+    pv.add_argument("--rate-plan", default="SU")
+    pv.add_argument("--country-id")
+    pv.add_argument("--state-id")
+    pv.add_argument("--title", default="heyphony")
+    pv.add_argument("--sms-url", help="defaults to the anveo paste url for this host")
+    pv.add_argument("--base", default=routes_base(), help="the host a provider will post texts to")
+    pv.add_argument("--test", action="store_true", help="anveo's TEST flag: sandbox the request")
+    pv.add_argument("--apply", action="store_true", help="actually spend money")
+    pv.set_defaults(func=cmd_provision)
     hk = sub.add_parser("hooks", help="the url and the setting that makes one provider's texts arrive")
     hk.add_argument("provider", nargs="?")
     hk.add_argument("--base", default=routes_base())
@@ -241,6 +276,8 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "--setup":
         argv = ["setup"] + argv[1:]
+    if argv[:2] == ["setup", "provision"]:
+        argv = ["provision"] + argv[2:]
     if argv[:2] == ["setup", "--select"]:
         argv = ["setup", "select"] + argv[2:]
     args = build_parser().parse_args(argv)

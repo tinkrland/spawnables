@@ -196,8 +196,16 @@ def plan_sip(provider, did=None, new=False):
         "connect": connect,
         "from_owner": ["the did", "the sip username", "the sip password"],
         "proves": "one inbound text in `heyphony open messages`, and one call in `heyphony calls`",
-        "provisioning": {"now": "browser", "later": "programmatic ordering from the cli",
-                         "why": "ordering a number is a purchase, and a purchase is a person's act until it is a lane"},
+        "provisioning": ({"now": "cli", "browser": browser,
+                          "command": f"heyphony setup provision --provider anveo --area-code <n> "
+                                     f"--sms-url {routes.paste_url('anveo')} --apply",
+                          "why": "anveo publishes areas, order and sms url as three api actions, so the same cli "
+                                 "can buy the number and point its texts at the catcher without a browser",
+                          "spends_money": True, "test_flag": "anveo's TEST parameter sandboxes the request"}
+                         if key == "anveo" else
+                         {"now": "browser", "later": "programmatic ordering from the cli",
+                          "why": "ordering a number is a purchase, and a purchase is a person's act until the "
+                                 "provider documents enough to script it. anveo does, the rest do not yet"}),
         "works_while_off": profile["works_while_off"],
         "sip_style": profile.get("sip_style"),
         "pricing": {"did_usd_month": profile["did_usd_month"],

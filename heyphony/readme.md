@@ -26,6 +26,7 @@ $ heyphony setup select sip
   does this number already exist?
   > i already have a sip did   paste the number, then the sip username and password
     get a new one              opens the provider portal in a browser
+                               (anveo can be ordered from the cli instead)
 ```
 
 pick the provider, say whether the number is already yours, paste it if it is or take the portal if it is not, and what comes back is the exact next command with the pieces a person still has to fetch marked:
@@ -44,7 +45,9 @@ heyphony setup                      # the whole plan, as json, without walking a
 
 that split is the whole reason the flow is written this way. an agent cannot click a dropdown, so a menu that only exists as a menu is a wall. every choice here is also a key in the data, and a run with no terminal and no flags **returns the next question instead of waiting for an answer**: `{"needs": "provider", "flag": "--provider", "options": [...]}`. nothing blocks, nothing hangs, and a missing answer is a value rather than a stuck process. the menu is for the human who happens to be at the keyboard; the flags are the real interface.
 
-ordering a number is still a browser act, and the plan says so rather than pretending otherwise: `provisioning: {now: "browser", later: "programmatic ordering from the cli"}`. a purchase is a person's act until it is a lane.
+ordering a number is a browser act for nine of the ten providers, and the plan says so rather than pretending otherwise: `provisioning: {now: "browser"}`. a purchase is a person's act until a provider documents the whole chain.
+
+anveo is the exception, and it is the one worth having. `ANVEO.AREAS.LIST` says which area codes have stock and what each rate plan costs, `DID.ORDER` places the order and answers with the numbers it bought, and `DID.UPDATE` sets `SMS_URL` on a number by e164, which is the same url the catcher is already listening on. so `heyphony setup provision --provider anveo --area-code 212 --sms-url auto --apply` buys the number and points its texts at the inbox in one go, and `--test` uses their sandbox flag so the first run costs nothing. every request is signed with `hmac_sha1(key=secure phrase, message=account email)`, computed here rather than pasted, and the suite pins their published example vector so the signature cannot rot silently.
 
 ### ten providers, and not all of them receive a text
 

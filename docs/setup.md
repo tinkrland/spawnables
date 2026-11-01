@@ -20,6 +20,8 @@ export HEYPHONY_SIP_DID=+1...
 bin/heyphony connect sip --voipms --did +1... --username ... --password ...
 bin/heyphony serve --port 8099 --token ...     # provider sms webhook
 bin/heyphony hooks <provider>              # what to paste, and the api call that arms it
+bin/heyphony setup provision --provider anveo --area-code 212 --sms-url auto --apply
+                                           # anveo only: buy the number and arm its texts in one go
 bin/heyphony hooks bulkvs --apply          # arms it when the credentials are in the environment
 ```
 

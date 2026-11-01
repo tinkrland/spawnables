@@ -6,6 +6,7 @@ declares, so a reader that drifts from linphone fails immediately.
 import contextlib
 import io
 import json
+import os
 import pathlib
 import sqlite3
 import sys
@@ -686,6 +687,13 @@ class TestTheReadmesCannotDrift(unittest.TestCase):
         self.assertIn("a jerryrigged workaround for giving your agent a phone number of its own", text)
         self.assertIn("also onramps signal", text)
 
+    def test_the_positioning_is_honest_about_what_this_is(self):
+        text = self.readme().lower()
+        for needle in ("ai-operatable", "not a reinvention of the phone industry",
+                       "join as you, not as a bot", "free for the ten whitelisted",
+                       "call centre", "consent and attestation"):
+            self.assertIn(needle, text, f"the readme stopped saying {needle!r}")
+
     def test_the_card_is_explained_where_a_human_will_look_for_it(self):
         text = self.readme().lower()
         self.assertIn("the card, so nobody pastes a chat again", text)
@@ -712,6 +720,85 @@ class TestTheCatcherKnowsEveryPath(unittest.TestCase):
         self.assertIsNone(catcher.provider_of("/sms/twilio"))
         self.assertIsNone(catcher.provider_of("/sms"))
         self.assertIsNone(catcher.provider_of("/email"))
+
+
+class TestProvisioningIsACliWhereTheProviderAllowsIt(unittest.TestCase):
+    def run_cli(self, argv):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = telephony_cli.main(argv)
+        return code, out.getvalue()
+
+    def test_anveo_signature_matches_their_published_example(self):
+        from heyphony import provision
+        self.assertEqual(provision.signature("some@email.com", "my secure phrase"),
+                         "396cdfaff3491f457b95e51a5ebd89ad516d623d")
+
+    def test_anveo_answers_parse_into_areas_and_numbers(self):
+        from heyphony import provision
+        areas = provision.parse(
+            '<RESPONSE><RESULT>SUCCESS</RESULT><AREAS>'
+            '<AREA AREA_NAME="ALBERTVILLE" AREA_ID="191.195.165.31.230" AREA_CODE="256" STOCK="49">'
+            '<RATE_PLAN RATE_PLAN_ID="VALUE" RATE_PLAN_NAME="Value" MONTHLY100="149" SETUP100="249" />'
+            '<RATE_PLAN RATE_PLAN_ID="SU" RATE_PLAN_NAME="Service Unlimited" MONTHLY100="149" SETUP100="249" />'
+            '</AREA></AREAS></RESPONSE>')
+        self.assertEqual(areas["result"], "SUCCESS")
+        self.assertEqual(areas["areas"][0]["AREA_CODE"], "256")
+        self.assertEqual(areas["areas"][0]["rate_plans"][1]["RATE_PLAN_ID"], "SU")
+        bought = provision.parse(
+            '<RESPONSE><RESULT>SUCCESS</RESULT><DIDS>'
+            '<DID E164="12121111111" DID_TYPE="GEOGRAPHIC" SMS_URL="" STATUS="Active" AREA_CODE="212" />'
+            '</DIDS></RESPONSE>')
+        self.assertEqual(bought["dids"][0]["E164"], "12121111111")
+
+    def test_provisioning_is_a_plan_without_apply_and_names_its_credentials(self):
+        from heyphony import provision
+        saved = {k: os.environ.pop(v, None) for k, v in provision.ENV.items()}
+        try:
+            plan = provision.plan("212", sms_url="https://host:8099/sms/anveo?from=$[from]$")
+            self.assertFalse(plan["applied"])
+            self.assertEqual(sorted(plan["missing"]), ["email", "phrase", "userkey"])
+            self.assertEqual([step["action"] for step in plan["steps"]],
+                             ["ANVEO.AREAS.LIST", "DID.ORDER", "DID.UPDATE"])
+            self.assertIn("DID.ORDER", plan["steps"][1]["as_curl"])
+            self.assertIn("$[from]$", plan["steps"][2]["params"]["SMS_URL"])
+            self.assertIn("--apply", plan["next"])
+            bad = provision.plan("212", did_type="MAGIC")
+            self.assertFalse(bad["ok"])
+            self.assertIn("did_type", bad["why"])
+        finally:
+            for key, value in saved.items():
+                if value is not None:
+                    os.environ[provision.ENV[key]] = value
+
+    def test_only_anveo_is_provisionable_from_the_cli_and_the_plan_says_which(self):
+        code, text = self.run_cli(["provision", "--provider", "anveo", "--area-code", "212"])
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(text)["provider"], "anveo")
+        from heyphony import setup as flow
+        anveo = flow.plan_sip("anveo", "+12125551234")
+        self.assertEqual(anveo["provisioning"]["now"], "cli")
+        self.assertIn("setup provision", anveo["provisioning"]["command"])
+        self.assertTrue(anveo["provisioning"]["spends_money"])
+        flowroute = flow.plan_sip("flowroute", "+12125551234")
+        self.assertEqual(flowroute["provisioning"]["now"], "browser")
+
+    def test_arming_anveos_sms_refuses_without_credentials_and_shows_the_call(self):
+        from heyphony import provision, routes
+        saved = {k: os.environ.pop(v, None) for k, v in provision.ENV.items()}
+        try:
+            answer = routes.apply_hook("anveo", "https://host:8099", "+12125551234")
+            self.assertFalse(answer["applied"])
+            self.assertEqual(answer["missing"], ["userkey", "email", "phrase"])
+            self.assertIn("DID.UPDATE", answer["as_curl"])
+            self.assertIn("FILTER.E164", answer["as_curl"].replace("%5B", "[").replace("%5D", "]"))
+            no_did = routes.apply_hook("anveo", "https://host:8099")
+            self.assertFalse(no_did["applied"])
+            self.assertIn("--did", no_did["why"])
+        finally:
+            for key, value in saved.items():
+                if value is not None:
+                    os.environ[provision.ENV[key]] = value
 
 
 class TestTheGuidedSetup(unittest.TestCase):

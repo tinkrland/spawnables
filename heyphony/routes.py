@@ -63,8 +63,11 @@ ROUTES = {
                       "paste the url below: anveo replaces the placeholders with the real values",
                       "do not enable sms over sip: anveo ignores registration for sms delivery and needs a "
                       "fully qualified host with a port, and it passes the text in x-anveo-sms-* headers"],
-        "apply": None,
-        "evidence": "anveo's own receive-sms-over-http and sms-over-sip pages",
+        "apply": {"module": "anveo", "method": "DID.UPDATE",
+                  "auth": ["ANVEO_EMAIL", "ANVEO_SECURE_PHRASE"],
+                  "headers": {"userkey": "ANVEO_USERKEY"},
+                  "why": "DID.UPDATE sets SMS_URL by e164, so the hook is a call and not a portal visit"},
+        "evidence": "anveo's own receive-sms-over-http page and did.update arguments",
     },
     "signalwire": {
         "kind": "webhook-json",
@@ -260,10 +263,22 @@ def apply_hook(provider, base=BASE, did=None):
     key = _key(provider)
     route = ROUTES[key]
     apply = route.get("apply")
-    if not apply or not apply.get("url"):
+    if not apply or (not apply.get("url") and not apply.get("module")):
         return {"applied": False, "provider": key,
                 "why": "this provider's route is set by hand, or there is no route to set"}
     paste = paste_url(key, base)
+    if apply.get("module") == "anveo":
+        from heyphony import provision
+        if not did:
+            return {"applied": False, "provider": key,
+                    "why": "anveo arms one number at a time, so pass --did",
+                    "as_curl": provision.as_curl("DID.UPDATE", {"FILTER.E164": "<did>", "SMS_URL": paste})}
+        answer = provision.arm_sms(did, paste)
+        if answer.get("ok"):
+            return {"applied": True, "provider": key, "result": answer.get("result"),
+                    "did": did, "sms_url": paste}
+        return {"applied": False, "provider": key, "missing": answer.get("missing"),
+                "why": answer.get("why"), "as_curl": answer.get("as_curl")}
     query, body = _payload(apply, paste, did)
     if not _ready(apply):
         return {"applied": False, "provider": key, "missing": [n for n in _env_names(apply) if not os.environ.get(n)],

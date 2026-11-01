@@ -2139,9 +2139,19 @@ class TestDutyCycle(unittest.TestCase):
         self.assertIn("fibbing", report["issues"][0])
         self.assertIn("force a step", report["issues"][1])
 
-    def test_latency_is_not_quoted_before_it_is_measured(self):
-        self.assertIn("unmeasured", self.duty().plan()["resume_latency"])
-        self.assertIn("resume_latency_is_unmeasured", self.duty().honesty())
+    def test_the_measured_wake_carries_its_provenance(self):
+        latency = self.duty().plan()["resume_latency"]
+        for field in ("host", "measured_at", "iterations", "wake_ms", "fidelity", "how"):
+            self.assertIn(field, latency)
+        self.assertGreaterEqual(latency["iterations"], 10)
+        self.assertLessEqual(latency["wake_ms"]["p50"], latency["wake_ms"]["p95"])
+        self.assertIn("do not quote it", latency["rule"])
+
+    def test_seconds_are_not_sold_as_milliseconds(self):
+        line = self.duty().honesty()["resume_latency_is_one_host"]
+        self.assertIn("seconds rather than milliseconds", line)
+        self.assertIn("not every desktop", line)
+        self.assertNotIn("unmeasured", line)
 
 
 if __name__ == "__main__":

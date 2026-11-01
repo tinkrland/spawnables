@@ -38,6 +38,30 @@ sleep windows derive from the persona's timezone, not the host's, and `coherence
 awake inside its own declared night plus any clock jump over two seconds. a machine whose hours and
 whose browser disagree is a coherence failure, not a preference.
 
+## measured: what a wake costs (2026-11-01)
+
+`tools/duty_wake_bench.mjs` on a live tenki session, 2 vcpu / 3 gb / 30 gb, ten pause-resume cycles on
+one session, timing to the point where a command has actually returned output rather than the point
+where the hypervisor says "running":
+
+| what | p50 | p95 |
+| --- | --- | --- |
+| wake (resume + first command) | 4740 ms | 5031 ms |
+| resume alone | 3572 ms | 3770 ms |
+| pause alone | 6804 ms | 7822 ms |
+| exec on a live session, for scale | 663 ms | 696 ms |
+
+**memory survived every cycle**: a background process held a shell variable `$RANDOM`, a pid and a
+counter; after each resume the pid was alive, the variable was identical and the counter had kept
+climbing. so on this host the tier's continuity claim holds, and `duty.plan(caps={"sleep": True})`
+is the honest shape there. our own adapters still only `freeze`, which is why the plan keeps its
+"disk: the guest boots" branch: that is a limitation of our adapter, not of the idea.
+
+read it honestly: **seconds, not milliseconds**, and past the 1500 ms budget hypeman_bench was written
+against. the earlier two-iteration measurement said 1.66 s; a ten-cycle run says 3.6 s, so the small
+sample was optimistic and the small sample is the one we had quoted. pause costs more than resume,
+which argues for sleeping rarely and deeply rather than napping.
+
 ## what it will not claim
 
 `honesty()` carries the four lines: asleep is not invisible; a disk thaw is a boot; guest timers do

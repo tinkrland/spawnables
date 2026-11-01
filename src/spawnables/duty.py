@@ -74,6 +74,23 @@ WAKE_TRIGGERS = {
                    "note": "refused: this is the mistake the whole module exists to prevent"},
 }
 
+# measured 2026-11-01 on a live tenki session by tools/duty_wake_bench.mjs: a background process
+# holding a shell variable, then pause, resume, and one command that returned output - the point at
+# which the machine is usable again rather than merely "running". ten iterations on one session,
+# because a night repeated is the actual use, and because the earlier two-iteration figure was
+# optimistic by roughly a factor of two.
+MEASURED = {
+    "host": "tenki sandbox, 2 vcpu / 3 gb / 30 gb",
+    "measured_at": "2026-11-01",
+    "iterations": 10,
+    "wake_ms": {"p50": 4740, "p95": 5031},
+    "resume_ms": {"p50": 3572, "p95": 3770},
+    "pause_ms": {"p50": 6804, "p95": 7822},
+    "exec_ms": {"p50": 663},
+    "fidelity": "memory: the shell variable, the background pid and its counter all survived",
+    "how": "tools/duty_wake_bench.mjs, pause -> resume -> echo awake, ten cycles on one session",
+}
+
 FENCE = {
     "job-in-flight": "a render, a download or a test run is work that a sleep destroys",
     "call-ringing": "a live call needs the machine; voicemail is the carrier's job, not the sleeper's",
@@ -169,8 +186,15 @@ def plan(profile="overnight", persona_tz="asia/kolkata", caps=None, triggers=("s
         "always_on": sorted({WAKE_TRIGGERS[t]["holder"] for t in triggers} | {"the keeper"}),
         "steps": steps,
         "fence": dict(FENCE),
-        "resume_latency": "unmeasured: do not quote a number until it is benchmarked on this host",
+        "resume_latency": latency(),
     }
+
+
+def latency():
+    """the measured wake, with the provenance that makes it a number instead of a claim."""
+    return dict(MEASURED, covers="this sandbox class; a desktop guest with a browser open is a "
+                                 "different bill and has not been measured",
+                rule="quote it with host, date and iteration count, or do not quote it")
 
 
 def wake_path(trigger, caps=None):
@@ -217,7 +241,11 @@ def honesty():
                                     "and nothing about that is secret"),
         "a_disk_thaw_is_a_boot": "uptime resets and open windows are gone, so do not claim otherwise",
         "guest_timers_do_not_fire": "cron inside a suspended vm fires late, so every trigger is host-side",
-        "resume_latency_is_unmeasured": "measure on the target host before promising seconds",
+        "resume_latency_is_one_host": (f"measured {MEASURED['wake_ms']['p50']} ms p50 / "
+                                       f"{MEASURED['wake_ms']['p95']} ms p95 to usable on "
+                                       f"{MEASURED['host']} over {MEASURED['iterations']} cycles. "
+                                       "that is a sandbox, not every desktop, and it is seconds "
+                                       "rather than milliseconds"),
         "the_promise_stays_up": "the guest sleeps, the catcher and the keeper do not",
     }
 

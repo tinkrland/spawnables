@@ -33,6 +33,17 @@ sits just past the 1500 ms p95 budget in `tools/hypeman_bench.py`. it is well
 inside "the agent barely noticed" and nowhere near a cold boot, but anyone
 quoting sub-second should be quoting someone else's hardware.
 
+## remeasured 2026-11-01: slower than the first number
+
+the two-iteration figures above were optimistic. a ten-cycle run by `tools/duty_wake_bench.mjs` on the
+same class of session (2 vcpu / 3 gb) measured wake-to-usable at **4740 ms p50 / 5031 ms p95**, resume
+at 3572 ms, pause at 6804 ms, and an ordinary exec at 663 ms - so roughly two thirds of a wake is the
+resume and the rest is the round trip.
+
+the useful half is continuity: a background process holding a shell variable, a pid and a counter
+survived all ten cycles, so a paused session really returns rather than boots. that is the property
+the duty tier needs, and it is worth more than the number being small.
+
 ## the rule from hypeman applies unchanged
 
 a snapshot is one-to-many. restoring a **warm identity guest** twice produces two

@@ -679,6 +679,11 @@ class TestTheReadmesCannotDrift(unittest.TestCase):
         self.assertIn("*turn your ai companion into a commpanion (sorry for the pun) with its own "
                       "comms stack*", self.readme())
 
+    def test_heyphony_is_the_number_not_a_platform(self):
+        text = self.readme()
+        self.assertIn("a jerryrigged workaround for giving your agent a phone number of its own", text)
+        self.assertIn("also onramps signal", text)
+
     def test_the_card_is_explained_where_a_human_will_look_for_it(self):
         text = self.readme().lower()
         self.assertIn("the card, so nobody pastes a chat again", text)
@@ -686,7 +691,8 @@ class TestTheReadmesCannotDrift(unittest.TestCase):
 
     def test_heyphony_explains_itself_in_the_same_voice(self):
         text = pathlib.Path("heyphony/readme.md").read_text()
-        for needle in ("one number that rings a process", "onramp", "inbound first",
+        for needle in ("a jerryrigged workaround", "a **phone number of its own**",
+                       "one you can actually reach", "onramp", "inbound first",
                        "baresip", "ctrl_tcp", "packages alone", "refused for otp"):
             self.assertIn(needle, text.lower(), f"heyphony readme lost {needle!r}")
         self.assertNotIn("—", text)

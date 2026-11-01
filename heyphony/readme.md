@@ -1,10 +1,14 @@
 # heyphony
 
-give your agent one number that rings a process.
+*a jerryrigged workaround for giving your ai agent a phone number of its own, one you can actually reach*
+
+the short version first, because it is easy to lose under the details: this folder exists so your agent has a **phone number of its own**. not an address, not an inbox, not a chat window on somebody's website, but a number in the same network as every other number, which a person can dial or text from the phone already in their pocket, and which rings a process instead of a handset. everything else here is the workaround that gets to that, and "workaround" is a description rather than an apology: nobody sells a phone number to a program, so the shape is a sip did from a provider that sells them for about a dollar, a client on a machine we already run, and a cli that emits json. the telecom layer is thirty years deep and it is not going to change for us, so the jerryrigging is the honest form of the adaptation rather than a shortcut around it.
 
 telephony is the oldest door in the building and almost nobody knocks on it for an agent. the reason is not that it is hard to make a call, it is that every layer around it was built for a person holding a handset: a provider dashboard, a softphone app, a portal that wants a login and a credit card and a click through a wizard. an agent has none of that, and does not need any of it. what it needs is one number, a client on a machine we already own, and a command that returns json. that is the whole product here, and it is deliberately the least interesting part of telephony, because the interesting part is the network it gets to sit on.
 
 this folder is the telephony half of the comms branch and it packages alone. take it, put it on a host with a number, and it works without the rest of the branch. the umbrella depends on it and it imports nothing from the umbrella, so a number can live somewhere the meetings rail does not, which is usually the right call.
+
+and it does two jobs rather than one, which is worth stating before either gets explained. it **holds the number**: registration, the client, the inbox, the calls. and it **onramps what the number unlocks**, because a number is the prerequisite a lot of rails quietly demand, and signal is the clearest case: signal has no bot api, it wants a phone, and once heyphony has one, `heyphony get signal` is the whole installation. that is why installing signal lives in this package instead of the umbrella: the getter needs the number, so it belongs wherever the number is.
 
 ## what it actually is, said plainly
 
@@ -72,17 +76,26 @@ heyphony open voicemail                 # whatever the carrier or the email lane
 
 read state is a sidecar file, because a provider webhook never says whether anyone looked. pretending it does is what makes an inbox useless to a process that has to answer "is this new?" honestly. voicemail stays a carrier feature, so the view reads wherever the carrier put it: voip.ms emails it, which means it arrives through the email lane, and flowroute does not answer at all. a file plus a `<name>.json` sidecar carrying sender, seconds and transcript is the shape, and a missing sidecar means no transcript rather than an invented one.
 
-## get: what a number unlocks
+## the getters: onramping signal, and whatever else wants a phone
 
-a number is the prerequisite for the rails that want a phone, so the package that holds the number is the one that opens them. getters are data, one json recipe per rail, with every command verified against upstream rather than remembered.
+signal is the rail that makes the point best, so it is the one to look at. it has no bot api to sign up for, no dashboard to click through, and no way to be reached by a program at all unless somebody holds a number: the honest path is a phone that registers, or a desktop that links itself as a second device to a phone that already did. heyphony holds the number, so heyphony is where that plan lives, and the whole thing is one command.
+
+```
+heyphony get signal                     # the plan: install, register or link, verify, what stays human
+heyphony get signal --path link-desktop  # no number needed, one qr scan
+heyphony get signal --run               # execute the install steps
+```
+
+the same shape covers whatever comes after signal: getters are data, one json recipe per rail, with every command verified against upstream rather than remembered.
 
 ```
 heyphony get --list             # what this host can open
-heyphony get signal             # the plan: install, join, verify, and what stays human
-heyphony get signal --run       # execute the install steps
+heyphony get signal --path register-number   # the phone that owns the number signs up
 ```
 
 dry by default, `--run` when you mean it, and the qr scan stays a person's act, because a linked device is an identity and identities are not self service. a getter is not a lane: the lane lives in the umbrella with its carrier, gate and honest state, and this package only knows how to install the rail and hand back the part that remains human.
+
+that last line is the boundary worth keeping straight. heyphony onramps signal, it does not become signal: the lane that catches a signal webhook, holds the hmac and answers people lives in the umbrella with every other carrier. the number and the install belong here, because a number is what this package holds.
 
 ## where it is honest about itself
 

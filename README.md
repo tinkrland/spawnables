@@ -26,7 +26,7 @@ each folder at the branch root is a lane. it knows its carrier, its gate and its
 
 | folder | what it is | gate |
 | --- | --- | --- |
-| [heyphony](heyphony/readme.md) | **telephony**: a sip did, voip.ms or flowroute, a client on the host. the onramp into the oldest network there is | `HEYPHONY_SIP_DID` |
+| [heyphony](heyphony/readme.md) | **the number**: a jerryrigged workaround for giving your agent a phone number of its own you can reach, through a sip did from voip.ms or flowroute and a client on the host. also onramps signal, because signal wants a phone | `HEYPHONY_SIP_DID` |
 | [email](email/readme.md) | agentmail or carlyemail on a domain you own, svix-signed, caught while the machine sleeps | `CARLYEMAIL_SIGNING_SECRET` |
 | [imessage](imessage/readme.md) | blue bubbles and rcs fallback through photon / spectrum, v0-signed, number whitelist | `PHOTON_SIGNING_SECRET` |
 | [telegram](telegram/readme.md) | one bot, one webhook, one secret header: the easiest lane in the branch | `TELEGRAM_WEBHOOK_SECRET` |
@@ -37,7 +37,7 @@ each folder at the branch root is a lane. it knows its carrier, its gate and its
 | [meetings](meetings/readme.md) | zoom, google meet, teams: join, speak, listen, share the screen | `ZOOM_SDK_KEY` |
 | [streaming](streaming/readme.md) | twitch and kick. the one folder that publishes, on a human's press | `TWITCH_CLIENT_ID` |
 
-the telephone is deliberately not reimplemented here: a number is one registration, one carrier and one long-lived secret, so it lives in its own package next to the umbrella rather than inside it. comms depends on heyphony, heyphony imports nothing from comms, and a test enforces the direction so the package stays portable on its own.
+the telephone is deliberately not reimplemented here, and it is also not pretended into being something modern: nobody sells a phone number to a program, so heyphony is a workaround, a number bought for a dollar and a client on a host we already run. it lives in its own package next to the umbrella rather than inside it, since a number is one registration, one carrier and one long-lived secret, and because the package also onramps the rails that only want a phone. comms depends on heyphony, heyphony imports nothing from comms, and a test enforces the direction so the package stays portable on its own.
 
 ### nine inboxes, one memory
 
@@ -90,4 +90,4 @@ the four signature schemes the carriers actually use (svix, v0, waha, and slack'
 - renders, never publishes, except `streaming/`, where publishing is the product and the go-live press is a human's.
 - a did stays voip: refused for otp, refused for bulk outbound, fine for receiving.
 
-to use it: `git checkout comms`, then `python3 tests/selftest.py` (103 tests, stdlib only, no network).
+to use it: `git checkout comms`, then `python3 tests/selftest.py` (104 tests, stdlib only, no network).

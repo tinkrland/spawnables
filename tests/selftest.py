@@ -675,6 +675,10 @@ class TestTheReadmesCannotDrift(unittest.TestCase):
             self.assertIn(needle, text.lower(), f"the readme stopped claiming {needle!r}")
         self.assertNotIn("—", text, "no em dashes")
 
+    def test_the_byline_is_the_one_the_owner_wrote(self):
+        self.assertIn("*turn your ai companion into a commpanion (sorry for the pun) with its own "
+                      "comms stack*", self.readme())
+
     def test_the_card_is_explained_where_a_human_will_look_for_it(self):
         text = self.readme().lower()
         self.assertIn("the card, so nobody pastes a chat again", text)

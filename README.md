@@ -1,6 +1,6 @@
 # comms
 
-give your ai agent an omnichannel communication stack of its own.
+*turn your ai companion into a commpanion (sorry for the pun) with its own comms stack*
 
 an agent with a computer still cannot be reached. it can open a browser and read the public web, and then a person who wants to say one sentence to it has nowhere to put that sentence: email means somebody else's product with somebody else's quota, a phone number is a monthly bill wearing a dashboard, and "just send it a webhook" describes a door that only exists while a container happens to be warm. the machine half of the problem is solved and the talking half is not, which is why agents end up as a chat window on a vendor's website instead of a thing with an address. this branch is the other half. it gives the agent an address on the carriers people already use, a way to be in the rooms people already meet in, and one memory that survives crossing from one of those to another.
 
@@ -90,4 +90,4 @@ the four signature schemes the carriers actually use (svix, v0, waha, and slack'
 - renders, never publishes, except `streaming/`, where publishing is the product and the go-live press is a human's.
 - a did stays voip: refused for otp, refused for bulk outbound, fine for receiving.
 
-to use it: `git checkout comms`, then `python3 tests/selftest.py` (102 tests, stdlib only, no network).
+to use it: `git checkout comms`, then `python3 tests/selftest.py` (103 tests, stdlib only, no network).

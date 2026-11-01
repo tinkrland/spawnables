@@ -12,6 +12,7 @@ import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
+from comms import cards as cardbook
 from comms import catcher, envelope, gates, registry
 from comms import cli as comms_cli
 from heyphony import cli as telephony_cli
@@ -550,6 +551,142 @@ class TestOpeningTheInboxes(unittest.TestCase):
         self.assertIn("blackhole", audio.virtual_mic("macos")["device"])
         self.assertIn("NOT oss", audio.virtual_mic("windows")["note"])
         self.assertEqual(audio.audit()["not_oss"], ["vb-cable"])
+
+class TestTelegram(unittest.TestCase):
+    """the easiest lane: one endpoint, one header, and a group refusal."""
+
+    def setUp(self):
+        self.tg = lane("telegram")
+        self.env = {"TELEGRAM_WEBHOOK_SECRET": "s3cret", "TELEGRAM_BOT_TOKEN": "bot",
+                    "TELEGRAM_ALLOWED_CHATS": "555"}
+
+    def update(self, chat=555, kind="private", text="hello"):
+        return json.dumps({"update_id": 9, "message": {
+            "chat": {"id": chat, "type": kind}, "from": {"username": "ana", "id": 7},
+            "text": text, "date": 1793500000}})
+
+    def test_an_unset_secret_closes_the_lane(self):
+        ok, why = self.tg.verify({}, {"TELEGRAM_WEBHOOK_SECRET": ""})
+        self.assertFalse(ok)
+        self.assertIn("closed, not open", why)
+
+    def test_a_bad_or_missing_token_is_401(self):
+        self.assertEqual(self.tg.handle(self.update(), {}, self.env)["status"], 401)
+        self.assertEqual(self.tg.handle(self.update(), {"x-telegram-bot-api-secret-token": "nope"},
+                                        self.env)["status"], 401)
+
+    def test_a_group_is_a_room_not_a_person(self):
+        answer = self.tg.handle(self.update(chat=-1001, kind="supergroup"),
+                                {"x-telegram-bot-api-secret-token": "s3cret"}, self.env)
+        self.assertEqual(answer["status"], 403)
+        self.assertEqual(answer["body"]["error"], "group-reply")
+
+    def test_a_stranger_is_refused_and_a_whitelisted_chat_normalises(self):
+        headers = {"x-telegram-bot-api-secret-token": "s3cret"}
+        stranger = self.tg.handle(self.update(chat=999), headers, self.env)
+        self.assertEqual(stranger["status"], 403)
+        self.assertIn("not whitelisted", stranger["body"]["error"])
+        answer = self.tg.handle(self.update(), headers, self.env)
+        self.assertEqual(answer["status"], 200)
+        entry = answer["body"]["envelope"]
+        self.assertEqual(entry["channel"], "telegram")
+        self.assertEqual(entry["sender"], "ana")
+        self.assertEqual(entry["thread"], "555")
+        self.assertEqual(entry["id"], "telegram:9")
+
+    def test_the_lane_is_discovered_by_the_registry(self):
+        self.assertIn("telegram", registry.lanes())
+        self.assertEqual(self.tg.LANE["state"], "designed")
+
+
+class TestConnectingCard(unittest.TestCase):
+    """one person, every lane, and the thread they already had."""
+
+    def cards(self):
+        return [cardbook.new("Ana Rivera", {"email": "Ana@Example.com", "phone": "+91 98765 43210"})]
+
+    def test_one_person_resolves_from_any_lane(self):
+        cards = self.cards()
+        self.assertEqual(cardbook.resolve(cards, "email", "ANA@example.com")["card"], "ana-rivera")
+        cards, _ = cardbook.link(cards, "ana-rivera", "telegram", "ana_tg")
+        self.assertEqual(cardbook.resolve(cards, "telegram", "ana_tg")["card"], "ana-rivera")
+        self.assertEqual(cardbook.resolve(cards, "email", "ana@example.com")["channels"],
+                         ["email", "phone", "telegram"])
+
+    def test_a_phone_number_is_one_number_however_it_is_written(self):
+        self.assertEqual(cardbook.canonical("phone", "+91 98765-43210"), "+919876543210")
+        self.assertEqual(cardbook.canonical("email", " Ana@Example.COM "), "ana@example.com")
+
+    def test_a_second_card_claiming_a_handle_is_refused(self):
+        cards = self.cards() + [cardbook.new("A Rivera")]
+        cards, result = cardbook.link(cards, "a-rivera", "email", "ana@example.com")
+        self.assertFalse(result["linked"])
+        self.assertEqual(result["why"], "silent-merge")
+        self.assertEqual(result["held_by"], "ana-rivera")
+        self.assertIn("--merge", result["how"])
+
+    def test_merging_needs_the_name_typed(self):
+        cards = self.cards() + [cardbook.new("A Rivera")]
+        cards, refused = cardbook.merge(cards, "ana-rivera", "a-rivera", "yes")
+        self.assertFalse(refused["merged"])
+        self.assertEqual(refused["needs"], "A Rivera")
+        cards, done = cardbook.merge(cards, "ana-rivera", "a-rivera", "a rivera")
+        self.assertTrue(done["merged"])
+        self.assertEqual(len(cards), 1)
+
+    def test_a_stranger_is_stored_not_stitched(self):
+        answer = cardbook.resolve(self.cards(), "telegram", "somebody_new")
+        self.assertIsNone(answer["card"])
+        self.assertEqual(answer["why"], "stranger-card")
+
+    def test_the_digest_is_the_paste_somebody_would_have_done(self):
+        cards = self.cards()
+        cards, _ = cardbook.link(cards, "ana-rivera", "telegram", "ana_tg")
+        events = [
+            {"channel": "email", "sender": "ana@example.com", "body": "here is the deck", "at": 100},
+            {"channel": "telegram", "sender": "ana_tg", "body": "got it, sending today", "at": 300},
+            {"channel": "email", "sender": "stranger@example.com", "body": "unrelated", "at": 200},
+        ]
+        digest = cardbook.digest(cards, "ana-rivera", events)
+        self.assertEqual([r["body"] for r in digest["recent"]],
+                         ["got it, sending today", "here is the deck"])
+        self.assertEqual(digest["across"], ["email", "telegram"])
+        self.assertEqual(digest["count"], 2)
+
+    def test_the_digest_of_nobody_says_so(self):
+        self.assertIsNone(cardbook.digest(self.cards(), "nobody", [])["card"])
+
+
+class TestTheReadmesCannotDrift(unittest.TestCase):
+    """prose that names carriers has to keep naming the ones that exist, and no others."""
+
+    def readme(self):
+        return pathlib.Path("README.md").read_text()
+
+    def test_every_lane_in_the_tree_is_named_in_the_root_readme(self):
+        text = self.readme().lower()
+        for folder in registry.folders():
+            self.assertIn(folder, text, f"{folder} is a lane but the readme does not mention it")
+
+    def test_the_stack_is_described_as_a_stack(self):
+        text = self.readme()
+        for needle in ("omnichannel", "communication stack", "one memory", "turnkey",
+                       "rcs", "zoom", "google meet", "teams", "screen"):
+            self.assertIn(needle, text.lower(), f"the readme stopped claiming {needle!r}")
+        self.assertNotIn("—", text, "no em dashes")
+
+    def test_the_card_is_explained_where_a_human_will_look_for_it(self):
+        text = self.readme().lower()
+        self.assertIn("the card, so nobody pastes a chat again", text)
+        self.assertIn("an unknown sender is stored, not stitched", text)
+
+    def test_heyphony_explains_itself_in_the_same_voice(self):
+        text = pathlib.Path("heyphony/readme.md").read_text()
+        for needle in ("one number that rings a process", "onramp", "inbound first",
+                       "baresip", "ctrl_tcp", "packages alone", "refused for otp"):
+            self.assertIn(needle, text.lower(), f"heyphony readme lost {needle!r}")
+        self.assertNotIn("—", text)
+
 
 if __name__ == "__main__":
     suite = unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__])

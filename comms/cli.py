@@ -90,6 +90,42 @@ def cmd_signup(args):
         _out(signup.plan(args.service))
 
 
+def cmd_card(args):
+    """the connecting card: one person, every lane, and the conversation they already had."""
+    from comms import cards as cardbook
+    cards = cardbook.load()
+    if args.new:
+        card = cardbook.new(args.new, note=args.note or "")
+        cards.append(card)
+        cardbook.save(cards)
+        _out({"created": card["id"], "card": card})
+        return
+    if args.link:
+        card_id, channel, handle = args.link
+        cards, result = cardbook.link(cards, card_id, channel, handle)
+        if result.get("linked"):
+            cardbook.save(cards)
+        _out(result)
+        return
+    if args.merge:
+        keep_id, drop_id = args.merge
+        cards, result = cardbook.merge(cards, keep_id, drop_id, args.confirm or "")
+        if result.get("merged"):
+            cardbook.save(cards)
+        _out(result)
+        return
+    if args.digest:
+        from heyphony import inbox
+        _out(cardbook.digest(cards, args.digest, inbox.read()))
+        return
+    if args.show:
+        card = next((c for c in cards if c["id"] == args.show), None)
+        _out(card or {"card": None, "why": f"no card {args.show!r}"})
+        return
+    _out({"cards": [{"id": c["id"], "name": c["name"], "channels": sorted(c.get("handles", {}))} for c in cards],
+          "refused": cardbook.REFUSED})
+
+
 def cmd_doctor(args):
     _out({"lanes": registry.states(), "refused": envelope.REFUSED,
           "note": "a lane with credentials and no live message is designed, not verified"})
@@ -122,6 +158,12 @@ def build_parser():
     su.add_argument("--list", action="store_true")
     su.add_argument("--devices", action="store_true", help="what we concluded about driving a phone")
     su.set_defaults(func=cmd_signup)
+    ca = sub.add_parser("card", help="one person, every lane: the connecting card")
+    ca.add_argument("--new"); ca.add_argument("--note")
+    ca.add_argument("--link", nargs=3, metavar=("ID", "CHANNEL", "HANDLE"))
+    ca.add_argument("--merge", nargs=2, metavar=("KEEP", "DROP")); ca.add_argument("--confirm")
+    ca.add_argument("--show"); ca.add_argument("--digest")
+    ca.set_defaults(func=cmd_card)
     d = sub.add_parser("doctor"); d.set_defaults(func=cmd_doctor)
     return p
 

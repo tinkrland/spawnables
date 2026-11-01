@@ -1,4 +1,4 @@
-"""the catcher for the umbrella's lanes: email, imessage, whatsapp, slack.
+"""the catcher for the umbrella's lanes: email, imessage, whatsapp, slack, telegram.
 
 each route verifies its own scheme before anything is parsed or stored, and every
 stored message lands in the shared inbox with channel set. sms is not here: texts
@@ -8,11 +8,11 @@ import json
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from comms import envelope, gates
+from comms import cards as cardbook, envelope, gates
 from heyphony import inbox
 
 ROUTES = {"email": "email", "mail": "email", "imessage": "imessage",
-          "whatsapp": "whatsapp", "slack": "slack"}
+          "whatsapp": "whatsapp", "slack": "slack", "telegram": "telegram"}
 
 
 def pick(payload, *keys):
@@ -90,6 +90,20 @@ def make_handler(path=None, env=None):
             length = int(self.headers.get("Content-Length") or 0)
             raw = (self.rfile.read(length) if length else b"{}").decode("utf-8", "replace")
             headers = {k.lower(): v for k, v in self.headers.items()}
+            if channel == "telegram":
+                # telegram's lane owns its own header gate, whitelist and group refusal
+                from comms import registry
+                answer = registry._load("telegram").handle(raw, headers, env)
+                if answer["status"] == 200:
+                    entry = answer["body"]["envelope"]
+                    known = cardbook.resolve(cardbook.load(env), entry["channel"], entry["sender"])
+                    if known.get("card"):
+                        entry["card"] = known["card"]
+                    stored, reason = inbox.append(entry, path)
+                    self._reply(200, {"stored": stored, "reason": reason, "lane": channel})
+                    return
+                self._reply(answer["status"], answer["body"])
+                return
             ok, why = verify(channel, raw, headers, env)
             if not ok:
                 self._reply(401, {"rejected": why})
@@ -99,6 +113,9 @@ def make_handler(path=None, env=None):
             except ValueError:
                 payload = {"unparsed": raw}
             entry = normalize(channel, payload)
+            known = cardbook.resolve(cardbook.load(env), entry["channel"], entry["sender"] or "")
+            if known.get("card"):
+                entry["card"] = known["card"]
             stored, reason = inbox.append(entry, path)
             self._reply(200 if stored or reason == "duplicate" else 500,
                         {"stored": stored, "reason": reason, "lane": channel})

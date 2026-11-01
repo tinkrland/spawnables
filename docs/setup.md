@@ -4,7 +4,7 @@ two commands, two scopes. `bin/heyphony` gives an agent a number; `bin/comms` te
 
 ```
 git checkout comms
-python3 tests/selftest.py       # 52 tests, stdlib only, no network
+python3 tests/selftest.py       # 102 tests, stdlib only, no network
 bin/heyphony --setup            # telephony: the number, the client, the proof
 bin/comms --setup               # every lane, its gate, its honest state
 ```

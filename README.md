@@ -53,7 +53,9 @@ the audio rail is where most stacks go quietly nonfree, so this branch answers i
 
 ### the card, so nobody pastes a chat again
 
-the cross-channel part needs a place to live, and that place is a card (`comms/cards.py`). a card is one person: a name, the handles they use per carrier, an optional note. because every lane produces the same envelope, a message from any of those handles resolves to the same card, and the digest of that card is the last few things said across every lane in one order. that is exactly the work a human does by hand when they paste the other chat in so the agent can follow along, and it is the work this branch refuses to keep asking for.
+the cross-channel part needs a place to live, and that place is [recognica](comms/recognica/readme.md), the contact book. a card is one person: a name, the handles they use per carrier, an optional note. because every lane produces the same envelope, a message from any of those handles resolves to the same card, and the digest of that card is the last few things said across every lane in one order. that is exactly the work a human does by hand when they paste the other chat in so the agent can follow along, and it is the work this branch refuses to keep asking for.
+
+the book is shelved by **who somebody is to the owner**, because delegation is what makes the distinction load bearing: `humans/owner/` holds the person the agent serves, `humans/people/` holds everybody else it talks to, and `agents/` holds peers that are also software. a flat list cannot say which of these people the agent answers to, and an agent that treats its owner like any inbound sender is not delegated to, it is adrift. a new card is a contact until somebody names an owner, and an entry on the agents shelf can never inherit a human's trust.
 
 three rules keep the card honest, and all of them are about not inventing a person. a handle belongs to one card, so a second card claiming it is refused as a merge rather than merged as a side effect, and a merge needs the dropped card's name typed by whoever means it, because merging the wrong two people is impersonation with extra steps. an unknown sender is stored, not stitched: being messaged does not make somebody known, and a stranger does not get a card until a human decides they are one. and a card is state, not a secret, so it lives on the host beside the lanes, out of the burn lane entirely.
 
@@ -102,4 +104,4 @@ the four signature schemes the carriers actually use (svix, v0, waha, and slack'
 - renders, never publishes, except `streaming/`, where publishing is the product and the go-live press is a human's.
 - a did stays voip: refused for otp, refused for bulk outbound, fine for receiving.
 
-to use it: `git checkout comms`, then `python3 tests/selftest.py` (121 tests, stdlib only, no network).
+to use it: `git checkout comms`, then `python3 tests/selftest.py` (stdlib only, no network, and the count is whatever it prints).

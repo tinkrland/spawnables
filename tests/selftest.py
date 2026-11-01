@@ -8,6 +8,7 @@ import io
 import json
 import os
 import pathlib
+import re
 import sqlite3
 import sys
 import tempfile
@@ -717,6 +718,24 @@ class TestTheReadmesCannotDrift(unittest.TestCase):
             self.assertIn(needle, text, f"the heyphony folder lost {needle!r}")
         for page in pages:
             self.assertNotIn("—", page.read_text(), f"{page} picked up an em dash")
+
+    def test_the_branch_readme_points_at_the_shelved_book(self):
+        text = pathlib.Path("README.md").read_text()
+        self.assertIn("comms/recognica/readme.md", text)
+        self.assertNotIn("comms/cards.py", text)
+        for shelf in ("humans/owner", "humans/people", "agents/"):
+            self.assertIn(shelf, text)
+        self.assertTrue(pathlib.Path("comms/recognica/readme.md").is_file())
+        # the journal links to it with a path that actually resolves
+        journal = pathlib.Path("heyphony/journal/2026-11-01.md")
+        for target in re.findall(r"\]\((\.[^)]+)\)", journal.read_text()):
+            self.assertTrue((journal.parent / target).resolve().exists(), f"{journal} links to a missing {target}")
+
+    def test_the_setup_doc_carries_the_steps_that_used_to_be_implied(self):
+        text = pathlib.Path("docs/setup.md").read_text()
+        for needle in ("--areas", "--purchase", "no payment rail is wired here on purpose", "catching", "voicemail",
+                       "heyphony app --port 8790", "carrier emails parsed"):
+            self.assertIn(needle, text)
 
     def test_the_heyphony_readme_reads_like_the_branch_readme(self):
         """the owner's ask: same shape as main's readme, prose first, sections rather than a wall."""

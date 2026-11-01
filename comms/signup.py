@@ -31,7 +31,7 @@ LEGS = {
         "have": "a voip did from voip.ms or flowroute, inbound-first",
         "state": "partial",
         "note": ("a voip number is refused by a large share of signup and verification flows "
-                 "(see heyphony/providers.py). an app-only flow needs a real handset, and a "
+                 "(see heyphony/src/providers.py). an app-only flow needs a real handset, and a "
                  "borrowed handset is still somebody else's identity, not yours"),
     },
 }

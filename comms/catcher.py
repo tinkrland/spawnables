@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from comms import envelope, gates
 from comms.recognica import cards as cardbook
-from heyphony import inbox
+from heyphony.src import manage as inbox
 
 ROUTES = {"email": "email", "mail": "email", "imessage": "imessage",
           "whatsapp": "whatsapp", "slack": "slack", "telegram": "telegram"}

@@ -9,7 +9,8 @@ import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from heyphony import inbox, routes
+from heyphony.src.manage import inbox
+from heyphony.src.setup import routes
 
 
 def pick(payload, *keys):

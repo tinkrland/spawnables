@@ -6,6 +6,8 @@ there is no product that sells a phone number to a program. there are products t
 
 that is the whole pitch, and it is smaller than it sounds. your agent ends up with a **phone number of its own**, in the same network as every other number, dialable and textable from the phone already in somebody's pocket. everything else here is plumbing to make that address handleable by something without eyes.
 
+if you opened this folder and could not tell how it runs, that is what [directory.md](directory.md) is for: the folder tree, the setup flow and the manage flow drawn separately, and where each command sits. the rest of this page is the argument for the shape, not the map of it.
+
 ## the problem
 
 the first problem is that a phone number is a weird object to give a program. it is not a url, it is not a key. it is a lease on a slice of a network that was designed in the seventies, sold through portals written in the two thousands, and answered by an endpoint that has to keep a tcp connection alive. the two obvious answers both fail. you can rent an "agent phone" from a startup, which is a sip did with a nicer invoice and a claim about ai you cannot verify. or you can build telecom, which is a decade of work about interconnection agreements before you have received a single text.
@@ -68,7 +70,7 @@ the number shops fall into two piles, and the pile is decided by a single questi
 
 the host runs **baresip**, because its `ctrl_tcp` module is a json command socket: json in, json out, `"command": "dial"`, and an event bus back, all of it visible in the module's own source with `ctrl_tcp_listen 0.0.0.0:4444` sitting in the shipped config example. a typed protocol an agent speaks beats a cli a parser has to read, and this lane mostly needs three things, which are dial, hear, and hang up.
 
-pjsua was the other candidate and lost on weight: the pjsip media stack plus pjsua2 bindings built per host, and an interactive telnet console instead of a socket. the verdict lives in `sip.py` as data with the reasoning attached so it does not get relitigated from vibes in six months. linphone still does the desktop job fine, and its configuration keys are what this folder generates.
+pjsua was the other candidate and lost on weight: the pjsip media stack plus pjsua2 bindings built per host, and an interactive telnet console instead of a socket. the verdict lives in `src/linphone/sip.py` as data with the reasoning attached so it does not get relitigated from vibes in six months. linphone still does the desktop job fine, and its configuration keys are what this folder generates.
 
 ### what a number is and is not
 

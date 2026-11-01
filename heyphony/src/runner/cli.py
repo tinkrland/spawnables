@@ -9,7 +9,11 @@ import json
 import pathlib
 import sys
 
-from heyphony import getters, inbox, providers, sip, views
+from heyphony.src.onramp import flow as getters
+from heyphony.src.manage import inbox
+from heyphony.src import providers
+from heyphony.src.linphone import sip
+from heyphony.src.manage import views
 
 SETUP = {
     "what_this_is": "one number that rings a process: a sip did, a provider, a client on the host.",
@@ -46,7 +50,7 @@ def cmd_setup(args):
 
 def cmd_setup_select(args):
     """`heyphony setup select sip`: a menu on a terminal, a json question for a process."""
-    from heyphony import setup as flow
+    from heyphony.src.setup import flow as flow
     interactive = (not getattr(args, "json", False)
                    and sys.stdin.isatty() and sys.stdout.isatty())
     rail = args.rail or "sip"
@@ -95,7 +99,7 @@ def cmd_setup_select(args):
 
 def cmd_app(args):
     """the launcher: tabs for caught texts, voicemail and calls, and one thread per person."""
-    from heyphony import launcher
+    from heyphony.src.runner import gui as launcher
     server = launcher.serve(port=args.port, host=args.host, voicemail_dir=args.voicemail_dir)
     url = f"http://{args.host}:{args.port}/"
     if args.json:
@@ -116,7 +120,8 @@ def cmd_app(args):
 
 def cmd_import(args):
     """a forwarded carrier email becomes a caught message, audio and sidecar included."""
-    from heyphony import launcher, views
+    from heyphony.src.runner import gui as launcher
+    from heyphony.src.manage import views
     raw = pathlib.Path(args.file).read_text(errors="replace") if args.file else sys.stdin.read()
     answer = launcher.import_email(raw, save_dir=args.voicemail_dir or views.voicemail_dir())
     _out(answer)
@@ -125,13 +130,13 @@ def cmd_import(args):
 
 def cmd_provision(args):
     """buy and arm a number from the cli, where a provider documents enough to script it."""
-    from heyphony import provision
+    from heyphony.src.setup import provision
     if args.areas and args.provider != "anveo":
         _out({"ok": False, "why": "only anveo publishes a stock and price lookup we can call",
               "can_provision": ["anveo"]})
         return 1
     if args.areas:
-        from heyphony import provision
+        from heyphony.src.setup import provision
         answer = provision.areas(did_type=args.did_type, country_id=args.country_id,
                                  state_id=args.state_id, area_code=args.area_code,
                                  area_name=args.area_name)
@@ -143,7 +148,7 @@ def cmd_provision(args):
               "elsewhere": "the others order in a browser, then their hook is `heyphony hooks <provider>`",
               "can_provision": ["anveo"]})
         return 1
-    from heyphony import routes
+    from heyphony.src.setup import routes
     sms_url = args.sms_url
     if sms_url in (None, "auto"):
         sms_url = routes.paste_url("anveo", args.base)
@@ -159,7 +164,7 @@ def cmd_provision(args):
 
 def cmd_hooks(args):
     """the url to paste, and for providers with an api, the call that sets it."""
-    from heyphony import routes
+    from heyphony.src.setup import routes
     if not getattr(args, "provider", None):
         _out({"providers": [{"provider": name, "kind": v["kind"],
                              "paste_url": routes.hook(name, args.base)["paste_url"] or "email"}
@@ -208,7 +213,7 @@ def cmd_inbox(args):
 
 
 def cmd_serve(args):
-    from heyphony import catcher
+    from heyphony.src.manage import catcher
     catcher.serve(port=args.port, token=args.token)
 
 
@@ -243,7 +248,7 @@ def cmd_doctor(args):
 
 
 def routes_base():
-    from heyphony import routes
+    from heyphony.src.setup import routes
     return routes.BASE
 
 

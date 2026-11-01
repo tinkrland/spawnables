@@ -1,3 +1,3 @@
 #!/bin/sh
 here=$(cd "$(dirname "$0")/.." && pwd)
-PYTHONPATH="$here" exec python3 -m heyphony.cli "$@"
+PYTHONPATH="$here" exec python3 -m heyphony.src.runner.cli "$@"

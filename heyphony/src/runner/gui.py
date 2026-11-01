@@ -21,7 +21,12 @@ import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from heyphony import inbox, mailparse, providers, routes, sip, views
+from heyphony.src.manage import inbox
+from heyphony.src.manage import mailparse
+from heyphony.src import providers
+from heyphony.src.setup import routes
+from heyphony.src.linphone import sip
+from heyphony.src.manage import views
 
 TABS = ("messages", "voicemail", "calls")
 

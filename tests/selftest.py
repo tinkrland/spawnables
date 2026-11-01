@@ -5,6 +5,7 @@ declares, so a reader that drifts from linphone fails immediately.
 """
 import contextlib
 import io
+import argparse
 import json
 import os
 import pathlib
@@ -21,11 +22,14 @@ from comms import cards as cardbook
 from comms.recognica import cards as recognica_cards, roles as recognica_roles
 from comms import catcher, envelope, gates, registry
 from comms import cli as comms_cli
-from heyphony import cli as telephony_cli
-from heyphony import catcher as phone_catcher
-from heyphony import getters
-from heyphony import inbox, providers, setup as setup_flow, sip
-from heyphony import sip as linphone
+from heyphony.src.runner import cli as telephony_cli
+from heyphony.src.manage import catcher as phone_catcher
+from heyphony.src.onramp import flow as getters
+from heyphony.src.manage import inbox
+from heyphony.src import providers
+from heyphony.src.setup import flow as setup_flow
+from heyphony.src.linphone import sip
+from heyphony.src.linphone import sip as linphone
 
 
 def lane(name):
@@ -437,7 +441,7 @@ class TestOpeningTheInboxes(unittest.TestCase):
     def setUp(self):
         import tempfile
         self.home = tempfile.mkdtemp()
-        from heyphony import inbox as store
+        from heyphony.src.manage import inbox as store
         self.store = store
         self.path = pathlib.Path(self.home) / "telephony" / "inbox.jsonl"
         store.append({"id": "a1", "channel": "sms", "sender": "+1555",
@@ -445,30 +449,30 @@ class TestOpeningTheInboxes(unittest.TestCase):
         store.append({"id": "a2", "channel": "sms", "sender": "+1666", "body": "hello", "at": 1700000100}, self.path)
 
     def test_rows_are_numbered_and_previewed(self):
-        from heyphony import views
+        from heyphony.src.manage import views
         out = views.messages(home=self.home, path=self.path)
         self.assertEqual([r["n"] for r in out["rows"]], [1, 2])
         self.assertEqual(out["rows"][0]["from"], "+1666")
         self.assertTrue(out["rows"][0]["preview"])
 
     def test_the_unread_mark_is_ours_because_the_provider_does_not_track_it(self):
-        from heyphony import views
+        from heyphony.src.manage import views
         self.assertEqual(views.messages(home=self.home, path=self.path)["unread_total"], 2)
         views.messages(home=self.home, path=self.path, do_mark=[1])
         self.assertEqual(views.messages(home=self.home, path=self.path, unread=True)["count"], 1)
 
     def test_show_expands_exactly_one_body(self):
-        from heyphony import views
+        from heyphony.src.manage import views
         out = views.messages(home=self.home, path=self.path, show=2)
         self.assertIn("signal code", out["message"]["body"])
 
     def test_a_thread_filter_narrows_to_one_number(self):
-        from heyphony import views
+        from heyphony.src.manage import views
         out = views.messages(home=self.home, path=self.path, thread="+1555")
         self.assertEqual(out["count"], 1)
 
     def test_voicemail_reads_its_sidecar_and_never_invents_a_transcript(self):
-        from heyphony import views
+        from heyphony.src.manage import views
         folder = pathlib.Path(self.home) / "telephony" / "voicemail"
         folder.mkdir(parents=True)
         (folder / "vm1.wav").write_bytes(b"RIFF")
@@ -480,12 +484,12 @@ class TestOpeningTheInboxes(unittest.TestCase):
         self.assertTrue(any(r["transcript"] == "" for r in rows))
 
     def test_the_call_log_is_empty_rather_than_wrong_without_a_database(self):
-        from heyphony import views
+        from heyphony.src.manage import views
         out = views.calls(home=self.home)
         self.assertEqual((out["count"], out["rows"]), (0, []))
 
     def test_open_is_one_command_for_all_three(self):
-        from heyphony import views
+        from heyphony.src.manage import views
         self.assertEqual(views.messages(home=self.home, path=self.path)["inbox"], "messages")
         self.assertEqual(views.calls(home=self.home)["inbox"], "calls")
         self.assertEqual(views.voicemail(home=self.home)["inbox"], "voicemail")
@@ -663,6 +667,96 @@ class TestConnectingCard(unittest.TestCase):
         self.assertIsNone(cardbook.digest(self.cards(), "nobody", [])["card"])
 
 
+class TestTheDirectoryExplainsItself(unittest.TestCase):
+    """the complaint that started this: python files, no way to see how the thing runs."""
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    hey = root / "heyphony"
+
+    def test_the_map_exists_and_is_a_map(self):
+        text = (self.hey / "directory.md").read_text()
+        self.assertGreaterEqual(text.count("```mermaid"), 3, "the map lost its diagrams")
+        for needle in ("setup", "manage", "onramp", "src/", "runner", "linphone",
+                       "turnedon", "turnedoff", "inbox", "outgoing", "commands"):
+            self.assertIn(needle, text, f"the map does not mention {needle}")
+        self.assertNotIn("—", text)
+
+    def test_setup_and_manage_are_drawn_as_separate_flows(self):
+        """one flow for getting a number, one for living with it. conflating them is how it got confusing."""
+        text = (self.hey / "directory.md").read_text()
+        self.assertIn("the setup flow", text)
+        self.assertIn("the manage flow", text)
+        setup = text.split("### the setup flow", 1)[1].split("### the manage flow", 1)[0]
+        self.assertIn("provision", setup, "the buy-a-number branch is missing")
+        self.assertIn("sip did", setup, "the bring-a-number branch is missing")
+        manage = text.split("### the manage flow", 1)[1]
+        self.assertIn("is the host up", manage)
+        self.assertIn("no live calls", manage)
+
+    def test_every_folder_that_holds_code_says_what_it_is_for(self):
+        for folder in ("src", "src/runner", "src/linphone", "src/setup", "src/manage", "src/onramp",
+                       "src/setup/test", "src/setup/commands", "src/manage/turnedon",
+                       "src/manage/turnedoff", "src/manage/inbox", "src/manage/outgoing"):
+            page = self.hey / folder / "readme.md"
+            self.assertTrue(page.is_file(), f"{folder} has no readme.md")
+            self.assertGreater(len(page.read_text()), 400, f"{folder}/readme.md says nothing")
+
+    def test_no_module_sits_where_a_description_folder_would(self):
+        """a folder and a module with one name is a trap: the module wins, then someone adds an __init__."""
+        for folder in self.hey.rglob("*"):
+            if not folder.is_dir():
+                continue
+            for page in folder.glob("*.py"):
+                clash = folder / page.stem
+                if clash.is_dir() and (clash / "__init__.py").is_file():
+                    self.fail(f"{clash} would shadow {page}")
+
+    def test_the_code_lives_under_src_and_nothing_else_does(self):
+        loose = sorted(p.name for p in self.hey.glob("*.py") if p.name != "__init__.py")
+        self.assertEqual(loose, [], f"modules outside src: {loose}")
+
+    def test_the_off_routing_page_matches_the_vendor_table(self):
+        """the table a person reads and the data the code routes on must be the same table."""
+        from heyphony.src import providers
+        text = (self.hey / "src/manage/turnedoff/readme.md").read_text()
+        for name in providers.inbox_providers():
+            self.assertIn(f"| {name} |", text, f"{name} is missing from the off-routing table")
+        for name in ("voyced", "voxacall", "bitcall"):
+            self.assertIn(f"| {name} |", text)
+        for name, facts in ((n, providers.profile(n)["works_while_off"]) for n in providers.PROVIDERS):
+            for row in text.splitlines():
+                if row.startswith(f"| {name} |"):
+                    cells = [c.strip() for c in row.strip("|").split("|")]
+                    want = ("yes" if facts["texts"] else "no",
+                            "yes" if facts["voicemail"] else "no",
+                            "yes" if facts["live_calls"] else "no")
+                    self.assertEqual(tuple(cells[1:4]), want, f"{name} routing drifted: {row}")
+                    break
+            else:
+                self.fail(f"{name} has no row")
+
+    def test_the_command_index_names_the_commands_that_exist(self):
+        from heyphony.src.runner import cli
+        parser = cli.build_parser()
+        subs = set()
+        for action in parser._actions:
+            if isinstance(action, argparse._SubParsersAction):
+                subs |= set(action.choices)
+        table = (self.hey / "src/setup/commands/readme.md").read_text()
+        for name in subs:
+            self.assertIn(f"`heyphony {name}", table, f"{name} exists and is not in the index")
+        for absent in ("heyphony send", "heyphony call`"):
+            self.assertIn(absent, table, f"the index stopped declaring {absent} missing")
+
+    def test_the_prose_never_claims_a_lane_is_proven(self):
+        for page in self.hey.rglob("*.md"):
+            text = page.read_text().lower()
+            self.assertNotIn("—", text, f"{page} picked up an em dash")
+        off = (self.hey / "src/manage/turnedoff/readme.md").read_text().lower()
+        self.assertIn("no live calls", (self.hey / "directory.md").read_text().lower())
+        self.assertIn("only some of them offer it", off)
+
+
 class TestTheReadmesCannotDrift(unittest.TestCase):
     """prose that names carriers has to keep naming the ones that exist, and no others."""
 
@@ -796,7 +890,7 @@ class TestTheReadmesCannotDrift(unittest.TestCase):
 
 class TestTheCatcherKnowsEveryPath(unittest.TestCase):
     def test_a_provider_path_is_recognised_and_a_stranger_is_not(self):
-        from heyphony import catcher
+        from heyphony.src.manage import catcher
         for name in ("flowroute", "anveo", "signalwire", "questblue", "bulkvs"):
             self.assertEqual(catcher.provider_of(f"/sms/{name}?x=1"), name)
         self.assertIsNone(catcher.provider_of("/sms/twilio"))
@@ -812,7 +906,7 @@ class TestTheProvisioningChainStopsBeforeItSpends(unittest.TestCase):
         return code, out.getvalue()
 
     def test_areas_carry_stock_and_prices_in_dollars(self):
-        from heyphony import provision
+        from heyphony.src.setup import provision
         row = provision._area_row({"AREA_ID": "191.195.165.31.230", "AREA_CODE": "256",
                                    "AREA_NAME": "ALBERTVILLE", "STOCK": "49",
                                    "rate_plans": [{"RATE_PLAN_ID": "SU", "RATE_PLAN_NAME": "Service Unlimited",
@@ -822,7 +916,7 @@ class TestTheProvisioningChainStopsBeforeItSpends(unittest.TestCase):
         self.assertEqual(row["rate_plans"][0]["setup_usd"], 2.49)
 
     def test_apply_asks_for_stock_and_stops_at_the_order(self):
-        from heyphony import provision
+        from heyphony.src.setup import provision
         saved = {k: os.environ.pop(v, None) for k, v in provision.ENV.items()}
         try:
             answer = provision.plan("212", apply=True)
@@ -838,7 +932,7 @@ class TestTheProvisioningChainStopsBeforeItSpends(unittest.TestCase):
                          [("ANVEO.AREAS.LIST", True), ("DID.ORDER", False), ("DID.UPDATE", True)])
 
     def test_the_purchase_step_is_parked_rather_than_forgotten(self):
-        from heyphony import provision
+        from heyphony.src.setup import provision
         parked = provision.plan("212", purchase=True)
         self.assertFalse(parked["ok"])
         self.assertEqual(parked["purchase"], "parked")
@@ -846,7 +940,7 @@ class TestTheProvisioningChainStopsBeforeItSpends(unittest.TestCase):
         self.assertIn("hooks anveo --apply", parked["instead"])
 
     def test_area_selection_is_first_class(self):
-        from heyphony import provision
+        from heyphony.src.setup import provision
         self.assertEqual(sorted(provision.DID_TYPES), ["GEOGRAPHIC", "MOBILE", "NATIONAL", "TOLLFREE"])
         plan = provision.plan("212", area_name="new york", country_id="US")
         self.assertEqual(plan["area_name"], "new york")
@@ -855,7 +949,7 @@ class TestTheProvisioningChainStopsBeforeItSpends(unittest.TestCase):
 
 class TestTheSetupPlanCoversVoicemailAndCatching(unittest.TestCase):
     def test_a_connect_line_is_not_the_whole_errand(self):
-        from heyphony import setup as flow
+        from heyphony.src.setup import flow as flow
         plan = flow.plan_sip("voip.ms", "+12125551234")
         self.assertEqual(plan["catching"]["kind"], "email")
         self.assertIn("heyphony serve", plan["catching"]["serve"])
@@ -887,7 +981,7 @@ class TestTheLauncher(unittest.TestCase):
             inbox.append(entry, path=self.inbox)
 
     def test_texts_and_voicemail_merge_into_one_thread_per_person(self):
-        from heyphony import launcher
+        from heyphony.src.runner import gui as launcher
         raw = ("From: voipms@voip.ms\nSubject: VOICEMAIL from 15551230000\n"
                "Date: Sun, 01 Nov 2026 09:00:00 +0000\nContent-Type: text/plain\n\n"
                "new voicemail, 14 seconds. transcript: call me back about the invoice.\n")
@@ -904,7 +998,7 @@ class TestTheLauncher(unittest.TestCase):
 
     def test_a_forwarded_voicemail_is_not_counted_twice(self):
         """the message and its recording are one thing to a person, so the thread shows it once."""
-        from heyphony import launcher
+        from heyphony.src.runner import gui as launcher
         raw = ("From: voipms@voip.ms\nSubject: VOICEMAIL from 15559998888\n"
                "Date: Sun, 01 Nov 2026 09:00:00 +0000\nMIME-Version: 1.0\n"
                "Content-Type: multipart/mixed; boundary=B\n\n--B\nContent-Type: text/plain\n\n"
@@ -923,7 +1017,7 @@ class TestTheLauncher(unittest.TestCase):
         self.assertEqual(launcher.views.voicemail(path=self.voice)["count"], 1)
 
     def test_a_reply_is_a_draft_with_a_route_and_never_a_send(self):
-        from heyphony import launcher
+        from heyphony.src.runner import gui as launcher
         answer = launcher.draft("+15551230000", "sure, 3 works", path=self.inbox)
         self.assertFalse(answer["applied"])
         self.assertEqual(answer["provider"], "voip.ms")
@@ -932,7 +1026,7 @@ class TestTheLauncher(unittest.TestCase):
         self.assertIn("draft", answer["note"])
 
     def test_voicemail_rows_carry_a_time_a_person_can_read(self):
-        from heyphony import launcher
+        from heyphony.src.runner import gui as launcher
         raw = ("From: voipms@voip.ms\nSubject: VOICEMAIL from 15557776666\n"
                "Date: Sun, 01 Nov 2026 09:00:00 +0000\nMIME-Version: 1.0\n"
                "Content-Type: multipart/mixed; boundary=B\n\n--B\nContent-Type: text/plain\n\n"
@@ -947,7 +1041,7 @@ class TestTheLauncher(unittest.TestCase):
     def test_the_page_serves_tabs_and_json(self):
         import threading
         import urllib.request
-        from heyphony import launcher
+        from heyphony.src.runner import gui as launcher
         server = launcher.serve(port=0, path=self.inbox, voicemail_dir=self.voice)
         port = server.server_address[1]
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -970,7 +1064,7 @@ class TestTheLauncher(unittest.TestCase):
             server.server_close()
 
     def test_a_carrier_email_keeps_its_audio_and_never_guesses_a_sender(self):
-        from heyphony import mailparse
+        from heyphony.src.manage import mailparse
         raw = ("From: voipms@voip.ms\nSubject: VOICEMAIL from 12125550123\n"
                "Date: Sun, 01 Nov 2026 10:00:00 +0000\nMIME-Version: 1.0\n"
                "Content-Type: multipart/mixed; boundary=B\n\n--B\n"
@@ -1057,12 +1151,12 @@ class TestProvisioningIsACliWhereTheProviderAllowsIt(unittest.TestCase):
         return code, out.getvalue()
 
     def test_anveo_signature_matches_their_published_example(self):
-        from heyphony import provision
+        from heyphony.src.setup import provision
         self.assertEqual(provision.signature("some@email.com", "my secure phrase"),
                          "396cdfaff3491f457b95e51a5ebd89ad516d623d")
 
     def test_anveo_answers_parse_into_areas_and_numbers(self):
-        from heyphony import provision
+        from heyphony.src.setup import provision
         areas = provision.parse(
             '<RESPONSE><RESULT>SUCCESS</RESULT><AREAS>'
             '<AREA AREA_NAME="ALBERTVILLE" AREA_ID="191.195.165.31.230" AREA_CODE="256" STOCK="49">'
@@ -1079,7 +1173,7 @@ class TestProvisioningIsACliWhereTheProviderAllowsIt(unittest.TestCase):
         self.assertEqual(bought["dids"][0]["E164"], "12121111111")
 
     def test_provisioning_is_a_plan_without_apply_and_names_its_credentials(self):
-        from heyphony import provision
+        from heyphony.src.setup import provision
         saved = {k: os.environ.pop(v, None) for k, v in provision.ENV.items()}
         try:
             plan = provision.plan("212", sms_url="https://host:8099/sms/anveo?from=$[from]$")
@@ -1102,7 +1196,7 @@ class TestProvisioningIsACliWhereTheProviderAllowsIt(unittest.TestCase):
         code, text = self.run_cli(["provision", "--provider", "anveo", "--area-code", "212"])
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(text)["provider"], "anveo")
-        from heyphony import setup as flow
+        from heyphony.src.setup import flow as flow
         anveo = flow.plan_sip("anveo", "+12125551234")
         self.assertEqual(anveo["provisioning"]["now"], "cli")
         self.assertIn("setup provision", anveo["provisioning"]["command"])
@@ -1112,7 +1206,8 @@ class TestProvisioningIsACliWhereTheProviderAllowsIt(unittest.TestCase):
         self.assertEqual(flowroute["provisioning"]["now"], "browser")
 
     def test_arming_anveos_sms_refuses_without_credentials_and_shows_the_call(self):
-        from heyphony import provision, routes
+        from heyphony.src.setup import provision
+        from heyphony.src.setup import routes
         saved = {k: os.environ.pop(v, None) for k, v in provision.ENV.items()}
         try:
             answer = routes.apply_hook("anveo", "https://host:8099", "+12125551234")
@@ -1139,7 +1234,7 @@ class TestTheGuidedSetup(unittest.TestCase):
         return code, out.getvalue()
 
     def test_the_menu_is_every_provider_the_routes_know_about(self):
-        from heyphony import routes
+        from heyphony.src.setup import routes
         keys = [c["key"] for c in setup_flow.PROVIDER_CHOICES]
         self.assertEqual(keys, ["voip.ms", "flowroute", "anveo", "signalwire", "questblue",
                                 "bulkvs", "jmp.chat", "voyced", "voxacall", "bitcall"])
@@ -1230,7 +1325,7 @@ class TestTheGuidedSetup(unittest.TestCase):
         self.assertEqual(providers.profile("bulkvs")["did_usd_month"], 0.06)
 
     def test_every_route_says_what_a_person_pastes_and_what_to_do_when_nothing_can_be_pasted(self):
-        from heyphony import routes
+        from heyphony.src.setup import routes
         for name in routes.ROUTES:
             hook = routes.hook(name, "https://host:8099")
             self.assertIn(hook["kind"], ("email", "webhook-json", "url-forward", "post-to-url", "xmpp", "none"))
@@ -1245,7 +1340,7 @@ class TestTheGuidedSetup(unittest.TestCase):
         self.assertIn("$[message]$", anveo)
 
     def test_bulkvs_registers_one_webhook_over_its_api_and_needs_credentials_first(self):
-        from heyphony import routes
+        from heyphony.src.setup import routes
         dry = routes.apply_hook("bulkvs", "https://host:8099")
         self.assertFalse(dry["applied"])
         self.assertEqual(sorted(dry["missing"]), ["BULKVS_API_PASS", "BULKVS_API_USER"])
@@ -1254,7 +1349,7 @@ class TestTheGuidedSetup(unittest.TestCase):
         self.assertIn('"Webhook": "comms"', dry["as_curl"])
 
     def test_one_envelope_out_of_five_more_shapes(self):
-        from heyphony import routes
+        from heyphony.src.setup import routes
         bulk = routes.normalize("bulkvs", {"From": "+1555", "To": "+1666", "Message": "yo", "RefId": "r1"})
         self.assertEqual((bulk["sender"], bulk["recipient"], bulk["body"], bulk["id"]), ("+1555", "+1666", "yo", "r1"))
         questblue = routes.normalize("questblue", {"from": "+1555", "to": "+1666", "msg": "hey"})

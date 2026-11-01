@@ -14,7 +14,7 @@ import pathlib
 import subprocess
 
 HERE = pathlib.Path(__file__).resolve().parent
-DIR = HERE / "getters"
+DIR = HERE   # recipes sit beside this file, one json per rail
 
 
 def available():

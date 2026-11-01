@@ -16,7 +16,7 @@ heyphony get signal --path register-number --run    # the other path, if you wan
 
 that is `heyphony get`, not `comms get`, on purpose. signal's only real prerequisite is a
 number with an sms, and the package that holds the number is the package that can open the
-rail. the recipe it executes is `heyphony/getters/signal.json`, so what the command does is
+rail. the recipe it executes is `heyphony/src/onramp/signal.json`, so what the command does is
 readable and diffable instead of baked into a shell history. dry by default, because
 installing is a real change, and the qr scan is never something the command does for you.
 

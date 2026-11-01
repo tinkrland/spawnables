@@ -38,7 +38,7 @@ def cmd_status(args):
 
 
 def cmd_inbox(args):
-    from heyphony import inbox
+    from heyphony.src import manage as inbox
     rows = inbox.read(since_days=args.since)
     if args.lane:
         rows = [r for r in rows if r.get("channel") == args.lane]
@@ -148,7 +148,7 @@ def cmd_card(args):
         _out(result)
         return
     if args.digest:
-        from heyphony import inbox
+        from heyphony.src import manage as inbox
         _out(cardbook.digest(cards, args.digest, inbox.read()))
         return
     if args.show:

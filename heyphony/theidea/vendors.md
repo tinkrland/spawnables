@@ -21,7 +21,7 @@ seven of the ten answer yes. three answer no, and they are listed anyway, becaus
 | voxacall | global | ask | nothing: trunking and dids, no sms story | behind a login |
 | bitcall | global | ask | nothing yet: inbound numbers are on their roadmap | otp, esim, hlr only |
 
-prices are the ones each provider publishes on its own pages, and every value is `verified: false` in `providers.py` until a real delivery proves it, because a phone number that has never received a message is not a phone number that works.
+prices are the ones each provider publishes on its own pages, and every value is `verified: false` in `src/providers.py` until a real delivery proves it, because a phone number that has never received a message is not a phone number that works.
 
 ## the seven that can be an inbox
 

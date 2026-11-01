@@ -3,6 +3,8 @@
 the fixtures are linphone's own schemas, built here from the columns the sdk
 declares, so a reader that drifts from linphone fails immediately.
 """
+import contextlib
+import io
 import json
 import pathlib
 import sqlite3
@@ -18,7 +20,7 @@ from comms import cli as comms_cli
 from heyphony import cli as telephony_cli
 from heyphony import catcher as phone_catcher
 from heyphony import getters
-from heyphony import inbox, providers, sip
+from heyphony import inbox, providers, setup as setup_flow, sip
 from heyphony import sip as linphone
 
 
@@ -692,10 +694,98 @@ class TestTheReadmesCannotDrift(unittest.TestCase):
     def test_heyphony_explains_itself_in_the_same_voice(self):
         text = pathlib.Path("heyphony/readme.md").read_text()
         for needle in ("a jerryrigged workaround", "a **phone number of its own**",
-                       "one you can actually reach", "onramp", "inbound first",
-                       "baresip", "ctrl_tcp", "packages alone", "refused for otp"):
+                       "one you can actually reach", "what it gives you, turnkey",
+                       "setup select sip", "**device on**", "**device off**",
+                       "onramp", "inbound first", "baresip", "ctrl_tcp",
+                       "packages alone", "refused for otp"):
             self.assertIn(needle, text.lower(), f"heyphony readme lost {needle!r}")
         self.assertNotIn("—", text)
+
+
+class TestTheGuidedSetup(unittest.TestCase):
+    """a menu for a person, a json question for a process, one plan either way."""
+
+    def run_cli(self, argv):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = telephony_cli.main(argv)
+        return code, out.getvalue()
+
+    def test_the_menu_is_the_two_providers_and_nothing_else(self):
+        self.assertEqual([c["key"] for c in setup_flow.PROVIDER_CHOICES], ["voip.ms", "flowroute"])
+        self.assertEqual([c["key"] for c in setup_flow.DID_CHOICES], ["existing", "new"])
+
+    def test_a_piped_answer_picks_by_number_and_enter_takes_the_default(self):
+        def keyed(answer):
+            return setup_flow.select("provider", setup_flow.PROVIDER_CHOICES,
+                                     stream_in=io.StringIO(answer), stream_out=io.StringIO(), tty=False)
+        self.assertEqual(keyed("2\n"), "flowroute")
+        self.assertEqual(keyed("\n"), "voip.ms")
+        self.assertEqual(keyed("voip.ms\n"), "voip.ms")
+
+    def test_garbage_is_asked_again_rather_than_accepted(self):
+        self.assertEqual(setup_flow.select("provider", setup_flow.PROVIDER_CHOICES,
+                                           stream_in=io.StringIO("nope\n2\n"),
+                                           stream_out=io.StringIO(), tty=False), "flowroute")
+
+    def test_a_terminal_we_cannot_read_keys_from_still_gets_a_menu(self):
+        out = io.StringIO()
+        self.assertEqual(setup_flow.select("provider", setup_flow.PROVIDER_CHOICES,
+                                           stream_in=io.StringIO("1\n"), stream_out=out, tty=True),
+                         "voip.ms")
+        self.assertIn("1. voip.ms", out.getvalue())
+
+    def test_an_existing_did_gives_the_connect_line(self):
+        plan = setup_flow.plan_sip("voipms", did="+15551234567")
+        self.assertEqual(plan["provider"], "voip.ms")
+        self.assertEqual(plan["did"]["source"], "existing")
+        self.assertIn("--provider voip.ms --did +15551234567", plan["connect"])
+        self.assertFalse(plan["verified"])
+        self.assertEqual(plan["number_type"], "voip")
+
+    def test_a_new_number_goes_to_the_browser_and_says_what_is_later(self):
+        plan = setup_flow.plan_sip("flowroute", new=True)
+        self.assertEqual(plan["did"]["source"], "new")
+        self.assertTrue(plan["browser"]["url"].startswith("https://"))
+        self.assertFalse(plan["browser"]["deep_link_verified"])
+        self.assertEqual(plan["provisioning"]["now"], "browser")
+        self.assertIn("cli", plan["provisioning"]["later"])
+
+    def test_e164_is_enforced_before_a_plan_exists(self):
+        self.assertTrue(setup_flow.valid_did("+15551234567"))
+        self.assertFalse(setup_flow.valid_did("5551234"))
+        self.assertFalse(setup_flow.valid_did("+1"))
+
+    def test_a_process_with_no_flags_gets_the_next_question_not_a_hang(self):
+        code, text = self.run_cli(["setup", "select", "sip"])
+        self.assertEqual(code, 0)
+        answer = json.loads(text)
+        self.assertFalse(answer["ok"])
+        self.assertEqual(answer["needs"], "provider")
+        self.assertEqual([o["key"] for o in answer["options"]], ["voip.ms", "flowroute"])
+
+    def test_a_process_with_the_flags_gets_the_plan(self):
+        code, text = self.run_cli(["setup", "select", "sip", "--provider", "voipms",
+                                   "--did", "+15551234567", "--json"])
+        self.assertEqual(code, 0)
+        plan = json.loads(text)
+        self.assertIn("+15551234567", plan["connect"])
+        self.assertEqual(plan["rail"], "sip")
+
+    def test_a_third_provider_is_refused_with_the_two_that_exist(self):
+        code, text = self.run_cli(["setup", "select", "sip", "--provider", "twilio"])
+        self.assertEqual(code, 1)
+        self.assertEqual(json.loads(text)["options"], ["voip.ms", "flowroute"])
+
+    def test_an_unknown_rail_is_refused(self):
+        code, text = self.run_cli(["setup", "select", "carrier-pigeon"])
+        self.assertEqual(code, 1)
+        self.assertEqual(json.loads(text)["rails"], ["sip"])
+
+    def test_the_old_plan_flag_still_prints_the_plan(self):
+        code, text = self.run_cli(["setup"])
+        self.assertEqual(code, 0)
+        self.assertIn("lanes", json.loads(text))
 
 
 if __name__ == "__main__":

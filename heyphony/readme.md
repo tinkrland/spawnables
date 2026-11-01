@@ -2,35 +2,85 @@
 
 *a jerryrigged workaround for giving your ai agent a phone number of its own, one you can actually reach*
 
-the short version first, because it is easy to lose under the details: this folder exists so your agent has a **phone number of its own**. not an address, not an inbox, not a chat window on somebody's website, but a number in the same network as every other number, which a person can dial or text from the phone already in their pocket, and which rings a process instead of a handset. everything else here is the workaround that gets to that, and "workaround" is a description rather than an apology: nobody sells a phone number to a program, so the shape is a sip did from a provider that sells them for about a dollar, a client on a machine we already run, and a cli that emits json. the telecom layer is thirty years deep and it is not going to change for us, so the jerryrigging is the honest form of the adaptation rather than a shortcut around it.
+one number, ringing a process instead of a handset. calls arrive and become a call log, texts arrive and become a message, voicemail arrives and becomes a file, and all three land somewhere an agent can read without a mail client, a softphone or a pair of eyes. that is what this folder is for, and the ramshackle way it gets there is a later section, because the first question should be what you actually get.
 
-telephony is the oldest door in the building and almost nobody knocks on it for an agent. the reason is not that it is hard to make a call, it is that every layer around it was built for a person holding a handset: a provider dashboard, a softphone app, a portal that wants a login and a credit card and a click through a wizard. an agent has none of that, and does not need any of it. what it needs is one number, a client on a machine we already own, and a command that returns json. that is the whole product here, and it is deliberately the least interesting part of telephony, because the interesting part is the network it gets to sit on.
+the short version: your agent ends up with a **phone number of its own**, in the same network as every other number, dialable and textable from the phone already in somebody's pocket. everything else here is plumbing to make that address handleable by a process.
 
-this folder is the telephony half of the comms branch and it packages alone. take it, put it on a host with a number, and it works without the rest of the branch. the umbrella depends on it and it imports nothing from the umbrella, so a number can live somewhere the meetings rail does not, which is usually the right call.
+## what it gives you, turnkey
 
-and it does two jobs rather than one, which is worth stating before either gets explained. it **holds the number**: registration, the client, the inbox, the calls. and it **onramps what the number unlocks**, because a number is the prerequisite a lot of rails quietly demand, and signal is the clearest case: signal has no bot api, it wants a phone, and once heyphony has one, `heyphony get signal` is the whole installation. that is why installing signal lives in this package instead of the umbrella: the getter needs the number, so it belongs wherever the number is.
+a did from a provider that sells them for about a dollar a month, registered to a client that lives on the **host**, so the number is alive whether or not any guest is running. an inbox with the three things a mailbox gives a human for free and an agent never gets: a stable handle for a message, an answer to "is this new", and a cheap way to read one item in full. a setup that a process can perform rather than a wizard it has to watch. and, once the number exists, one command per rail that only wanted a phone in the first place, which today means `heyphony get signal`.
 
-## what it actually is, said plainly
+turnkey here means something specific and small: order a number, point it at a host you already run, run the setup, and the agent has an address. no dashboard archaeology, no webhook server of your own to write, no container kept warm so a text can arrive, and no portal session that has to stay open afterwards.
 
-nothing here is an "ai native" platform, and pretending to build one would be the mistake. nobody reinvented telecom for agents, and they should not: the useful property of a phone number is that it is *old*. it reaches people, it lives in the same network everybody else's number lives in, and it does not need a new app installed on anyone's phone before it works. you do not get that by writing a better api, you get it by using the one that already exists.
+### the setup is a cli, so an agent can operate it
 
-so this folder is the opposite of a new platform. it is an **onramp**: the telecom layer already exists, it is thirty years deep, and the work is making it handleable by a process that reads json rather than by a human reading a menu. four shapes cover that, and each one is a decision about what an agent is actually good at.
+`heyphony setup select sip` walks the three questions this actually needs, as menus rather than paragraphs.
 
-### a cli that emits json, not a dashboard
+```
+$ heyphony setup select sip
+  which provider (both about a dollar a month):
+  > voip.ms    carrier side voicemail and texts land in email, so the inbox keeps
+               working with the machine off
+    flowroute  one dollar a month, texts by webhook or smpp, no voicemail fallback
 
-`heyphony status` and `heyphony --setup` print objects on stdout with exit codes that mean something. no prompts, no wizard, no screen that has to be watched. an autonomous process cannot click a button labelled "verify", and a stack that ends in a button is a stack an agent cannot finish.
+  does this number already exist?
+  > i already have a sip did   paste the number, then the sip username and password
+    get a new one              opens the provider portal in a browser
+```
 
-### setup that is a runbook, not documentation
+pick the provider, say whether the number is already yours, paste it if it is or take the portal if it is not, and what comes back is the exact next command with the pieces a person still has to fetch marked:
 
-`heyphony --setup` is the plan rather than prose about the plan: what to ask the owner for, which environment variable opens which lane, which commands to run, and what counts as proof that it worked. the difference matters when the reader is a process deciding what to do next.
+```
+heyphony connect sip --provider voip.ms --did +1555... --username <sip username> --password <sip password>
+```
 
-### config it writes, not config you type
+and every one of those questions has a flag, because the caller is often not a person. the same walk is one line with no menu at all:
 
-the sip client's rc file is generated with the sections that client actually reads, and written 0600 because it holds a password. the keys were read from linphone's own source rather than remembered, and a test fails if the generator drifts from the schemas it claims to write.
+```
+heyphony setup select sip --provider voipms --did +1555... --json
+heyphony setup select sip --provider flowroute --new --json   # order in the browser, then come back
+heyphony setup                      # the whole plan, as json, without walking anything
+```
 
-### decoupled and packageable
+that split is the whole reason the flow is written this way. an agent cannot click a dropdown, so a menu that only exists as a menu is a wall. every choice here is also a key in the data, and a run with no terminal and no flags **returns the next question instead of waiting for an answer**: `{"needs": "provider", "flag": "--provider", "options": [...]}`. nothing blocks, nothing hangs, and a missing answer is a value rather than a stuck process. the menu is for the human who happens to be at the keyboard; the flags are the real interface.
 
-imports nothing else in the branch, and a test enforces that by walking this folder's files and failing on any import of the umbrella. a package that can be lifted out is a package that can be trusted to keep working when the surrounding work changes.
+ordering a number is still a browser act, and the plan says so rather than pretending otherwise: `provisioning: {now: "browser", later: "programmatic ordering from the cli"}`. a purchase is a person's act until it is a lane.
+
+### what survives the machine being off
+
+the honest shape of a phone number is that half of it is somebody else's computer. so the interesting question is not what happens while everything is up, it is what happens when the host is asleep.
+
+|               | phone calls | text messages |
+| ------------- | ----------- | ------------- |
+| **device on**  | rings the client on the host, and becomes a call in the log (recorded and transcribed when the rail is wired) | the provider's webhook lands in the shared inbox, one message |
+| **device off** | no registered endpoint, so the carrier decides: voip.ms answers with its own voicemail and emails it, flowroute has no fallback and the caller simply gets nothing | still arrives, because texts never travel over sip: the provider webhook stores it, or the carrier emails it (voip.ms), and the agent reads it when the machine is back |
+
+the asymmetry in that table is the whole design of the lane. texts are patient: they are provider events, they are stored by something that is not us, and they are waiting whether or not anything was awake. voicemail is patient because it is a carrier feature, which is exactly why it only shows up when the provider has one, and why flowroute's silence in that cell is a fact rather than an oversight.
+
+| provider | texts while off | voicemail while off | live calls while off |
+| -------- | --------------- | ------------------- | -------------------- |
+| voip.ms | yes, sms to email | yes, carrier voicemail to email | no |
+| flowroute | yes, our webhook stores them | no fallback at the carrier | no |
+
+every value in that table is marked `verified: false` in `providers.py` until one real delivery proves it, because a phone number that has never received a message is not a phone number that works. texts are also the reason to check that a did is sms capable **before** paying for it: an inbound inbox is not a verification route, and a number type that a sender refuses never dials us at all.
+
+## the ramp, said plainly
+
+now the part the rest of this folder is actually made of, which is not a platform.
+
+nothing here is an "ai native" telecom product, and pretending to build one would be the mistake. the useful property of a phone number is that it is *old*: it reaches people, it lives in the same network everybody else's number lives in, and it does not need a new app installed on anyone's phone. you do not get that by writing a better api. you get it by talking to the network that already exists, which is thirty years deep, sold through dashboards, and never going to change for us.
+
+so this folder is an **onramp** rather than a reinvention, and it packages alone: take it, put it on a host with a number, and it works without the rest of the branch. the umbrella depends on it, it imports nothing from the umbrella, and a number can therefore live somewhere the meetings rail does not, which is usually the right call.
+
+four shapes cover the adaptation, and each is a decision about what a process is actually good at.
+
+**json out, not a dashboard in.** `heyphony status`, `heyphony setup` and everything else print objects on stdout with exit codes that mean something. no prompts unless a person is at the terminal, no wizard that has to be watched, no state that only exists behind a login screen.
+
+**setup as a runbook and a menu.** `heyphony setup` prints the whole plan as data, `heyphony setup select sip` walks it, and the flags are the same answers in a form a process can pass. the two are one flow with two faces, which is how a human and an agent can use the same tool without either one being a second class citizen.
+
+**config it writes, not config you type.** the sip client's rc file is generated with the sections that client actually reads, and written 0600 because it holds a password. the keys were read from linphone's own source rather than remembered, and a test fails if the generator drifts from the schemas it claims to write.
+
+**decoupled and packageable.** imports nothing else in the branch, and a test enforces that by walking this folder's files and failing on any import of the umbrella. a package that can be lifted out is a package that can be trusted to keep working when the surrounding work changes.
 
 ## calls and messages, and why the asymmetry
 
@@ -88,21 +138,17 @@ heyphony get signal --run               # execute the install steps
 
 the same shape covers whatever comes after signal: getters are data, one json recipe per rail, with every command verified against upstream rather than remembered.
 
-```
-heyphony get --list             # what this host can open
-heyphony get signal --path register-number   # the phone that owns the number signs up
-```
-
 dry by default, `--run` when you mean it, and the qr scan stays a person's act, because a linked device is an identity and identities are not self service. a getter is not a lane: the lane lives in the umbrella with its carrier, gate and honest state, and this package only knows how to install the rail and hand back the part that remains human.
 
 that last line is the boundary worth keeping straight. heyphony onramps signal, it does not become signal: the lane that catches a signal webhook, holds the hmac and answers people lives in the umbrella with every other carrier. the number and the install belong here, because a number is what this package holds.
 
 ## where it is honest about itself
 
-nothing in here has placed a call yet. what is built and tested: config generation against linphone's own keys, call history and message readers against its own sqlite schemas, the provider table with works-while-offline as data, the sms catcher, the inbox, and the getter recipes. what proves it is one host, one did, an echo test, and `heyphony calls` seeing that call in the log.
+nothing in here has placed a call yet. what is built and tested: config generation against linphone's own keys, call history and message readers against its own sqlite schemas, the provider table with works-while-offline as data, the sms catcher, the inbox, the guided setup with its flags and its menu, and the getter recipes. what proves it is one host, one did, an echo test, and `heyphony calls` seeing that call in the log.
 
 ```
-heyphony --setup                        # the plan, as json
+heyphony setup                          # the whole plan, as json
+heyphony setup select sip [--provider voipms|flowroute] [--did +1... | --new] [--json]
 heyphony connect sip --voipms --did +1... --username ... --password ...
 heyphony open messages|calls|voicemail|all
 heyphony get signal [--path phone-signup|link-desktop|register-number] [--run]

@@ -4,7 +4,7 @@ two commands, two scopes. `bin/heyphony` gives an agent a number; `bin/comms` te
 
 ```
 git checkout comms
-python3 tests/selftest.py       # 102 tests, stdlib only, no network
+python3 tests/selftest.py       # 116 tests, stdlib only, no network
 bin/heyphony --setup            # telephony: the number, the client, the proof
 bin/comms --setup               # every lane, its gate, its honest state
 ```
@@ -13,7 +13,7 @@ bin/comms --setup               # every lane, its gate, its honest state
 
 a number is the lane that unlocks the others: signal needs one to register, and a meetings lane is more useful when people can also call.
 
-`bin/heyphony --setup` prints the plan. in short: buy a did (flowroute or voip.ms, about a dollar a month), then
+`bin/heyphony --setup` prints the plan. `bin/heyphony setup select sip` walks it as menus (provider, then whether the did already exists, then the number), and the same three questions have flags so a process can answer them without a terminal: `--provider voipms|flowroute`, `--did +1...` or `--new`, `--json`. with no terminal and no flags it prints the next question instead of blocking. in short: buy a did (flowroute or voip.ms, about a dollar a month), then
 
 ```
 export HEYPHONY_SIP_DID=+1...

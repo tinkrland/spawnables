@@ -1,0 +1,205 @@
+"""the guided setup, in two shapes at once: a menu for a person, flags for a process.
+
+`heyphony setup select sip` walks three small choices - provider, then whether the did already
+exists or has to be ordered, then the number itself - and prints the exact connect command with
+the parts a human still has to fetch from the dashboard marked.
+
+the same module answers to flags, because the caller is often not a person: every menu is also a
+key in the data, and a non-tty run with missing answers returns the next question as json instead
+of blocking on a prompt. that is what makes setup operatable by an agent, not just readable by one.
+"""
+import sys
+
+from heyphony import providers
+
+RAILS = {
+    "sip": {
+        "rail": "sip",
+        "label": "sip",
+        "detail": "a did from a provider that sells them for about a dollar a month",
+        "gate": "HEYPHONY_SIP_DID",
+    },
+}
+
+PROVIDER_CHOICES = [
+    {"key": "voip.ms", "label": "voip.ms",
+     "detail": "carrier side voicemail and texts land in email, so the inbox keeps working with the machine off"},
+    {"key": "flowroute", "label": "flowroute",
+     "detail": "one dollar a month, texts by webhook or smpp, no voicemail fallback at the carrier"},
+]
+
+DID_CHOICES = [
+    {"key": "existing", "label": "i already have a sip did",
+     "detail": "paste the number, then the sip username and password from the provider dashboard"},
+    {"key": "new", "label": "get a new one",
+     "detail": "opens the provider portal in a browser; programmatic ordering comes later, by cli"},
+]
+
+PORTALS = {
+    "voip.ms": "https://voip.ms",
+    "flowroute": "https://manage.flowroute.com",
+}
+
+
+def _tty(stream):
+    try:
+        return bool(stream.isatty())
+    except (AttributeError, ValueError):
+        return False
+
+
+def _readline(stream_in, stream_out, prompt):
+    stream_out.write(prompt)
+    stream_out.flush()
+    line = stream_in.readline()
+    return (line or "").strip()
+
+
+def select(title, choices, default=0, stream_in=None, stream_out=None, tty=None):
+    """a menu when someone is watching, a number when they are not, a key either way.
+
+    arrow keys and enter when the stream is a terminal; a typed number otherwise. both paths
+    return the same key, so the flow below never has to know which kind of caller it has.
+    """
+    stream_in = stream_in or sys.stdin
+    stream_out = stream_out or sys.stdout
+    interactive = _tty(stream_in) and _tty(stream_out) if tty is None else tty
+    keys = [c["key"] for c in choices]
+
+    if not interactive:
+        while True:
+            answer = _readline(stream_in, stream_out, f"{title} [{default + 1}]: ")
+            if not answer:
+                return keys[default]
+            if answer.isdigit() and 1 <= int(answer) <= len(choices):
+                return keys[int(answer) - 1]
+            if answer in keys:
+                return answer
+            stream_out.write(f"not one of: {', '.join(keys)}\n")
+
+    try:
+        import termios
+        import tty as ttymod
+        fd = stream_in.fileno()
+        saved = termios.tcgetattr(fd)
+    except Exception:
+        saved, fd = None, None
+
+    index = default
+    if saved is not None:
+        try:
+            ttymod.setcbreak(fd)
+            while True:
+                stream_out.write(f"\n{title}\n")
+                for i, choice in enumerate(choices):
+                    mark = ">" if i == index else " "
+                    stream_out.write(f" {mark} {choice['label']}\n")
+                    if i == index:
+                        stream_out.write(f"     {choice['detail']}\n")
+                stream_out.write("   up/down to move, enter to pick\n")
+                stream_out.flush()
+                char = stream_in.read(1)
+                if char == "":  # stdin closed under us: take the highlighted row, never hang
+                    stream_out.write("\n")
+                    return keys[index]
+                if char in ("\r", "\n"):
+                    stream_out.write("\n")
+                    return keys[index]
+                if char == "j":
+                    index = min(index + 1, len(choices) - 1)
+                elif char == "k":
+                    index = max(index - 1, 0)
+                elif char == "\x1b":  # an escape sequence: arrow keys
+                    rest = stream_in.read(2)
+                    if rest == "[B":
+                        index = min(index + 1, len(choices) - 1)
+                    elif rest == "[A":
+                        index = max(index - 1, 0)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+
+    # a terminal we cannot put in cbreak mode still gets a menu, just a typed one
+    stream_out.write(f"\n{title}\n")
+    for i, choice in enumerate(choices):
+        stream_out.write(f"  {i + 1}. {choice['label']} - {choice['detail']}\n")
+    return select(title, choices, default, stream_in, stream_out, tty=False)
+
+
+def ask(prompt, stream_in=None, stream_out=None):
+    """one free text answer. the did is the only thing here a menu cannot offer."""
+    stream_in = stream_in or sys.stdin
+    stream_out = stream_out or sys.stdout
+    return _readline(stream_in, stream_out, prompt)
+
+
+def valid_did(value):
+    """e164, loosely: a plus and digits. a number we cannot dial is worse than no number."""
+    text = str(value or "").strip()
+    return text.startswith("+") and text[1:].isdigit() and 7 <= len(text[1:]) <= 15
+
+
+def plan_sip(provider, did=None, new=False):
+    """one dict that is the whole flow's result, whatever answered the questions."""
+    key = str(provider or "").lower().replace("voipms", "voip.ms").strip()
+    if key not in providers.PROVIDERS:
+        raise ValueError(f"unknown provider: {provider}")
+    profile = providers.profile(key)
+    steps = []
+    browser = None
+    source = "existing"
+
+    if new:
+        source = "new"
+        browser = {"url": PORTALS[key], "deep_link_verified": False,
+                   "why": f"sign in, order a number ({profile['did_usd_month']:.2f} usd a month), and confirm sms is enabled on it",
+                   "note": "the portal root on purpose: a guessed deep link rots and lands somebody on a 404"}
+        steps.append("order a did in the browser above, and check that the number is sms capable before paying")
+    else:
+        steps.append("confirm the did is sms capable; an inbound inbox is not a verification route")
+
+    steps += [
+        "fetch the sip username and password for that number from the provider dashboard",
+        "run the connect command below on the host, not in a burnable guest",
+        "start the host client, then `heyphony calls` after one real call",
+    ]
+    connect = (f"heyphony connect sip --provider {key} --did {did or '+1...'}"
+               " --username <sip username> --password <sip password>")
+    return {
+        "rail": "sip",
+        "provider": key,
+        "provider_choices": [c["key"] for c in PROVIDER_CHOICES],
+        "did": {"source": source, "number": None if new else did,
+                "sms_capable": "confirm at the provider before relying on texts"},
+        "browser": browser,
+        "steps": steps,
+        "connect": connect,
+        "from_owner": ["the did", "the sip username", "the sip password"],
+        "proves": "one inbound text in `heyphony open messages`, and one call in `heyphony calls`",
+        "provisioning": {"now": "browser", "later": "programmatic ordering from the cli",
+                         "why": "ordering a number is a purchase, and a purchase is a person's act until it is a lane"},
+        "works_while_off": profile["works_while_off"],
+        "number_type": "voip",
+        "verified": False,
+        "evidence": "the flow is tested against stored answers; no did has been ordered through it",
+    }
+
+
+def needs(question, choices):
+    return {"ok": False, "needs": question, "flag": f"--{question}",
+            "options": [{"key": c["key"], "detail": c["detail"]} for c in choices],
+            "how": "answer with the flag, or run it on a terminal to pick from the menu"}
+
+
+def render(plan):
+    """the human shape of the same dict: short lines, no braces."""
+    lines = [f"rail: {plan['rail']}  provider: {plan['provider']}",
+             f"did: {plan['did']['number'] or 'to order'}", ""]
+    if plan["browser"]:
+        lines += [f"order one here: {plan['browser']['url']}",
+                  f"  {plan['browser']['why']}", ""]
+    lines += ["what happens next:"]
+    lines += [f"  {i}. {step}" for i, step in enumerate(plan["steps"], 1)]
+    lines += ["", f"then: {plan['connect']}", "",
+              f"proves it: {plan['proves']}",
+              "state: designed. this becomes real when one live call or text carries."]
+    return "\n".join(lines)

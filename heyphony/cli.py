@@ -38,12 +38,63 @@ def _out(obj):
 
 
 def cmd_setup(args):
+    if getattr(args, "what", None) == "select":
+        return cmd_setup_select(args)
     _out(SETUP)
+
+
+def cmd_setup_select(args):
+    """`heyphony setup select sip`: a menu on a terminal, a json question for a process."""
+    from heyphony import setup as flow
+    interactive = (not getattr(args, "json", False)
+                   and sys.stdin.isatty() and sys.stdout.isatty())
+    rail = args.rail or "sip"
+    if rail not in flow.RAILS:
+        _out({"ok": False, "why": f"no such rail: {rail}", "rails": sorted(flow.RAILS)})
+        return 1
+
+    provider = getattr(args, "provider", None)
+    if not provider and interactive:
+        provider = flow.select("which provider (both about a dollar a month):", flow.PROVIDER_CHOICES)
+    if not provider:
+        _out(flow.needs("provider", flow.PROVIDER_CHOICES))
+        return 0
+
+    key = str(provider).lower().replace("voipms", "voip.ms").strip()
+    if key not in providers.PROVIDERS:
+        _out({"ok": False, "why": f"unknown provider: {provider}",
+              "options": list(providers.PROVIDERS)})
+        return 1
+
+    did = getattr(args, "did", None)
+    new = bool(getattr(args, "new", False) or getattr(args, "get_new", False))
+    if not did and not new and interactive:
+        source = flow.select("does this number already exist?", flow.DID_CHOICES)
+        new = source == "new"
+        if not new:
+            did = flow.ask("the did, in e164 (+1...): ")
+    if not did and not new:
+        _out(flow.needs("did", flow.DID_CHOICES))
+        return 0
+    if did and not flow.valid_did(did):
+        _out({"ok": False, "why": "that is not a number in e164 form",
+              "got": did, "example": "+15551234567"})
+        return 1
+    try:
+        plan = flow.plan_sip(key, did=did, new=new)
+    except ValueError as exc:
+        _out({"ok": False, "why": str(exc)})
+        return 1
+    if interactive:
+        print(flow.render(plan))
+    else:
+        _out(plan)
+    return 0
 
 
 def cmd_status(args):
     _out({"rc": str(sip.rc_path()), "rc_present": sip.rc_path().is_file(),
-          "provider": providers.profile("voip.ms")["name"],
+          "provider": providers.profile("voip.ms")["provider"],
           "sms_inbox": inbox.count(), "host_client": sip.host_client()["client"],
           "unread": sum(1 for r in views.messages(limit=500)["rows"] if r["unread"]),
           "voicemail": views.voicemail()["count"]})
@@ -108,7 +159,15 @@ def build_parser():
     p = argparse.ArgumentParser(prog="heyphony", description="telephony an agent can hold")
     p.add_argument("--setup", action="store_true", help="print the telephony setup plan as json and stop")
     sub = p.add_subparsers(dest="cmd")
-    s = sub.add_parser("setup"); s.set_defaults(func=cmd_setup)
+    s = sub.add_parser("setup", help="the plan, or `setup select sip` to walk it")
+    s.add_argument("what", nargs="?", choices=["select", "plan"])
+    s.add_argument("rail", nargs="?")
+    s.add_argument("--provider")
+    s.add_argument("--did", help="a did you already hold, in e164")
+    s.add_argument("--new", "--get-new", dest="new", action="store_true",
+                   help="order one in the browser instead")
+    s.add_argument("--json", action="store_true", help="json even on a terminal")
+    s.set_defaults(func=cmd_setup)
     st = sub.add_parser("status"); st.set_defaults(func=cmd_status)
     c = sub.add_parser("connect")
     c.add_argument("target", choices=["sip"])
@@ -149,12 +208,13 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "--setup":
         argv = ["setup"] + argv[1:]
+    if argv[:2] == ["setup", "--select"]:
+        argv = ["setup", "select"] + argv[2:]
     args = build_parser().parse_args(argv)
     if not getattr(args, "func", None):
         build_parser().print_help()
         return 2
-    args.func(args)
-    return 0
+    return args.func(args) or 0
 
 
 if __name__ == "__main__":

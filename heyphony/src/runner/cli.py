@@ -100,15 +100,29 @@ def cmd_setup_select(args):
 def cmd_app(args):
     """the launcher: tabs for caught texts, voicemail and calls, and one thread per person."""
     from heyphony.src.runner import gui as launcher
-    server = launcher.serve(port=args.port, host=args.host, voicemail_dir=args.voicemail_dir)
     url = f"http://{args.host}:{args.port}/"
     if args.json:
-        _out({"launcher": url, "tabs": list(launcher.TABS),
-              "reply": "drafts only", "state": "serving until interrupted",
-              "voicemail_dir": args.voicemail_dir})
-    else:
-        print(f"heyphony app on {url}")
-        print("tabs: caught messages, voicemail, calls. replies are drafted, never sent. ctrl-c to stop.")
+        # a flag called json must not hold the terminal. it prints what the page would show and
+        # exits without binding a port, so an agent can ask "what is in there" in one call.
+        threads = launcher.threads(voicemail_dir=args.voicemail_dir)
+        voice = launcher.voicemails(voicemail_dir=args.voicemail_dir)
+        calls = launcher.calls()
+        return _out({
+            "launcher": url,
+            "tabs": list(launcher.TABS),
+            "reply": "drafts only",
+            "serving": False,
+            "voicemail_dir": args.voicemail_dir,
+            "counts": {"threads": threads.get("count", 0),
+                       "voicemail": voice.get("count", 0),
+                       "calls": calls.get("count", 0),
+                       "missed": calls.get("missed", 0)},
+            "people": [t.get("peer") for t in threads.get("threads", [])][:10],
+            "start_it": f"heyphony app --port {args.port}",
+        })
+    server = launcher.serve(port=args.port, host=args.host, voicemail_dir=args.voicemail_dir)
+    print(f"heyphony app on {url}")
+    print("tabs: caught messages, voicemail, calls. replies are drafted, never sent. ctrl-c to stop.")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -301,7 +315,8 @@ def build_parser():
     ap.add_argument("--port", type=int, default=8790)
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--voicemail-dir")
-    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--json", action="store_true",
+                    help="print what the page would show and exit, instead of serving")
     ap.set_defaults(func=cmd_app)
     im = sub.add_parser("import", help="turn a forwarded carrier email into a caught message")
     im.add_argument("--file", help="an .eml or raw message; stdin when omitted")

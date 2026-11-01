@@ -45,4 +45,6 @@ the shim sets `PYTHONPATH` to the clone and execs the module, so nothing is inst
 
 > draft kept, not sent. no outbound api path is wired for this provider
 
+`heyphony app --json` answers without serving: it prints the tabs, the counts per tab and who is in the threads, then exits. an agent asking what is in the inbox should not have to background a server and kill it afterwards to find out, which is exactly what a json flag that also blocks would force.
+
 the page exists because a mail client gives a human a stable handle per conversation, an is-it-new answer, and a cheap way to read one item, and an agent gets none of those from a mailbox. it is not a chat app and it does not try to be one.

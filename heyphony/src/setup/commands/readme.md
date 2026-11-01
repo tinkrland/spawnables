@@ -12,7 +12,7 @@ one table, because the most common confusion in this package was not knowing whi
 | `heyphony connect sip --voipms` | setup | writes the 0600 config and one registration | yes, it rewrites the same keys |
 | `heyphony doctor` | setup (proof) | what is configured and what is still designed | yes |
 | `heyphony serve --port 8099` | manage | runs the catcher that receives texts and carrier email | it is a server, one at a time |
-| `heyphony app` | manage | the launcher on 127.0.0.1:8790 | same |
+| `heyphony app` | manage | the launcher on 127.0.0.1:8790; `--json` prints the tabs, counts and people and exits without serving | same |
 | `heyphony inbox --since 7` | manage | the raw rows, machine shaped, for a script rather than a person | yes |
 | `heyphony calls --missed` | manage | the call log out of the client's own sqlite, filtered if you ask | yes |
 | `heyphony open messages` | manage | reads the inbox, marks what you looked at | yes, read marks are a sidecar |

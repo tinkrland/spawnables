@@ -11,6 +11,7 @@ import os
 import pathlib
 import re
 import sqlite3
+import time
 import sys
 import tempfile
 import unittest
@@ -1037,6 +1038,24 @@ class TestTheLauncher(unittest.TestCase):
         launcher.import_email(raw, save_dir=self.voice, path=self.inbox)
         row = launcher.voicemails(path=self.inbox, voicemail_dir=self.voice)["rows"][0]
         self.assertRegex(row["when"], r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
+
+    def test_app_json_answers_and_exits_instead_of_serving_forever(self):
+        """a flag called --json that binds a port and never returns is a hang, not an answer."""
+        from heyphony.src.runner import cli as telephony_cli
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            started = time.time()
+            code = telephony_cli.main(["app", "--json"])
+            elapsed = time.time() - started
+        self.assertEqual(code, 0)
+        self.assertLess(elapsed, 5, "app --json blocked, so an agent calling it times out")
+        answer = json.loads(buffer.getvalue())
+        self.assertFalse(answer["serving"])
+        self.assertEqual(answer["tabs"], ["messages", "voicemail", "calls"])
+        self.assertEqual(answer["reply"], "drafts only")
+        self.assertIn("counts", answer)
+        self.assertEqual(set(answer["counts"]), {"threads", "voicemail", "calls", "missed"})
+        self.assertIn("start_it", answer, "the answer must say how to actually start the page")
 
     def test_the_page_serves_tabs_and_json(self):
         import threading

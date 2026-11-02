@@ -8,6 +8,7 @@ the order form is one data model with two sides: a **machine order** (what the u
 |---|---|---|---|
 | base image | [base-image.schema.json](schemas/base-image.schema.json) | os/distro/desktop combo | what can boot |
 | path tool | [path-tool.schema.json](schemas/path-tool.schema.json) | cli tool | what can go on PATH |
+| guest env | the order itself | `env` on the order | what the guest exports, by name, with vault refs instead of secrets |
 | app recipe | [recipe.schema.json](schemas/recipe.schema.json) | app | what apps exist and how they install |
 | rice | [rice.schema.json](schemas/rice.schema.json) | skin bundle | what a machine can wear |
 | machine order | [machine-order.schema.json](schemas/machine-order.schema.json) | user request | what one user asked for |
@@ -283,3 +284,14 @@ spawnables gives an agent one whole device it keeps - the happycapy / cue.im / s
 
 - **duplicate**: every card carries a duplicate button - it copies the machine's manifest verbatim into a pre-filled order form (nothing but identity is new: fresh id, `<name> copy`), the owner tweaks one thing - ram, distro, apps, services - and runs. [presets.py](../src/spawnables/presets.py) `clone_manifest` does the copy, the tweak, and the fresh identity; the clone goes through the same validation as any order, vault refs included.
 - **presets**: save any manifest as a named preset (catalog/presets/) and order new machines from it. presets are manifests, not a second schema - duplication and presets are one mechanism: one throws the copy away after use, the other keeps it.
+
+## guest env, and why a preset may hold a name but not a secret
+
+an order may carry `env`, a flat map of name to value. on linux it is written to `/etc/environment` by the `provision.env` stage, which runs after the path tools so a `PATH` entry can point at something that now exists.
+
+two rules, both enforced in `validate_order` rather than promised in prose:
+
+- names are `UPPER_SNAKE`, because a shell cannot read anything else.
+- a credential-shaped name (`*KEY`, `*TOKEN`, `*SECRET`, `*PASSWORD`) must carry a vault ref (`@@vault:name@@` or an `op://`, `bw://`, `pass://` source). a literal is refused, because presets are json files in a repo and a secret in a preset is a leak waiting for a commit.
+
+`@@vault:name@@` refs resolve at provision and never reach an event: the progress line carries the variable name. `op://` and friends are refused by that stage rather than exported as text, since the vaults cli resolves those, not the provisioner.

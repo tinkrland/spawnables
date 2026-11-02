@@ -188,6 +188,16 @@
           "type": "boolean"
         }
       }
+    },
+    "env": {
+      "type": "object",
+      "description": "guest variables for this machine: NAME -> value, or a vault ref (@@vault:name@@ or another vaults.py source). written to /etc/environment on linux; a preset keeps the ref, never the resolved value.",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "propertyNames": {
+        "pattern": "^[A-Z_][A-Z0-9_]*$"
+      }
     }
   }
 }

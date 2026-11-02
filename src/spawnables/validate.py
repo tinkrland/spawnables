@@ -10,6 +10,9 @@ import re
 from .netpriv import normalize as _net_normalize, validate_network as _net_validate
 
 USERNAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
+ENV_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
+SECRETISH = ("SECRET", "TOKEN", "PASSWORD", "PASSWD", "PRIVATE", "KEY", "CREDENTIAL")
+REF_HINTS = ("@@vault:", "op://", "bw://", "pass://")
 
 
 def validate_order(order, catalog):
@@ -139,5 +142,30 @@ def validate_order(order, catalog):
         warnings.append(
             f"ordered payload ~{est} mb is more than 60% of the {order.size.disk_gb} gb disk"
         )
+
+    for name, value in (getattr(order, "env", {}) or {}).items():
+        if not ENV_NAME_RE.match(str(name)):
+            errors.append(f"env '{name}': names are UPPER_SNAKE (letters, digits, underscore, "
+                          "not starting with a digit); a shell cannot read the rest")
+            continue
+        text = str(value if value is not None else "")
+        if not text.strip():
+            warnings.append(f"env {name}: empty value, so nothing is exported")
+        if "\n" in text or '"' in text:
+            errors.append(f"env '{name}': /etc/environment holds one NAME=\"value\" per line, "
+                          "so no newlines or double quotes in the value")
+        from .vault import refs_in
+        ref = any(hint in text for hint in REF_HINTS)
+        if "@@vault:" in text and not refs_in(text):
+            errors.append(
+                f"env '{name}': '@@vault:' without a name the vault can resolve. names are "
+                "lowercase letters, digits, dot, dash and underscore (@@vault:mail-smtp@@), "
+                "so a slash here would never resolve and would be exported as literal text")
+            continue
+        if not ref and any(word in str(name).upper() for word in SECRETISH):
+            errors.append(
+                f"env '{name}': looks like a credential but carries a literal. point it at a vault "
+                "(@@vault:name@@ or another vaults.py source) so the preset stays a file rather than a "
+                "secret; the value is resolved at provision and never written to an event")
 
     return errors, warnings

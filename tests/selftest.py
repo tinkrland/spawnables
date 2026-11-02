@@ -2,6 +2,10 @@
 
 run: python3 tests/selftest.py
 """
+import contextlib
+import io
+import json
+import os
 import sys
 import pathlib
 import unittest
@@ -1506,6 +1510,129 @@ class TestCatalogRoster(unittest.TestCase):
         self.assertIn("pwa", notion["availability"]["windows"])
         self.assertEqual(CATALOG.order_types_for(notion, "linux"), ["pwa"])
         self.assertEqual(notion["category"], "productivity")
+
+
+def _log(provisioner):
+    """the event stream as text, because events are objects and json.dumps refuses them."""
+    return " | ".join(f"{e.stage}.{e.status} {e.detail}" for e in provisioner.emitter.history)
+
+
+class TestGuestEnvAndTemplates(unittest.TestCase):
+    """the ask: a saved template carrying the variables and the PATH, without becoming a secret store."""
+
+    def order(self, env=None, tools=None, image="mint-22-cinnamon"):
+        from spawnables.models import MachineOrder
+        return MachineOrder.from_dict({"id": "mo-env", "name": "heyphony host", "base_image": image,
+                                       "timezone": "asia/kolkata", "path_tools": tools or ["python"],
+                                       "env": env or {}})
+
+    def test_env_is_written_to_etc_environment_and_the_log_carries_the_name_only(self):
+        from spawnables.catalog import Catalog
+        from spawnables.provisioner import Provisioner
+        from spawnables.vault import Vault, DictBackend
+        cat = Catalog("catalog")
+        order = self.order({"PATH": "/opt/heyphony/bin:/usr/bin", "SMTP_KEY": "@@vault:mail-smtp@@"})
+        adapter = FakeAdapter()
+        backend = DictBackend()
+        backend.put("mail-smtp", "hunter2")
+        vault = Vault(backend)
+        p = Provisioner(order, cat, adapter, vault=vault)
+        p._env("linux")
+        writes = [c for c in adapter.execs if "/etc/environment" in c]
+        self.assertEqual(len(writes), 1)
+        self.assertIn('PATH="/opt/heyphony/bin:/usr/bin"', writes[0])
+        self.assertIn('SMTP_KEY="hunter2"', writes[0], "the ref has to be resolved, not exported")
+        self.assertNotIn("hunter2", _log(p),
+                         "the resolved secret must never reach an event")
+
+    def test_a_missing_vault_refuses_instead_of_writing_a_literal(self):
+        from spawnables.catalog import Catalog
+        from spawnables.provisioner import Provisioner
+        cat = Catalog("catalog")
+        order = self.order({"SMTP_KEY": "@@vault:mail-smtp@@"})
+        adapter = FakeAdapter()
+        p = Provisioner(order, cat, adapter)
+        p._env("linux")
+        self.assertEqual([c for c in adapter.execs if "/etc/environment" in c], [])
+        self.assertIn("needs a vault", _log(p))
+
+    def test_a_vaults_source_ref_is_refused_rather_than_exported_as_text(self):
+        from spawnables.catalog import Catalog
+        from spawnables.provisioner import Provisioner
+        cat = Catalog("catalog")
+        adapter = FakeAdapter()
+        p = Provisioner(self.order({"SMTP_KEY": "op://work/mail/password"}), cat, adapter)
+        p._env("linux")
+        self.assertEqual([c for c in adapter.execs if "/etc/environment" in c], [])
+        self.assertIn("vaults cli", _log(p))
+
+    def test_a_credential_shaped_name_with_a_literal_is_refused_at_validation(self):
+        from spawnables.catalog import Catalog
+        from spawnables.validate import validate_order
+        cat = Catalog("catalog")
+        good = self.order({"PATH": "/opt/bin:/usr/bin", "SMTP_KEY": "@@vault:mail-smtp@@"})
+        self.assertEqual(validate_order(good, cat)[0], [])
+        bad = self.order({"smtp key": "x", "API_KEY": "abc", "SLASHED": "@@vault:a/b@@"})
+        errors = validate_order(bad, cat)[0]
+        self.assertTrue(any("UPPER_SNAKE" in e for e in errors))
+        self.assertTrue(any("looks like a credential" in e for e in errors))
+        self.assertTrue(any("would never resolve" in e for e in errors))
+
+    def test_non_linux_guests_are_skipped_out_loud(self):
+        from spawnables.catalog import Catalog
+        from spawnables.provisioner import Provisioner
+        cat = Catalog("catalog")
+        adapter = FakeAdapter()
+        p = Provisioner(self.order({"PATH": "/opt/bin"}), cat, adapter)
+        p._env("windows")
+        self.assertEqual(adapter.execs, [])
+        self.assertIn("linux path today", _log(p))
+
+    def test_a_saved_preset_keeps_env_paths_and_tools_and_still_says_what_needs_a_vault(self):
+        import tempfile
+        from spawnables.presets import load_presets
+        from spawnables.cli import main as cli_main
+        with tempfile.TemporaryDirectory() as d:
+            order = os.path.join(d, "order.json")
+            with open(order, "w") as fh:
+                json.dump({"id": "mo-env", "name": "heyphony host", "base_image": "mint-22-cinnamon",
+                           "timezone": "asia/kolkata", "path_tools": ["python"],
+                           "env": {"PATH": "/opt/heyphony/bin:/usr/bin",
+                                   "SMTP_KEY": "@@vault:mail-smtp@@"}}, fh)
+            presets = os.path.join(d, "presets")
+            buffer = io.StringIO()
+            with contextlib.redirect_stdout(buffer):
+                self.assertEqual(cli_main(["presets", "save", order, "--name", "heyphony host",
+                                           "--dir", presets]), 0)
+            self.assertEqual(json.loads(buffer.getvalue())["saved"], "heyphony-host")
+            saved = load_presets(presets)["heyphony-host"]["manifest"]
+            self.assertEqual(saved["env"]["PATH"], "/opt/heyphony/bin:/usr/bin")
+            self.assertEqual(saved["path_tools"], ["python"])
+            buffer = io.StringIO()
+            with contextlib.redirect_stdout(buffer):
+                cli_main(["presets", "list", "--dir", presets])
+            listed = json.loads(buffer.getvalue())["presets"][0]
+            self.assertIn("PATH", listed["env"])
+            self.assertEqual(listed["env_needs_vault"], ["SMTP_KEY"])
+            self.assertNotIn("hunter2", buffer.getvalue())
+
+    def test_an_order_that_cannot_validate_is_not_saved_as_a_template(self):
+        import tempfile
+        from spawnables.cli import main as cli_main
+        with tempfile.TemporaryDirectory() as d:
+            order = os.path.join(d, "order.json")
+            with open(order, "w") as fh:
+                json.dump({"id": "mo-env", "name": "nope", "base_image": "mint-22-cinnamon",
+                           "timezone": "asia/kolkata",
+                           "env": {"API_KEY": "literal-secret"}}, fh)
+            presets = os.path.join(d, "presets")
+            buffer = io.StringIO()
+            with contextlib.redirect_stdout(buffer):
+                self.assertEqual(cli_main(["presets", "save", order, "--name", "nope",
+                                           "--dir", presets]), 1)
+            answer = json.loads(buffer.getvalue())
+            self.assertFalse(answer["saved"])
+            self.assertFalse(os.path.exists(presets), "a preset that cannot order is a trap")
 
 
 class TestDeviceContext(unittest.TestCase):

@@ -65,6 +65,7 @@ class MachineOrder:
     users: list = field(default_factory=list)  # list[UserOrder]; os accounts
     grants: list = field(default_factory=list)  # list[GrantOrder]; agent access
     agent_bridge: dict = field(default_factory=dict)
+    env: dict = field(default_factory=dict)  # guest variables: name -> value or a vault ref
     network: dict = field(default_factory=dict)  # section 03: network & privacy
     device_context: dict = field(default_factory=dict)  # advanced: device context tuning
     rebuild_on_thaw: bool = False
@@ -87,6 +88,7 @@ class MachineOrder:
             users=[UserOrder(**u) for u in d.get("users", [])],
             grants=[GrantOrder(**g) for g in d.get("grants", [])],
             agent_bridge=d.get("agent_bridge", {}),
+            env=dict(d.get("env", {})),
             network=d.get("network", {}),
             device_context=d.get("device_context", {}),
             rebuild_on_thaw=d.get("rebuild_on_thaw", False),

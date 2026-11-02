@@ -72,6 +72,11 @@ class Provisioner:
             install = self.catalog.tool_install(tool_id, family)
             steps.append((f"tools.{tool_id}", install))
 
+        # env lands where run() puts it: after the tools, so a PATH entry can point at what exists
+        steps.append(("env", ("skip: env is a linux path today" if os_name != "linux" else
+                              f"/etc/environment gets {len(getattr(self.order, 'env', {}) or {})} "
+                              "variable(s), refs resolved")))
+
         for app in self.order.apps:
             recipe = self.catalog.recipe(app)
             if recipe is None:
@@ -120,6 +125,7 @@ class Provisioner:
         self._machinefp(os_name)
         self._devctx(os_name)
         self._tools(family)
+        self._env(os_name)
         self._apps(os_name, family)
         self._services(os_name)
         self._rice()
@@ -150,6 +156,52 @@ class Provisioner:
             return False
         em.emit(f"provision.{stage}", "ok", label)
         return True
+
+    def _env(self, os_name):
+        """guest variables, written once, as data, with the refs resolved and never logged.
+
+        after the tools stage on purpose: a PATH entry can point at what was just installed, which is
+        half of why anyone wants this on a template at all.
+        """
+        values = dict(getattr(self.order, "env", {}) or {})
+        em = self.emitter
+        if not values:
+            em.emit("provision.env", "ok", "nothing to export")
+            return
+        if os_name != "linux":
+            em.emit("provision.env", "skip", f"env is a linux path today ({os_name} has no /etc/environment)")
+            return
+        lines = []
+        for name in sorted(values):
+            raw = str(values[name] if values[name] is not None else "")
+            refs = vault_refs_in(raw)
+            if refs:
+                if self.vault is None:
+                    em.emit("provision.env", "fail",
+                            f"{name}: @@vault:{refs[0]}@@ needs a vault; none configured")
+                    return
+                try:
+                    resolved = self.vault.resolve(raw)
+                except VaultError as e:
+                    em.emit("provision.env", "fail", f"{name}: {e}")
+                    return
+            elif any(hint in raw for hint in ("op://", "bw://", "pass://")):
+                # the vaults tool fetches these, this stage cannot, and writing the ref itself into a
+                # shell's environment is the failure mode that looks like it worked
+                em.emit("provision.env", "fail",
+                        f"{name}: {raw.split('://')[0]}:// refs are resolved by the vaults cli, not "
+                        "at provision; store @@vault:name@@ or a literal that is not a secret")
+                return
+            else:
+                resolved = raw
+            lines.append(f'{name}="{resolved}"')
+        if lines:
+            script = "set -e; printf '%s\\n' " + " ".join(
+                f"'{line}'" for line in lines) + " > /etc/environment"
+            ok = self._exec_checked("env", script, ", ".join(sorted(values)))
+            if not ok:
+                raise ProvisionError("env: /etc/environment could not be written")
+        em.emit("provision.env", "ok", f"{len(lines)} variable(s) exported")
 
     def _locale(self, os_name):
         cmd = LOCALE_CMD.get(os_name)

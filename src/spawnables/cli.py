@@ -4,11 +4,13 @@ stdlib only; celesto is imported lazily by the adapters on a real provision.
 """
 import argparse
 import json
+import pathlib
 import sys
 
 from . import duty
 from .catalog import Catalog
 from .models import MachineOrder
+from .presets import load_presets, save_preset
 from .validate import validate_order
 from .provisioner import Provisioner, ProvisionError
 from .lifecycle import Machine, LifecycleError, VerbNotSupported
@@ -111,6 +113,57 @@ def cmd_duty(args):
     return 0
 
 
+def _is_ref(value):
+    """a value that names a secret rather than being one, in either shape the repo resolves."""
+    from .vault import refs_in
+    text = str(value or "")
+    return bool(refs_in(text)) or text.startswith(("op://", "bw://", "pass://"))
+
+
+def cmd_presets(args):
+    """saved orders: list what exists, show one, or save an order as a re-orderable template."""
+    if args.action == "list":
+        presets = load_presets(args.dir)
+        out = []
+        for pid, entry in sorted(presets.items()):
+            m = entry.get("manifest") or {}
+            out.append({"id": pid, "name": m.get("name"), "description": entry.get("description", ""),
+                        "base_image": m.get("base_image"), "size": m.get("size"),
+                        "path_tools": m.get("path_tools") or [], "apps": m.get("apps") or [],
+                        "services": m.get("services") or [], "rice": m.get("rice"),
+                        "env": sorted((m.get("env") or {}).keys()),
+                        "env_needs_vault": sorted(n for n, v in (m.get("env") or {}).items()
+                                                  if _is_ref(v))})
+        print(json.dumps({"presets": out, "dir": str(args.dir)}, indent=2))
+        return 0
+    if args.action == "show":
+        presets = load_presets(args.dir)
+        if args.order not in presets:
+            print(json.dumps({"known": False, "asked": args.order, "presets": sorted(presets)},
+                             indent=2))
+            return 1
+        print(json.dumps(presets[args.order], indent=2))
+        return 0
+    if not args.order or not args.name:
+        print(json.dumps({"saved": False, "why": "save needs an order file and --name"}, indent=2))
+        return 1
+    catalog, order = _catalog_and_order(args)
+    errors, warnings = validate_order(order, catalog)
+    if errors:
+        print(json.dumps({"saved": False, "why": "the order does not validate, and a preset that "
+                                                 "cannot order is a trap", "errors": errors,
+                          "warnings": warnings}, indent=2))
+        return 1
+    path = save_preset(args.dir, args.name, json.loads(pathlib.Path(args.order).read_text()),
+                       description=args.description)
+    print(json.dumps({"saved": (path or {}).get("id"),
+                      "name": args.name, "dir": str(args.dir), "description": args.description,
+                      "env": sorted((order.env or {}).keys()),
+                      "env_needs_vault": sorted(n for n, v in (order.env or {}).items() if _is_ref(v)),
+                      "warnings": warnings}, indent=2))
+    return 0
+
+
 def cmd_surface(args):
     """the four verbs an agent gets on a device with no dom, and who offers which."""
     from . import surface
@@ -132,6 +185,14 @@ def main(argv=None):
         p = sub.add_parser(name)
         p.add_argument("order", help="machine order json file")
         p.set_defaults(fn=fn)
+    pr = sub.add_parser("presets", help="saved orders: save, list, show")
+    pr.add_argument("action", choices=["save", "list", "show"])
+    pr.add_argument("order", nargs="?", help="order json for save, preset id for show")
+    pr.add_argument("--name", default="")
+    pr.add_argument("--description", default="")
+    pr.add_argument("--dir", default="catalog/presets")
+    pr.set_defaults(fn=cmd_presets)
+
     v = sub.add_parser("vaults", help="the owner's vaults as sources: check, card, resolve, code")
     v.add_argument("action", choices=["check", "card", "resolve", "code"])
     v.add_argument("ref", nargs="?", help="op://vault/item/field, bw://item/field, pass://vault/item/field")

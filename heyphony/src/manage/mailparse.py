@@ -20,6 +20,8 @@ import time
 
 PHONE = re.compile(r"\+?\d[\d\s().-]{6,}\d")
 AUDIO_EXT = (".wav", ".mp3", ".ogg", ".m4a", ".flac", ".opus", ".au", ".gsm")
+# one attachment, capped. a carrier voicemail is kilobytes; a 300 mb "audio/mpeg" is not a voicemail
+MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 VOICE_WORDS = ("voicemail", "voice mail", "voice message", "new message from")
 SMS_WORDS = ("sms", "text message", "new text")
 
@@ -59,6 +61,10 @@ def _attachments(message, save_dir=None):
         payload = part.get_payload(decode=True) or b""
         if not payload:
             continue
+        if len(payload) > MAX_ATTACHMENT_BYTES:
+            saved.append({"name": name, "bytes": len(payload), "saved": False,
+                          "why": "bigger than a voicemail gets; kept as a row, not written to disk"})
+            continue
         if save_dir is None:
             saved.append({"name": name, "bytes": len(payload), "saved": False})
             continue
@@ -66,7 +72,11 @@ def _attachments(message, save_dir=None):
         folder.mkdir(parents=True, exist_ok=True)
         stem = re.sub(r"[^a-z0-9]+", "-", pathlib.Path(name or "voicemail").stem.lower()).strip("-") or "voicemail"
         digest = hashlib.sha256(payload).hexdigest()[:8]
-        suffix = pathlib.Path(name or "voicemail.wav").suffix.lower() or ".wav"
+        # the suffix comes from an allowlist, never from the sender: a part that claims audio/mpeg and
+        # carries a name ending .sh would otherwise be written into the folder as something runnable
+        suffix = pathlib.Path(name or "voicemail.wav").suffix.lower()
+        if suffix not in AUDIO_EXT:
+            suffix = ".wav"
         target = folder / f"{int(time.time())}-{stem}-{digest}{suffix}"
         target.write_bytes(payload)
         saved.append({"name": target.name, "path": str(target), "bytes": len(payload), "saved": True})

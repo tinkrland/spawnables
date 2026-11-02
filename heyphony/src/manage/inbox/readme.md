@@ -13,3 +13,5 @@ everything lands in a jsonl file, one row per message, with the same keys whiche
 deduplication is by the provider's own id, so a webhook that retries four times is one message. when a vendor sends no id, one is derived from the sender, the body and the timestamp, which is stable enough for a retry and honest enough to be wrong exactly once.
 
 read state lives beside the file rather than in it, because a delivery is not a read and a provider never tells you one happened.
+
+what a message can put on disk, and what it can make the agent open, is [attachments](attachments.md).

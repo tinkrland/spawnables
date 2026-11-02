@@ -117,7 +117,7 @@ that thread key is the only piece of identity this package owns. anything wider,
 | `src/runner/` | how do i run it, and how does an agent | `cli.py`, `gui.py` |
 | `src/linphone/` | what does the sip client do, with what config, and on which operating system | `sip.py`, `client.py` |
 | `src/setup/` | how does a number come to exist and start answering | `flow.py`, `provision.py`, `routes.py` |
-| `src/manage/` | what happened while i was not looking | `inbox.py`, `views.py`, `catcher.py`, `mailparse.py` |
+| `src/manage/` | what happened while i was not looking, and what a message may put on disk | `inbox.py`, `views.py`, `catcher.py`, `mailparse.py` |
 | `src/onramp/` | which rails open once a number exists | `flow.py`, `signal.json`, `telegram.json` |
 | `src/providers.py` | which vendor, at what price, routing where | data, no logic worth the name |
 

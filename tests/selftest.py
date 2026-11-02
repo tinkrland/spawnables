@@ -801,6 +801,93 @@ class TestTheHostAndItsClient(unittest.TestCase):
         self.assertEqual(self.client.host("plan9"), "linux", "an unknown platform keeps the tested row")
         self.assertEqual(self.client.HOSTS["windows-wsl"]["audio_module"], "pulse.so")
 
+    def test_connect_defaults_to_writing_both_dialects(self):
+        """the default used to write only linphone's rc while the chosen client is baresip."""
+        import tempfile
+        from heyphony.src.runner import cli as telephony_cli
+        old = dict(os.environ)
+        try:
+            with tempfile.TemporaryDirectory() as home:
+                os.environ["HOME"] = home
+                os.environ.pop("XDG_CONFIG_HOME", None)
+                buffer = io.StringIO()
+                with contextlib.redirect_stdout(buffer):
+                    code = telephony_cli.main(["connect", "sip", "--provider", "flowroute",
+                                               "--did", "+12125551234",
+                                               "--username", "u", "--password", "p"])
+                self.assertEqual(code, 0)
+                answer = json.loads(buffer.getvalue())
+                self.assertIn("linphone", answer["wrote"])
+                self.assertIn("baresip", answer["wrote"])
+                self.assertTrue(pathlib.Path(answer["wrote"]["linphone"]).is_file())
+                accounts = pathlib.Path(home, ".baresip", "accounts")
+                self.assertTrue(accounts.is_file())
+                self.assertIn("sip.flowroute.com", accounts.read_text())
+                self.assertEqual(oct(accounts.stat().st_mode)[-3:], "600")
+        finally:
+            os.environ.clear()
+            os.environ.update(old)
+
+    def test_an_audio_content_type_cannot_buy_a_runnable_suffix(self):
+        """a part that says audio/mpeg and carries evil.sh inside a voicemail folder is how a mail
+        becomes something the agent runs, so the suffix comes from an allowlist."""
+        import tempfile
+        from heyphony.src.manage import mailparse
+        raw = (b"From: voicemail@carrier <v@c>\nSubject: new voicemail\nMIME-Version: 1.0\n"
+               b"Content-Type: multipart/mixed; boundary=b\n\n--b\nContent-Type: text/plain\n\n"
+               b"listen\n--b\nContent-Type: audio/mpeg; name=evil.sh\n"
+               b"Content-Disposition: attachment; filename=../../evil.sh\n\naudio\n--b--\n")
+        with tempfile.TemporaryDirectory() as folder:
+            item = mailparse.parse(raw, save_dir=folder)
+            audio = item["audio"]
+            self.assertTrue(audio["saved"])
+            written = pathlib.Path(audio["path"])
+            self.assertEqual(written.parent, pathlib.Path(folder))
+            self.assertEqual(written.suffix, ".wav")
+            self.assertEqual(sorted(p.name for p in pathlib.Path(folder).iterdir()), [written.name])
+
+    def test_nothing_large_enough_to_be_a_payload_is_written(self):
+        import tempfile
+        from heyphony.src.manage import mailparse
+        big = b"0" * (mailparse.MAX_ATTACHMENT_BYTES + 1)
+        raw = (b"From: voicemail@carrier <v@c>\nSubject: new voicemail\nMIME-Version: 1.0\n"
+               b"Content-Type: audio/wav\n\n" + big)
+        with tempfile.TemporaryDirectory() as folder:
+            item = mailparse.parse(raw, save_dir=folder)
+            self.assertEqual(list(pathlib.Path(folder).iterdir()), [])
+            self.assertIn("bigger than a voicemail", str(item["audio"] ))
+
+    def test_the_attachment_page_answers_the_file_question(self):
+        """the ask: say how attachments are interpreted per channel, and what stops a message from
+        making the agent open a file anywhere on the disk."""
+        page = pathlib.Path("heyphony/src/manage/inbox/attachments.md").read_text().lower()
+        for needle in ("per channel", "not executed", "one folder", "allowlisted suffix", "size cap",
+                       "refuses", "25 mb", "untrusted"):
+            self.assertIn(needle, page, f"the page lost {needle!r}")
+        for channel in ("sms", "voicemail", "imessage", "whatsapp", "email"):
+            self.assertIn(channel, page, f"{channel} is a channel and the page does not say what happens")
+        outgoing = pathlib.Path("heyphony/src/manage/outgoing/readme.md").read_text().lower()
+        self.assertIn("does it support outbound: not yet, by design", outgoing)
+        for channel in ("sms on the did", "email", "calls", "imessage"):
+            self.assertIn(channel, outgoing, f"the outbound matrix lost {channel}")
+
+    def test_the_player_refuses_a_path_outside_the_voicemail_folder(self):
+        """the question: can a message make the agent open any file on its disk. no."""
+        import tempfile
+        from heyphony.src.manage import views
+        with tempfile.TemporaryDirectory() as folder:
+            inside = pathlib.Path(folder, "2026-vm-abc.wav")
+            inside.write_bytes(b"RIFF0000")
+            allowed = views._play(inside, folder=folder)
+            self.assertNotIn("refused", json.dumps(allowed))
+            outside = pathlib.Path(folder, "..", "secrets.wav")
+            refused = views._play(outside, folder=folder)
+            self.assertFalse(refused["played"])
+            self.assertIn("not a file in the voicemail folder", refused["why"])
+            script = pathlib.Path(folder, "run.sh")
+            script.write_text("#!/bin/sh\nrm -rf ~\n")
+            self.assertIn("not an audio suffix", views._play(script, folder=folder)["why"])
+
     def test_baresips_two_files_use_baresips_own_keys(self):
         files = self.client.baresip_files("+12125551234", "1234", "s3cret", "atlanta.voip.ms",
                                           platform="linux", home="/tmp/h")

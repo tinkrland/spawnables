@@ -183,11 +183,31 @@ PLAYERS = (
 )
 
 
-def _play(file):
+def _play(file, folder=None):
+    """play one file, and only one we put there ourselves.
+
+    the row's path is trusted no further than the voicemail folder: an inbox row is a file on disk the
+    agent did not write, so a path that escapes the folder (a crafted jsonl, a symlink, a typo) is
+    refused before a media player is pointed at it. this is the whole answer to "can a message make the
+    agent open something arbitrary": it can make it open a voicemail audio file in one directory.
+    """
+    root = (Path(folder) if folder else voicemail_dir()).expanduser().resolve()
+    target = Path(file).expanduser()
+    try:
+        resolved = target.resolve()
+    except OSError:
+        return {"played": False, "why": f"unreadable path: {target}"}
+    if resolved != root and root not in resolved.parents:
+        return {"played": False, "why": "refused: not a file in the voicemail folder",
+                "file": str(target)}
+    if resolved.suffix.lower() not in (".wav", ".mp3", ".ogg", ".m4a", ".flac", ".opus", ".au", ".gsm"):
+        return {"played": False, "why": "refused: not an audio suffix", "file": str(target)}
+    if not resolved.is_file():
+        return {"played": False, "why": "no such file", "file": str(target)}
     for player in PLAYERS:
         binary = shutil.which(player[0])
         if binary:
-            proc = subprocess.run([binary, *player[1], str(file)], capture_output=True, text=True)
+            proc = subprocess.run([binary, *player[1], str(resolved)], capture_output=True, text=True)
             return {"player": player[0], "code": proc.returncode, "file": str(file),
                     "err": (proc.stderr or "").strip()[-200:]}
     return {"played": False, "why": "no player on this host (tried ffplay, paplay, aplay, afplay). the file path is still in the row"}

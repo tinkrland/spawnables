@@ -1,10 +1,19 @@
 # outgoing: what leaves, and what does not
 
-today, nothing leaves. a reply drafted in the launcher is kept and the page says so in the same breath it confirms the draft:
+**does it support outbound: not yet, by design.** nothing leaves today. a reply drafted in the launcher is kept and the page says so in the same breath it confirms the draft:
 
 > draft kept, not sent. no outbound api path is wired for this provider
 
 that is deliberate. sending is the part of telephony where a mistake is not a bug, it is a message a real person reads, so the first send rail will be written carefully and not improvised late at night.
+
+## the matrix, so the answer is one line per channel
+
+| channel | outbound today | what it would take | where it belongs |
+| --- | --- | --- | --- |
+| sms on the did | no. drafts only | a provider send call, billed per message | this package, when it is written carefully |
+| email | no. the smtp rail is gated (`SMTP_URL`) and wired for delivery, not for a draft button | a send function and a reviewed default | the umbrella's email lane |
+| calls | no. dialling exists in the calling branch (`callheavy`), not here | nothing: it lives next door on purpose | the calling branch |
+| imessage, whatsapp, signal, slack, discord | no, and not this package's job | their own lane's api | the umbrella lanes |
 
 ## what the rail will be
 
@@ -19,6 +28,9 @@ that is deliberate. sending is the part of telephony where a mistake is not a bu
 inbound already handles audio: an attachment with an audio content type, or an audio extension, is written next to the voicemail sidecar and never held only in memory.
 
 outbound has no attachment path, and mms is not supported by any vendor in the table in a way worth pretending about. a link in an sms is the honest substitute, and it is the one that survives a carrier that mangles a picture.
+
+the inbound side, and the checks that keep a message from pointing the agent at a file it
+should not open, are in [attachments](../inbox/attachments.md).
 
 ## so what is a draft, mechanically
 

@@ -319,8 +319,10 @@ def build_parser():
     s.set_defaults(func=cmd_setup)
     st = sub.add_parser("status"); st.set_defaults(func=cmd_status)
     c = sub.add_parser("connect")
-    c.add_argument("--client", choices=["linphone", "baresip", "both"], default="linphone",
-                   help="which host client to write: linphone's rc, baresip's accounts+config, or both")
+    c.add_argument("--client", choices=["linphone", "baresip", "both"], default="both",
+                   help="which host client to write: linphone's rc, baresip's accounts+config, or both "
+                        "(default, because the chosen client is baresip and the call log comes from "
+                        "linphone's own sqlite, so the two files do different jobs)")
     c.add_argument("target", choices=["sip"])
     c.add_argument("--provider"); c.add_argument("--voipms", action="store_true")
     c.add_argument("--flowroute", action="store_true"); c.add_argument("--did", required=True)

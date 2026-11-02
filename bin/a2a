@@ -1,0 +1,4 @@
+#!/bin/sh
+# the a2a line is a contract first, so the shim only reaches the module beside it
+here=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+PYTHONPATH="$here${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m a2a.cli "$@"

@@ -27,14 +27,24 @@ CALL_STATUS = {0: "success", 1: "aborted", 2: "missed", 3: "declined", 4: "early
 DB_NAMES = {"calls": "call-history.db", "messages": "messages.db"}
 
 
-def config_dir(home=None):
-    home = Path(home or os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
-    return home / "linphone"
+def config_dir(home=None, platform=None):
+    """linphone's own directory. XDG when it is set, the os convention when it is not, because a
+    macos or windows host keeps this under its application folder rather than ~/.config."""
+    if home:
+        return Path(home) / "linphone"
+    if os.environ.get("XDG_CONFIG_HOME"):
+        return Path(os.environ["XDG_CONFIG_HOME"]) / "linphone"
+    from heyphony.src.linphone import client
+    return Path(client.host_plan(platform=platform)["linphone_config"])
 
 
-def data_dir(home=None):
-    home = Path(home or os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
-    return home / "linphone"
+def data_dir(home=None, platform=None):
+    if home:
+        return Path(home) / "linphone"
+    if os.environ.get("XDG_DATA_HOME"):
+        return Path(os.environ["XDG_DATA_HOME"]) / "linphone"
+    from heyphony.src.linphone import client
+    return Path(client.host_plan(platform=platform)["linphone_data"])
 
 
 def rc_path(home=None):

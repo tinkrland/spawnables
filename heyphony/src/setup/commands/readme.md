@@ -11,6 +11,8 @@ one table, because the most common confusion in this package was not knowing whi
 | `heyphony provision --purchase` | setup (buy) | the order itself | not written on purpose: it spends money |
 | `heyphony hooks <vendor>` | setup | prints the url and the setting, and `--apply` arms it | yes |
 | `heyphony connect sip --voipms` | setup | writes the 0600 config and one registration | yes, it rewrites the same keys |
+| `heyphony connect sip --client baresip\|both` | setup | the same, in the dialect of the client that will actually hold the registration | yes |
+| `heyphony status` | both | which host row this is, where the rc is, what is unread | yes |
 | `heyphony doctor` | setup (proof) | what is configured and what is still designed | yes |
 | `heyphony serve --port 8099` | manage | runs the catcher that receives texts and carrier email | it is a server, one at a time |
 | `heyphony app` | manage | the launcher on 127.0.0.1:8790; `--json` prints the tabs, counts and people and exits without serving | same |

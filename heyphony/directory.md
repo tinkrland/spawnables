@@ -15,8 +15,9 @@ heyphony/
     runner/                     how a person or an agent reaches it
       cli.py                    the commands
       gui.py                    the launcher page: caught messages, voicemail, calls
-    linphone/                   the sip client, wrapped
-      sip.py                    registration plan, config it writes, call log reads
+    linphone/                   the client that holds the registration, in both dialects
+      sip.py                    registration plan, linphone's rc, call log reads
+      client.py                 which host this is, and baresip's config and accounts
     setup/                      getting from no number to a number that answers
       flow.py                   the setup plan, as data
       provision.py              anveo: areas, order, arm the text url
@@ -114,10 +115,10 @@ that thread key is the only piece of identity this package owns. anything wider,
 | folder | the question it answers | the python |
 | --- | --- | --- |
 | `src/runner/` | how do i run it, and how does an agent | `cli.py`, `gui.py` |
-| `src/linphone/` | what does the sip client do, and with what config | `sip.py` |
+| `src/linphone/` | what does the sip client do, with what config, and on which operating system | `sip.py`, `client.py` |
 | `src/setup/` | how does a number come to exist and start answering | `flow.py`, `provision.py`, `routes.py` |
 | `src/manage/` | what happened while i was not looking | `inbox.py`, `views.py`, `catcher.py`, `mailparse.py` |
-| `src/onramp/` | which rails open once a number exists | `flow.py`, `signal.json` |
+| `src/onramp/` | which rails open once a number exists | `flow.py`, `signal.json`, `telegram.json` |
 | `src/providers.py` | which vendor, at what price, routing where | data, no logic worth the name |
 
 ## what is not here

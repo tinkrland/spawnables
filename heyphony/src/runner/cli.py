@@ -211,7 +211,9 @@ def cmd_setup_areas(args):
 
 
 def cmd_status(args):
+    from heyphony.src.linphone import client as host_client
     _out({"rc": str(sip.rc_path()), "rc_present": sip.rc_path().is_file(),
+          "host": host_client.host_plan()["host"],
           "provider": providers.profile("voip.ms")["provider"],
           "sms_inbox": inbox.count(), "host_client": sip.host_client()["client"],
           "unread": sum(1 for r in views.messages(limit=500)["rows"] if r["unread"]),
@@ -219,13 +221,26 @@ def cmd_status(args):
 
 
 def cmd_connect(args):
+    from heyphony.src.linphone import client as host_client
     provider = args.provider or ("voip.ms" if args.voipms else "flowroute" if args.flowroute else None)
     if not provider:
         raise SystemExit("connect sip needs --provider, or --voipms / --flowroute")
     providers.profile(provider)
-    path = sip.write_rc(provider, args.did, args.username, args.password, args.server)
-    _out({"rc": str(path), "provider": provider, "did": args.did, "endpoint": args.on,
-          "plan": sip.connection_plan(args.did, args.on), "next": "start the client on the host, then heyphony status"})
+    wanted = args.client or "linphone"
+    answer = {"provider": provider, "did": args.did, "endpoint": args.on,
+              "plan": sip.connection_plan(args.did, args.on), "wrote": {}}
+    if wanted in ("linphone", "both"):
+        answer["wrote"]["linphone"] = str(sip.write_rc(provider, args.did, args.username,
+                                                       args.password, args.server))
+    if wanted in ("baresip", "both"):
+        # the provider table's "server" column is prose, not a hostname, so the registration host
+        # comes from sip.sip_host, which is the same answer the linphone rc already writes
+        answer["wrote"]["baresip"] = host_client.write_baresip(
+            args.did, args.username, args.password, sip.sip_host(provider, args.server))
+    answer["host"] = host_client.host_plan()["host"]
+    answer["next"] = ("start the client on the host, then `heyphony status`; "
+                      "on a host we have not run, check the audio device in the plan first")
+    _out(answer)
 
 
 def cmd_calls(args):
@@ -304,6 +319,8 @@ def build_parser():
     s.set_defaults(func=cmd_setup)
     st = sub.add_parser("status"); st.set_defaults(func=cmd_status)
     c = sub.add_parser("connect")
+    c.add_argument("--client", choices=["linphone", "baresip", "both"], default="linphone",
+                   help="which host client to write: linphone's rc, baresip's accounts+config, or both")
     c.add_argument("target", choices=["sip"])
     c.add_argument("--provider"); c.add_argument("--voipms", action="store_true")
     c.add_argument("--flowroute", action="store_true"); c.add_argument("--did", required=True)

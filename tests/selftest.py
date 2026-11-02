@@ -754,6 +754,117 @@ class TestConnectingCard(unittest.TestCase):
         self.assertIsNone(cardbook.digest(self.cards(), "nobody", [])["card"])
 
 
+class TestTheHostAndItsClient(unittest.TestCase):
+    """the question that produced this: does the client only work on linux vms."""
+
+    def setUp(self):
+        from heyphony.src.linphone import client
+        self.client = client
+
+    def test_every_host_we_name_has_a_row_and_only_linux_is_verified(self):
+        plan = self.client.host_plan(platform="linux", home="/tmp/h")
+        self.assertEqual(set(plan["known"]), {"linux", "macos", "windows", "windows-wsl"})
+        self.assertTrue(self.client.HOSTS["linux"]["verified"])
+        for other in ("macos", "windows", "windows-wsl"):
+            self.assertFalse(self.client.HOSTS[other]["verified"],
+                             f"{other} cannot be claimed as run until a call is placed on it")
+
+    def test_the_paths_follow_the_operating_system(self):
+        linux = self.client.host_plan(platform="linux", home="/tmp/h")
+        macos = self.client.host_plan(platform="darwin", home="/tmp/h")
+        windows = self.client.host_plan(platform="win32", home="/tmp/h")
+        self.assertEqual(linux["linphonerc"], "/tmp/h/.config/linphone/linphonerc")
+        self.assertEqual(macos["linphonerc"],
+                         "/tmp/h/Library/Application Support/linphone/linphonerc")
+        self.assertIn("AppData", windows["linphonerc"])
+        for plan in (linux, macos, windows):
+            self.assertTrue(plan["baresip_dir"].endswith(".baresip"),
+                            "baresip keeps one directory name on every platform")
+
+    def test_the_audio_driver_and_player_are_named_per_host(self):
+        linux = self.client.host_plan(platform="linux")
+        macos = self.client.host_plan(platform="darwin")
+        windows = self.client.host_plan(platform="win32")
+        self.assertEqual(linux["audio"]["module"], "alsa.so")
+        self.assertEqual(macos["audio"]["module"], "coreaudio.so")
+        self.assertIn("afplay", macos["players"])
+        self.assertEqual(windows["players"], [], "windows has no built-in player, so it must not pretend")
+        from heyphony.src.manage import views
+        self.assertIn("afplay", [p[0] for p in views.PLAYERS])
+        for name in ("ffplay", "paplay", "aplay", "afplay"):
+            self.assertIn(name, [p[0] for p in views.PLAYERS])
+
+    def test_wsl_is_not_linux_for_audio_and_darwin_is_macos(self):
+        self.assertEqual(self.client.host("darwin"), "macos")
+        self.assertEqual(self.client.host("win32"), "windows")
+        self.assertEqual(self.client.host("linux"), "linux")
+        self.assertEqual(self.client.host("plan9"), "linux", "an unknown platform keeps the tested row")
+        self.assertEqual(self.client.HOSTS["windows-wsl"]["audio_module"], "pulse.so")
+
+    def test_baresips_two_files_use_baresips_own_keys(self):
+        files = self.client.baresip_files("+12125551234", "1234", "s3cret", "atlanta.voip.ms",
+                                          platform="linux", home="/tmp/h")
+        accounts = files["accounts"]
+        self.assertIn('<sip:1234@atlanta.voip.ms>', accounts)
+        self.assertIn("auth_pass=s3cret", accounts)
+        self.assertIn("regint=3600", accounts)
+        config = files["config"]
+        for key in ("audio_player", "audio_source", "ctrl_tcp_listen", "module_path"):
+            self.assertIn(key, config)
+        for module in ("ctrl_tcp.so", "g711.so", "account.so", "alsa.so"):
+            self.assertIn(module, config)
+        self.assertNotIn("s3cret", config, "the password belongs in accounts, not in config")
+
+    def test_tcp_adds_the_outbound_override_baresip_documents(self):
+        files = self.client.baresip_files("+1", "u", "p", "sip.example.com", transport="tcp",
+                                          platform="linux", home="/tmp/h")
+        self.assertIn('outbound="sip:sip.example.com;transport=tcp"', files["accounts"])
+        plain = self.client.baresip_files("+1", "u", "p", "sip.example.com", platform="linux",
+                                          home="/tmp/h")
+        self.assertNotIn("outbound=", plain["accounts"], "udp needs no override: the uri names the host")
+
+    def test_a_prose_server_is_refused_rather_than_written(self):
+        """the provider table's server column is a sentence, which produced a broken account line."""
+        self.assertFalse(self.client.looks_like_host("regional: atlanta, chicago, toronto"))
+        self.assertTrue(self.client.looks_like_host("atlanta.voip.ms"))
+        answer = self.client.write_baresip("+1", "u", "p", "regional: atlanta, chicago",
+                                          home="/tmp/h")
+        self.assertEqual(answer["refused"], "not-a-host")
+        self.assertEqual(answer["written"], [])
+
+    def test_the_written_files_are_0600(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as home:
+            answer = self.client.write_baresip("+1", "u", "p", "atlanta.voip.ms", home=home)
+            self.assertEqual(len(answer["written"]), 2)
+            for path in answer["written"]:
+                self.assertEqual(oct(pathlib.Path(path).stat().st_mode)[-3:], "600")
+
+    def test_connect_names_the_client_it_wrote(self):
+        import tempfile
+        from heyphony.src.runner import cli as telephony_cli
+        with tempfile.TemporaryDirectory() as home:
+            saved = dict(os.environ)
+            os.environ["HOME"] = home
+            os.environ.pop("XDG_CONFIG_HOME", None)
+            os.environ.pop("XDG_DATA_HOME", None)
+            buffer = io.StringIO()
+            try:
+                with contextlib.redirect_stdout(buffer):
+                    telephony_cli.main(["connect", "sip", "--provider", "voip.ms", "--did",
+                                       "+12125551234", "--username", "1234", "--password", "s3cret",
+                                       "--client", "both"])
+            finally:
+                os.environ.clear()
+                os.environ.update(saved)
+            answer = json.loads(buffer.getvalue())
+            self.assertEqual(set(answer["wrote"]), {"linphone", "baresip"})
+            self.assertIn("host", answer)
+            accounts = pathlib.Path(home, ".baresip", "accounts").read_text()
+            self.assertIn("atlanta.voip.ms", accounts)
+            self.assertNotIn("regional:", accounts, "the prose column must never reach an account line")
+
+
 class TestTheDirectoryExplainsItself(unittest.TestCase):
     """the complaint that started this: python files, no way to see how the thing runs."""
 

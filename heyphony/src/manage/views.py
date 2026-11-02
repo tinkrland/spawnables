@@ -173,11 +173,21 @@ def voicemail(home=None, path=None, limit=20, show=None, play=None):
     return out
 
 
+# ffplay carries its own audio stack, so it is first and works everywhere it is installed; the rest
+# are the platform's own tools. a windows host has none of these, which is why the refusal names them.
+PLAYERS = (
+    ("ffplay", ["-nodisp", "-autoexit", "-loglevel", "quiet"]),
+    ("paplay", []),      # linux, pulse
+    ("aplay", ["-q"]),   # linux, alsa
+    ("afplay", []),      # macos
+)
+
+
 def _play(file):
-    for player in (("ffplay", ["-nodisp", "-autoexit", "-loglevel", "quiet"]), ("paplay", []), ("aplay", ["-q"])):
+    for player in PLAYERS:
         binary = shutil.which(player[0])
         if binary:
             proc = subprocess.run([binary, *player[1], str(file)], capture_output=True, text=True)
             return {"player": player[0], "code": proc.returncode, "file": str(file),
                     "err": (proc.stderr or "").strip()[-200:]}
-    return {"played": False, "why": "no player on this host (ffplay, paplay or aplay). the file path is still in the row"}
+    return {"played": False, "why": "no player on this host (tried ffplay, paplay, aplay, afplay). the file path is still in the row"}

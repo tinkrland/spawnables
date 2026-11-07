@@ -8,6 +8,29 @@ the owner's question, which is the whole justification: *we are doing vms anyway
 
 a machine whose hardware is simulated rather than virtualized: no kvm passthrough, no virtio, a full cpu model in software. that buys compatibility - a 2013 android build, a mips router, a console, a psp - and costs speed. inside our stack an emulator is not a separate kind of thing: it is a **guest**, spawned, snapshotted, paused, resumed and burned like any other, with an adapter that knows how to drive it.
 
+## driving one, once it is up: an outside repo that already does it
+
+the adapter question, "knows how to drive it", has an open-source answer worth naming before anyone
+writes another one: [callstack/agent-device](https://github.com/callstack/agent-device) (MIT) is a
+device layer for agents. it boots and drives local android emulators and ios simulators, reads an
+accessibility snapshot instead of guessing from pixels, and returns evidence with the action: a
+screenshot, the logs, a trace, and a replayable script of the path.
+
+two of its properties matter here more than the verb list:
+
+- **sessions are scoped to the caller's worktree**, and a device is claimed while a session holds it.
+  two agents building the same branch do not fight over one emulator, which is the coordination
+  failure a fleet hits before it hits anything else.
+- **an ios simulator is not a phone.** it runs on our own mac with a debugger attached, so its
+  tree can be read. this page's sibling lanes used to assume mirroring was the only way to see ios;
+  it is the only way to see a *phone*, not a simulator.
+
+the adoption is its local session, because this lane is guests on our own machines: a session scoped
+to a worktree, on hardware we hold.
+
+its cost is a node runtime (22.12+) in a stack that has otherwise stayed stdlib python, so it goes on
+the fixture shape first, where it is standing in for an adapter we would otherwise write anyway.
+
 ## the three shapes
 
 1. **emulator inside a vm** (the default). the guest is an ordinary linux machine with the emulator installed, driven over adb or its own cli. this is how an android emulator actually runs, and it inherits every lifecycle property we already have: paused phones, pinned identity, coherence checks.
@@ -27,7 +50,7 @@ names, verbs, the event stream, pause/resume semantics, the card. the emulator l
 
 ## first work item, when this line opens
 
-an android fixture: one avd, cold-boot time measured, snapshot/restore verified, and a card that says "emulator, not a device" in the same font as everything else.
+an android fixture: one avd, cold-boot time measured, snapshot/restore verified, and a card that says "emulator, not a device" in the same font as everything else. if agent-device carries that fixture, the bar does not move: the fixture still has to return a screenshot, a log and a replay per run, which is the shape that tool already emits and the reason it is named above rather than dismissed.
 
 ## where this line sits: a mechanism, not a subject
 

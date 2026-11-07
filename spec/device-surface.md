@@ -10,18 +10,27 @@ guests, and a real phone on a desk.
 
 ## the four verbs
 
-| verb | android over adb | ios, mirrored on a mac |
-| --- | --- | --- |
-| `open_app(pkg)` | `adb shell monkey -p pkg -c android.intent.category.LAUNCHER 1` | refused |
-| `tap_text(label)` | dump the tree, find the node, tap its centre | refused |
-| `type_text(text)` | `adb shell input text`, spaces as `%s` | refused |
-| `screen()` | `adb exec-out screencap -p` | `screencapture` of the mirroring window, then ocr |
+| verb | android over adb | ios, mirrored (a phone we photograph) | ios, simulator (a mac we own) |
+| --- | --- | --- | --- |
+| `open_app(pkg)` | `adb shell monkey -p pkg -c android.intent.category.LAUNCHER 1` | refused | delegated |
+| `tap_text(label)` | dump the tree, find the node, tap its centre | refused | delegated |
+| `type_text(text)` | `adb shell input text`, spaces as `%s` | refused | delegated |
+| `screen()` | `adb exec-out screencap -p` | `screencapture` of the mirroring window, then ocr | delegated |
 
 why the asymmetry is not laziness: **a phone has no dom.** the closest thing is the accessibility
 tree. android dumps it over adb (`uiautomator dump`), so a label becomes a coordinate without a
 driver, which is why four verbs are enough there and why the same calls work on a real phone on a
 desk as well as on our android guests. ios keeps that tree inside the phone; mirroring exposes
-pixels, and vision ocr reads them. one platform has an api, the other has a camera.
+pixels, and vision ocr reads them, so a mirrored phone is a camera with a bill.
+
+**a simulator is the exception, and an earlier draft of this page got it wrong** by saying a
+simulator has no tree to read. it runs on our own mac with a debugger attached, so its
+accessibility tree can be read and acted on. that is [callstack/agent-device](https://github.com/callstack/agent-device)
+(MIT), which drives local simulators and emulators, scopes a session to the caller's worktree so two
+parallel agents do not grab the same device, and replays a scripted path. we take its **local
+session**; the `ios-sim` backend delegates every verb to it and composes no argv of its own, because
+a command line for a tool we have not run here is a guess with a docs link on it. `verified` stays
+false until somebody runs one.
 
 ## three refusals
 

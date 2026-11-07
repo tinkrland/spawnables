@@ -41,10 +41,21 @@ BACKENDS = {
                 "the phone, so there is no label to tap by"),
         "holds": "our own phone, eyes only",
     },
+    "ios-sim": {
+        "verbs": list(VERBS),
+        "covers": "the ios simulator on a mac we own, and an android emulator, through agent-device",
+        "why": ("a simulator is not a mirror: it runs on our own machine with a debugger attached, so "
+                "its accessibility tree can be read and acted on instead of photographed and guessed at"),
+        "holds": "our own mac, our own simulator",
+        "via": "callstack/agent-device (MIT), as a local session; every verb is delegated, none invented",
+        "needs": ["node 22.12+", "the agent-device cli or its mcp server", "xcode simulators installed"],
+        "verified": False,
+    },
     "ios-guest": {
         "verbs": [],
         "covers": "vphone-linux / vresearch101 guests",
-        "why": "a simulator has no springboard to tap and no tree to read, so no verb is honest here",
+        "why": ("a guest that only renders ios pixels has no bridge into the accessibility tree, so no "
+                "verb is honest here; the simulator path is ios-sim"),
         "holds": "nothing",
     },
 }
@@ -66,6 +77,8 @@ def why_no_dom():
 
 
 def open_app(pkg, backend="android-adb"):
+    if backend == "ios-sim":
+        return _delegated("open_app", pkg=pkg)
     if backend != "android-adb":
         return _refused("open_app", backend)
     return ["adb", "shell", "monkey", "-p", pkg, "-c", "android.intent.category.LAUNCHER", "1"]
@@ -111,6 +124,8 @@ def find_node(xml_text, label):
 
 def tap_text(label, backend="android-adb", xml_text=None):
     """a tap that is the last step of a dump, never a guess."""
+    if backend == "ios-sim":
+        return _delegated("tap_text", label=label)
     if backend != "android-adb":
         return _refused("tap_text", backend)
     if xml_text is None:
@@ -127,6 +142,8 @@ def escape_text(text):
 
 
 def type_text(text, backend="android-adb"):
+    if backend == "ios-sim":
+        return _delegated("type_text", text=text)
     if backend != "android-adb":
         return _refused("type_text", backend)
     return ["adb", "shell", "input", "text", escape_text(text)]
@@ -135,6 +152,8 @@ def type_text(text, backend="android-adb"):
 def screen(backend="android-adb"):
     if backend == "android-adb":
         return ["adb", "exec-out", "screencap", "-p"]
+    if backend == "ios-sim":
+        return _delegated("screen")
     if backend == "ios-mirroring":
         return {"argv": ["screencapture", "-x", "-l", "<mirroring-window-id>", "frame.png"],
                 "note": "then vision ocr; the pixels are all we get, and all we claim"}
@@ -149,13 +168,27 @@ def plan(verb, backend="android-adb", **kw):
     return table[verb](**{k: v for k, v in kw.items() if k != "backend"} | {"backend": backend})
 
 
+def _delegated(verb, **kw):
+    """a verb this module does not implement, handed to the tool that does.
+
+    no argv is composed here on purpose. composing a command line for a tool we have not run is the
+    guessing this module refuses everywhere else, so a delegated plan names the tool and the session
+    and stops.
+    """
+    spec = BACKENDS["ios-sim"]
+    return {"delegates": "agent-device", "verb": verb, "args": {k: v for k, v in kw.items() if k != "backend"},
+            "session": "local", "verified": spec["verified"], "needs": spec["needs"],
+            "docs": "https://github.com/callstack/agent-device",
+            "why": "the tool owns the simulator bridge; this module owns the contract and the refusals"}
+
+
 def _refused(verb, backend):
     spec = BACKENDS.get(backend, {})
     if not spec:
         return {"refused": True, "verb": verb, "why": f"unknown backend {backend!r}"}
     if not spec["verbs"]:
         return {"refused": True, "verb": verb, "backend": backend,
-                "why": spec["why"], "alternatives": ["android-adb"]}
+                "why": spec["why"], "alternatives": ["ios-sim", "android-adb"]}
     return {"refused": True, "verb": verb, "backend": backend,
             "why": f"{backend} offers {spec['verbs']}, not {verb}",
             "reason": REFUSED["ocr-pretending-to-press"] if backend == "ios-mirroring" else spec["why"]}
@@ -167,6 +200,9 @@ def agent_card():
         "backends": {k: {"verbs": v["verbs"], "holds": v["holds"]} for k, v in BACKENDS.items()},
         "why": why_no_dom(),
         "refused": REFUSED,
+        "also_adopted_from": ("callstack/agent-device (MIT) for the ios simulator bridge and device "
+                              "claims across parallel agents; the local session only, because a device "
+                              "we do not hold is not a backend"),
         "adopted_from": ("phone-harness's local mode (their four helpers: open_app, tap_text, type_text, "
                          "screen). the contract is worth taking; a device we do not own is not"),
     }

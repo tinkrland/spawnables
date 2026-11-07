@@ -2175,16 +2175,53 @@ class TestDeviceSurface(unittest.TestCase):
     def test_an_ios_guest_has_no_verb_at_all(self):
         refusal = self.surface().plan("open_app", pkg="a.b", backend="ios-guest")
         self.assertTrue(refusal["refused"])
-        self.assertEqual(refusal["alternatives"], ["android-adb"])
+        self.assertEqual(refusal["alternatives"], ["ios-sim", "android-adb"])
 
     def test_only_backends_we_hold_are_offered(self):
         card = self.surface().agent_card()
-        self.assertEqual(sorted(card["backends"]), ["android-adb", "ios-guest", "ios-mirroring"])
+        self.assertEqual(sorted(card["backends"]),
+                         ["android-adb", "ios-guest", "ios-mirroring", "ios-sim"])
         self.assertIn("borrowed-identity", card["refused"])
         # a backend that does not exist cannot be planned into
         refusal = self.surface().plan("tap_text", label="send", backend="someone-elses-phone")
         self.assertTrue(refusal["refused"])
         self.assertIn("unknown backend", refusal["why"])
+
+
+    def test_a_simulator_can_be_read_where_a_mirror_cannot(self):
+        """ios-guest used to claim a simulator has no tree to read. it has one: it runs on our own
+        mac with a debugger attached, which is a different thing from a phone we photograph."""
+        sim = self.surface().BACKENDS["ios-sim"]
+        self.assertEqual(list(sim["verbs"]), ["open_app", "tap_text", "type_text", "screen"])
+        self.assertFalse(sim["verified"], "nothing has run a simulator through this yet")
+        self.assertIn("our own mac", sim["holds"])
+        self.assertIn("agent-device", sim["via"])
+        self.assertIn("no bridge into the accessibility tree",
+                      self.surface().BACKENDS["ios-guest"]["why"])
+
+    def test_a_delegated_verb_names_the_tool_and_invents_nothing(self):
+        plan = self.surface().plan("tap_text", label="send", backend="ios-sim")
+        self.assertEqual(plan["delegates"], "agent-device")
+        self.assertEqual(plan["args"], {"label": "send"})
+        self.assertNotIn("argv", plan, "an argv for a tool we have not run would be a guess")
+        self.assertFalse(plan["verified"])
+        self.assertIn("node 22.12+", plan["needs"])
+
+    def test_the_credit_is_on_the_card_and_scoped_to_a_session_we_hold(self):
+        credit = self.surface().agent_card()["also_adopted_from"]
+        self.assertIn("callstack/agent-device", credit)
+        self.assertIn("MIT", credit)
+        self.assertIn("local session only", credit)
+
+
+    def test_the_spec_says_the_same_thing_as_the_table(self):
+        import re as _re
+        page = _re.sub(r"\s+", " ", pathlib.Path("spec/device-surface.md").read_text().lower())
+        for needle in ("ios, simulator", "delegated", "callstack/agent-device", "local session",
+                       "composes no argv", "verified` stays"):
+            self.assertIn(needle, page, f"the spec lost {needle!r}")
+        self.assertNotIn("a simulator has no tree to read, so no verb", page,
+                         "the wrong reading is still on the page")
 
     def test_no_cloud_endpoint_hides_in_this_module(self):
         import pathlib

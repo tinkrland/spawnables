@@ -2125,6 +2125,122 @@ class TestVaultSources(unittest.TestCase):
             elif isinstance(node, ast.ImportFrom):
                 imported.add((node.module or "").split(".")[0])
         self.assertLessEqual(imported, {"os", "shutil", "subprocess", "urllib"})
+class TestDeveloperOptionsKeptOn(unittest.TestCase):
+    """the toggle: developer options on a main android guest, put in place once and asserted after."""
+
+    def android(self, devopts=None):
+        return MachineOrder.from_dict({"id": "a1", "name": "pixel", "base_image": "android-15-x86",
+                                       "timezone": "asia/kolkata", "devopts": devopts or {}})
+
+    def adapter(self, state=None):
+        """an android adapter whose settings store is a dict, so a thaw can bring adb back off."""
+        store = dict(state or {})
+        log = []
+
+        def runner(argv):
+            cmd = argv[-1] if argv else ""
+            log.append(cmd)
+            if cmd.startswith("settings put global "):
+                _, _, _, key, value = cmd.split()
+                store[key] = value
+                return ExecResult(0, "")
+            if cmd.startswith("settings get global "):
+                return ExecResult(0, store.get(cmd.split()[-1], "null") + "\n")
+            return ExecResult(0, "")
+        a = AndroidAdapter(runner=runner)
+        a.log, a.store = log, store
+        return a
+
+    def test_default_is_adb_on_because_every_verb_needs_it(self):
+        from spawnables import devopts
+        self.assertEqual(devopts.normalize({})["level"], "adb")
+        self.assertEqual(devopts.steps({}), ["settings put global adb_enabled 1"])
+
+    def test_full_adds_the_visible_menu_and_stay_awake_and_nothing_engineering(self):
+        from spawnables import devopts
+        lines = " ".join(devopts.steps({"level": "full"}))
+        self.assertIn("development_settings_enabled 1", lines)
+        self.assertIn("adb_enabled 1", lines)
+        for never in ("ro.debuggable", "test-keys", "adb root", "tcpip"):
+            self.assertNotIn(never, lines)
+
+    def test_off_writes_nothing(self):
+        from spawnables import devopts
+        self.assertEqual(devopts.steps({"level": "off"}), [])
+        self.assertEqual(devopts.keeper({"level": "off"})["asserts"], [])
+
+    def test_the_three_non_retail_claims_are_refused_by_name(self):
+        from spawnables import devopts
+        catalog = Catalog("catalog")
+        img = catalog.image(self.android())
+        for key in ("debuggable", "root", "wireless"):
+            errors = devopts.validate({"level": "full", key: True}, img)
+            self.assertTrue(any(f"devopts.{key}: refused" in e for e in errors), key)
+        self.assertEqual(devopts.validate({"level": "full"}, img), [])
+
+    def test_an_unknown_level_is_an_error_not_a_default(self):
+        errors, _ = validate_order(self.android({"level": "max"}), Catalog("catalog"))
+        self.assertTrue(any("pick one of off, adb, full" in e for e in errors))
+
+    def test_the_order_validates_and_the_plan_names_the_stage_on_android(self):
+        catalog = Catalog("catalog")
+        order = self.android({"level": "full"})
+        errors, _ = validate_order(order, catalog)
+        self.assertEqual(errors, [])
+        plan = dict(Provisioner(order, catalog, self.adapter()).plan())
+        self.assertEqual(plan["devopts"], "android: full")
+
+    def test_a_non_android_guest_is_skipped_not_configured(self):
+        catalog = Catalog("catalog")
+        order = MachineOrder.from_dict({"id": "m1", "name": "box", "base_image": "mint-22-cinnamon",
+                                        "timezone": "asia/kolkata"})
+        plan = dict(Provisioner(order, catalog, FakeAdapter()).plan())
+        self.assertEqual(plan["devopts"], "skip: android guests only")
+
+    def test_provision_sets_it_and_says_visible_plus_adb_only(self):
+        catalog = Catalog("catalog")
+        a = self.adapter()
+        p = Provisioner(self.android({"level": "full"}), catalog, a)
+        p._devopts("android")
+        self.assertEqual(a.store["adb_enabled"], "1")
+        self.assertEqual(a.store["development_settings_enabled"], "1")
+        text = " | ".join(e.detail for e in p.emitter.history if e.stage == "provision.devopts")
+        self.assertIn("visible + adb only", text)
+
+    def test_a_thaw_that_brings_adb_back_off_is_repaired_and_logged(self):
+        a = self.adapter({"adb_enabled": "0"})
+        m = Machine(self.android(), a)
+        m._keep_devopts("thaw")
+        self.assertEqual(a.store["adb_enabled"], "1")
+        self.assertEqual(m.keeper_log, [{"at": "thaw", "setting": "adb_enabled",
+                                         "found": "0", "repaired": True}])
+
+    def test_a_setting_that_held_is_read_back_and_left_alone(self):
+        a = self.adapter({"adb_enabled": "1"})
+        m = Machine(self.android(), a)
+        m._keep_devopts("resume")
+        self.assertEqual(m.keeper_log, [{"at": "resume", "repaired": False}])
+        self.assertFalse([c for c in a.log if c.startswith("settings put")], "nothing to repair")
+
+    def test_off_means_the_keeper_does_not_touch_the_guest(self):
+        a = self.adapter()
+        m = Machine(self.android({"level": "off"}), a)
+        m._keep_devopts("thaw")
+        self.assertEqual(a.log, [])
+
+    def test_the_spec_says_what_the_code_does(self):
+        import re as _re
+        page = _re.sub(r"\s+", " ", pathlib.Path("spec/developer-options.md").read_text().lower())
+        for needle in ("visible + adb only", "never turns it on, at any level", "emulators line is untouched",
+                       "read the setting back", "devopts.wireless"):
+            self.assertIn(needle, page, f"the spec lost {needle!r}")
+
+    def test_the_hardware_tells_still_fail_a_debuggable_build_whatever_the_toggle_says(self):
+        from spawnables.mobile_tells import build_props_tells
+        issues = build_props_tells({"build": {"debuggable": True}, "api_level": 15})
+        self.assertTrue(any(i[1] == "ro.debuggable" and i[3] == "fail" for i in issues))
+
+
 class TestDeviceSurface(unittest.TestCase):
     """four verbs for a device with no dom, and the refusals that keep them honest."""
 

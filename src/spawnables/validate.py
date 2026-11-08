@@ -7,6 +7,7 @@ everything so the api cannot be talked into a bad provision.
 
 import re
 
+from . import devopts as _devopts
 from .netpriv import normalize as _net_normalize, validate_network as _net_validate
 
 USERNAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
@@ -142,6 +143,9 @@ def validate_order(order, catalog):
         warnings.append(
             f"ordered payload ~{est} mb is more than 60% of the {order.size.disk_gb} gb disk"
         )
+
+    if getattr(order, "devopts", None):
+        errors += _devopts.validate(order.devopts, img)
 
     for name, value in (getattr(order, "env", {}) or {}).items():
         if not ENV_NAME_RE.match(str(name)):

@@ -68,6 +68,7 @@ class MachineOrder:
     env: dict = field(default_factory=dict)  # guest variables: name -> value or a vault ref
     network: dict = field(default_factory=dict)  # section 03: network & privacy
     device_context: dict = field(default_factory=dict)  # advanced: device context tuning
+    devopts: dict = field(default_factory=dict)  # phone guests: developer options kept on, {level: off|adb|full}
     rebuild_on_thaw: bool = False
     image: str | None = None  # bring-your-own image path (ios requires it)
 
@@ -91,6 +92,7 @@ class MachineOrder:
             env=dict(d.get("env", {})),
             network=d.get("network", {}),
             device_context=d.get("device_context", {}),
+            devopts=dict(d.get("devopts", {})),
             rebuild_on_thaw=d.get("rebuild_on_thaw", False),
             image=d.get("image"),
         )

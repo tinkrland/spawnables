@@ -295,3 +295,5 @@ two rules, both enforced in `validate_order` rather than promised in prose:
 - a credential-shaped name (`*KEY`, `*TOKEN`, `*SECRET`, `*PASSWORD`) must carry a vault ref (`@@vault:name@@` or an `op://`, `bw://`, `pass://` source). a literal is refused, because presets are json files in a repo and a secret in a preset is a leak waiting for a commit.
 
 `@@vault:name@@` refs resolve at provision and never reach an event: the progress line carries the variable name. `op://` and friends are refused by that stage rather than exported as text, since the vaults cli resolves those, not the provisioner.
+
+android guests also carry a developer-options toggle: see [developer options](developer-options.md).

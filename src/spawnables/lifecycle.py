@@ -28,6 +28,25 @@ class Machine:
 
     # -- plumbing ----------------------------------------------------------
 
+    def _keep_devopts(self, moment):
+        """a resumed or restored phone can come back with adb off, which silently kills every verb in
+        surface.py. read it back and repair it; say so in the machine's log rather than in the result."""
+        from . import devopts
+        if getattr(self.adapter, "guest", "") != "android":
+            return
+        keep = devopts.keeper(getattr(self.order, "devopts", {}) or {})
+        self.keeper_log = getattr(self, "keeper_log", [])
+        for line, (key, want) in zip(keep["asserts"], (keep.get("expect") or {}).items()):
+            got = (self.adapter.exec(line).stdout or "").strip()
+            if got != want:
+                for fix in keep["repair"]:
+                    self.adapter.exec(fix)
+                self.keeper_log.append({"at": moment, "setting": key, "found": got or "unset", "repaired": True})
+                break
+        else:
+            if keep["asserts"]:
+                self.keeper_log.append({"at": moment, "repaired": False})
+
     def _once(self, verb, key):
         if key is None:
             return True
@@ -111,6 +130,7 @@ class Machine:
             return "already-applied"
         self.adapter.start()
         self.state = "live"
+        self._keep_devopts("resume")
         return "live: files intact"
 
     def freeze(self, snapshot_id=None, idempotency_key=None):
@@ -128,6 +148,7 @@ class Machine:
             return "already-applied"
         self.adapter.snapshot_restore(snapshot_id or "fresh-point")
         self.state = "live"
+        self._keep_devopts("thaw")
         return "live: exact session resumed"
 
     def export(self, flavor="data-only", idempotency_key=None):

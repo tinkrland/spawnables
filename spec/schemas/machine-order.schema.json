@@ -198,6 +198,22 @@
       "propertyNames": {
         "pattern": "^[A-Z_][A-Z0-9_]*$"
       }
+    },
+    "devopts": {
+      "type": "object",
+      "description": "android guests only: developer options kept on across boot and thaw. visible + adb only; a debuggable build is not offered.",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": [
+            "off",
+            "adb",
+            "full"
+          ],
+          "default": "adb"
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

@@ -73,6 +73,8 @@ class Provisioner:
             steps.append((f"tools.{tool_id}", install))
 
         # env lands where run() puts it: after the tools, so a PATH entry can point at what exists
+        steps.append(("devopts", "android: " + str((getattr(self.order, "devopts", {}) or {}).get("level", "adb"))
+                      if os_name == "android" else "skip: android guests only"))
         steps.append(("env", ("skip: env is a linux path today" if os_name != "linux" else
                               f"/etc/environment gets {len(getattr(self.order, 'env', {}) or {})} "
                               "variable(s), refs resolved")))
@@ -124,6 +126,7 @@ class Provisioner:
         self._network(os_name)
         self._machinefp(os_name)
         self._devctx(os_name)
+        self._devopts(os_name)
         self._tools(family)
         self._env(os_name)
         self._apps(os_name, family)
@@ -231,6 +234,21 @@ class Provisioner:
             return
         for label, cmd in steps:
             self._exec_checked("machinefp", cmd, label)
+
+    def _devopts(self, os_name):
+        """developer options on a phone guest: put in place once, then asserted at every boot and thaw."""
+        from . import devopts
+        if os_name != "android":
+            return
+        section = devopts.normalize(self.order.devopts or {})
+        if section["level"] == "off":
+            self.emitter.emit("provision.devopts", "skip", "developer options left as the image ships them")
+            return
+        for line in devopts.steps(section):
+            if not self._exec_checked("devopts", line, line.replace("settings put global ", "")):
+                raise ProvisionError(f"developer options failed at: {line}")
+        self.emitter.emit("provision.devopts", "ok",
+                          f"level {section['level']}, kept on across boot and thaw (visible + adb only)")
 
     def _devctx(self, os_name):
         """device context tuning: the card records the resolved

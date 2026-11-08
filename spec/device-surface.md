@@ -32,12 +32,46 @@ session**; the `ios-sim` backend delegates every verb to it and composes no argv
 a command line for a tool we have not run here is a guess with a docs link on it. `verified` stays
 false until somebody runs one.
 
-## three refusals
+## reach: what the four verbs cannot get at
+
+the four verbs only see the first screen. `tap_text` finds a label in the current dump, and a long
+settings list or a feed has most of its labels off-screen. four more plans, android over adb only:
+
+| plan | what it does | what it will not do |
+| --- | --- | --- |
+| `list_apps` | `pm list packages -3`; `-3` is third-party, system apps are an opt-in | |
+| `current_app` | one `dumpsys activity activities`, parsed by `foreground_package()` | guess when the screen is off: it says nothing is resumed |
+| `scroll(direction)` | move the content the way it is read; the finger goes the other way, slowly | fling. under 300 ms it is a `swipe`, and says so |
+| `swipe(direction)` | a quick flick, the finger's own direction | |
+
+**a name is resolved against what is installed, never against a table of guesses.** `open_app`
+takes an exact package id as before. given the installed list, a plain name resolves to one
+package or to a question: `chrome` finds `com.android.chrome`; `whatsapp` matches two packages and
+returns both rather than picking one on a phone that is logged into things; `signal` matches
+nothing, because signal's package is `org.thoughtcrime.securesms`, and the answer is the installed
+list. a table of well-known apps would fix that one case and quietly rot on the next hundred.
+
+**gestures never assume a screen size.** without `size` they return the call that reads it
+(`wm size`), the same shape as `tap_text` asking for a dump. an override size wins, because that is
+what the screen is. the span is symmetric around the anchor and limited by the nearer edge, so a
+gesture never ends off the screen, where it does nothing or lands on a system bar.
+
+**the end of a list is the screen, not the parser.** `at_end(before, after)` compares two dumps. a
+parser that finds no new items can be wrong about a list it does not understand; a screen that did
+not change did not move.
+
+a mirrored iphone keeps `screen()` and nothing here: iphone mirroring drops vertical drags, so a
+scroll would be a promise the backend cannot keep. the simulator path (`ios-sim`) is the tool's.
+
+## five refusals
 
 - **ocr pretending to press.** vision reads. a tap needs a coordinate somebody can vouch for, so
   `tap_text` on ios is refused rather than approximated.
 - **a silent tap.** `tap_text` with no dump returns the two calls that produce one, not a guess
   with a screenshot attached.
+- **guessing an app.** a name that matches two packages is a question, not a launch.
+- **a fling called a scroll.** a lift while the finger is still moving moves further than asked,
+  so a scroll under 300 ms is refused and pointed at `swipe`.
 - **a borrowed identity.** a device somebody else owns may be driven and may not become the
   identity. same rule as the mobile pool and the same rule as a vault session.
 

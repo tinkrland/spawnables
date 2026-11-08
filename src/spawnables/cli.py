@@ -168,7 +168,15 @@ def cmd_surface(args):
     """the four verbs an agent gets on a device with no dom, and who offers which."""
     from . import surface
     if args.verb:
-        plan = surface.plan(args.verb, backend=args.backend, **({} if args.verb != "open_app" else {"pkg": args.arg or ""}))
+        kw = {}
+        if args.verb == "open_app":
+            kw["pkg"] = args.arg or ""
+        elif args.verb in ("scroll", "swipe"):
+            kw["direction"] = args.direction
+            if args.size:
+                w, _, h = args.size.lower().partition("x")
+                kw["size"] = (int(w), int(h))
+        plan = surface.plan(args.verb, backend=args.backend, **kw)
         print(json.dumps(plan, indent=2, default=str))
     else:
         print(json.dumps(surface.agent_card(), indent=2))
@@ -208,8 +216,11 @@ def main(argv=None):
     sf = sub.add_parser("surface", help="the device verb set: open_app, tap_text, type_text, screen")
     sf.add_argument("verb", nargs="?")
     sf.add_argument("--backend", default="android-adb",
-                    choices=["android-adb", "ios-mirroring", "ios-guest", "cloud-farm"])
-    sf.add_argument("--arg", default=None, help="package name for open_app")
+                    choices=["android-adb", "ios-mirroring", "ios-guest", "ios-sim"])
+    sf.add_argument("--arg", default=None, help="package or app name for open_app")
+    sf.add_argument("--direction", default="down", choices=["up", "down", "left", "right"],
+                    help="for scroll and swipe")
+    sf.add_argument("--size", default=None, help="WxH for scroll and swipe, from `adb shell wm size`")
     sf.set_defaults(fn=cmd_surface)
     args = ap.parse_args(argv)
     return args.fn(args)

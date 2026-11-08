@@ -27,6 +27,10 @@ import xml.etree.ElementTree as ET
 
 VERBS = ("open_app", "tap_text", "type_text", "screen")
 
+# reach, not contract: what lets the four verbs get at things that are not on the first screen.
+# android-adb only. a mirrored iphone drops vertical drags, so it keeps screen() and nothing here.
+EXTRAS = ("list_apps", "current_app", "scroll", "swipe")
+
 BACKENDS = {
     "android-adb": {
         "verbs": list(VERBS),
@@ -65,6 +69,8 @@ REFUSED = {
     "ocr-pretending-to-press": "vision reads; a tap needs a coordinate somebody can vouch for",
     "borrowed-identity": "a device somebody else owns may be driven and may not become the identity",
     "silent-tap": "a tap without a dump is a guess with a screenshot attached",
+    "guessing-an-app": "a name that matches two packages is a question, not a launch",
+    "fling": "a scroll that lifts the finger while it is still moving is a swipe, and moves further than asked",
 }
 
 
@@ -76,12 +82,73 @@ def why_no_dom():
             "other has a camera.")
 
 
-def open_app(pkg, backend="android-adb"):
+def open_app(pkg, backend="android-adb", packages=None):
+    """launch by package id. given the installed list, a plain name resolves against it first."""
     if backend == "ios-sim":
         return _delegated("open_app", pkg=pkg)
     if backend != "android-adb":
         return _refused("open_app", backend)
+    if packages is not None:
+        found = resolve_app(pkg, packages)
+        if "candidates" in found or "refused" in found:
+            return found
+        pkg = found["package"]
     return ["adb", "shell", "monkey", "-p", pkg, "-c", "android.intent.category.LAUNCHER", "1"]
+
+
+def list_apps(backend="android-adb", system=False):
+    """the installed packages, third-party by default. system apps are an opt-in because the list is long."""
+    if backend != "android-adb":
+        return _refused("list_apps", backend)
+    return ["adb", "shell", "pm", "list", "packages"] + ([] if system else ["-3"])
+
+
+def parse_packages(text):
+    """`pm list packages` output -> sorted package ids. pure, so it is testable with no phone."""
+    out = []
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if line.startswith("package:"):
+            out.append(line[len("package:"):].strip())
+    return sorted(set(p for p in out if p))
+
+
+def resolve_app(name, packages):
+    """a name a person would say -> one installed package, or the candidates, or a refusal.
+
+    exact id first, then a fragment of an id. two fragment hits is a question for the caller:
+    picking the shortest, as a launcher might, is how the wrong app gets opened on a phone that
+    is logged into things.
+    """
+    want = (name or "").strip()
+    if not want:
+        return {"refused": True, "why": "no app name given", "installed": list(packages)[:20]}
+    if want in packages:
+        return {"package": want, "matched": "exact"}
+    key = "".join(ch for ch in want.lower() if ch.isalnum())
+    hits = sorted(p for p in packages if key and key in "".join(ch for ch in p.lower() if ch.isalnum()))
+    if len(hits) == 1:
+        return {"package": hits[0], "matched": "fragment"}
+    if hits:
+        return {"candidates": hits, "why": REFUSED["guessing-an-app"]}
+    return {"refused": True, "why": f"nothing installed matches {want!r}", "installed": list(packages)[:20]}
+
+
+def current_app(backend="android-adb"):
+    """the foreground package: one dumpsys read, parsed by foreground_package()."""
+    if backend != "android-adb":
+        return _refused("current_app", backend)
+    return ["adb", "shell", "dumpsys", "activity", "activities"]
+
+
+FOREGROUND = re.compile(r"mResumedActivity: ActivityRecord\{[^}]*?\bu\d+ ([\w.]+)/")
+
+
+def foreground_package(dumpsys_text):
+    match = FOREGROUND.search(dumpsys_text or "")
+    if not match:
+        raise LookupError("no resumed activity in that dumpsys; the screen may be off or locked")
+    return match.group(1)
 
 
 def dump_tree():
@@ -136,6 +203,74 @@ def tap_text(label, backend="android-adb", xml_text=None):
     return {"argv": ["adb", "shell", "input", "tap", str(node["x"]), str(node["y"])], "node": node}
 
 
+SIZE = re.compile(r"(?:Physical|Override) size:\s*(\d+)x(\d+)")
+DIRECTIONS = ("up", "down", "left", "right")
+
+
+def screen_size(wm_size_text):
+    """`wm size` output -> (w, h). an override wins, because that is what the screen actually is."""
+    found = SIZE.findall(wm_size_text or "")
+    if not found:
+        raise ValueError("no size in that output; `adb shell wm size` prints it")
+    w, h = found[-1]
+    return int(w), int(h)
+
+
+def _gesture(direction, amount, size, at):
+    if direction not in DIRECTIONS:
+        raise ValueError(f"direction is one of {DIRECTIONS}, not {direction!r}")
+    if not (0 < amount <= 1):
+        raise ValueError("amount is a fraction of the screen, above 0 and at most 1")
+    w, h = size
+    cx, cy = at if at else (w // 2, h // 2)
+    if not (0 <= cx < w and 0 <= cy < h):
+        raise ValueError(f"at={at} is outside the {w}x{h} screen")
+    # the span is symmetric around the anchor, so it is limited by whichever edge is nearer.
+    # a gesture that ends off the screen does nothing, or lands on a system bar.
+    dx = {"left": -1, "right": 1}.get(direction, 0) * min(int(w * amount / 2), cx, w - 1 - cx)
+    dy = {"up": -1, "down": 1}.get(direction, 0) * min(int(h * amount / 2), cy, h - 1 - cy)
+    return cx - dx, cy - dy, cx + dx, cy + dy
+
+
+def swipe(direction, backend="android-adb", size=None, amount=0.5, at=None, ms=120):
+    """a quick flick: the finger travels `direction` across the screen. content moves the other way."""
+    if backend != "android-adb":
+        return _refused("swipe", backend)
+    if size is None:
+        return {"needs": ["screen_size"], "argv": ["adb", "shell", "wm", "size"], "then": "swipe(direction, size=...)"}
+    x1, y1, x2, y2 = _gesture(direction, amount, size, at)
+    # a swipe on purpose: it is allowed to fling, so it says how long the finger was down
+    return ["adb", "shell", "input", "swipe", str(x1), str(y1), str(x2), str(y2), str(int(ms))]
+
+
+def scroll(direction, backend="android-adb", size=None, amount=0.5, at=None, ms=700):
+    """move the content `direction`, the way a person reads it: scroll down shows what is below.
+
+    the finger goes the opposite way, and slowly, because a fast lift becomes a fling and a fling
+    moves further than asked. the duration is the difference between this and swipe().
+    """
+    if backend != "android-adb":
+        return _refused("scroll", backend)
+    if size is None:
+        return {"needs": ["screen_size"], "argv": ["adb", "shell", "wm", "size"], "then": "scroll(direction, size=...)"}
+    if ms < 300:
+        return {"refused": True, "verb": "scroll", "why": REFUSED["fling"], "use": "swipe"}
+    opposite = {"up": "down", "down": "up", "left": "right", "right": "left"}[direction] if direction in DIRECTIONS else direction
+    x1, y1, x2, y2 = _gesture(opposite, amount, size, at)
+    return ["adb", "shell", "input", "swipe", str(x1), str(y1), str(x2), str(y2), str(int(ms))]
+
+
+def at_end(dump_before, dump_after):
+    """the list is over when the screen stopped changing, not when the parser found nothing new.
+
+    two dumps of the same screen are the same text, ignoring nothing but the whitespace between tags.
+    a parser that finds no new items can be wrong about a list it does not understand; the screen
+    does not lie about whether it moved.
+    """
+    norm = lambda t: re.sub(r">\s+<", "><", (t or "").strip())
+    return norm(dump_before) == norm(dump_after)
+
+
 def escape_text(text):
     """adb's shell eats spaces unless they are %s, and it is not a shell we can quote around."""
     return (text or "").replace("%", "\\%").replace(" ", "%s")
@@ -162,9 +297,10 @@ def screen(backend="android-adb"):
 
 def plan(verb, backend="android-adb", **kw):
     """one call for an agent: verb + backend -> argv or a refusal with the reason."""
-    table = {"open_app": open_app, "tap_text": tap_text, "type_text": type_text, "screen": screen}
+    table = {"open_app": open_app, "tap_text": tap_text, "type_text": type_text, "screen": screen,
+             "list_apps": list_apps, "current_app": current_app, "scroll": scroll, "swipe": swipe}
     if verb not in table:
-        raise ValueError(f"unknown verb {verb!r}; the set is {VERBS}")
+        raise ValueError(f"unknown verb {verb!r}; the set is {VERBS + EXTRAS}")
     return table[verb](**{k: v for k, v in kw.items() if k != "backend"} | {"backend": backend})
 
 
@@ -197,6 +333,8 @@ def _refused(verb, backend):
 def agent_card():
     return {
         "verbs": list(VERBS),
+        "extras": {"verbs": list(EXTRAS), "on": ["android-adb"],
+                   "why": "reach, not contract: the four verbs cannot get at what is off the first screen"},
         "backends": {k: {"verbs": v["verbs"], "holds": v["holds"]} for k, v in BACKENDS.items()},
         "why": why_no_dom(),
         "refused": REFUSED,

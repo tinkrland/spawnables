@@ -2336,8 +2336,123 @@ class TestDeviceSurface(unittest.TestCase):
         for needle in ("ios, simulator", "delegated", "callstack/agent-device", "local session",
                        "composes no argv", "verified` stays"):
             self.assertIn(needle, page, f"the spec lost {needle!r}")
+        for needle in ("reach: what the four verbs cannot get at", "never against a table of guesses",
+                       "gestures never assume a screen size", "the end of a list is the screen",
+                       "five refusals", "iphone mirroring drops vertical drags"):
+            self.assertIn(needle, page, f"the spec lost {needle!r}")
         self.assertNotIn("a simulator has no tree to read, so no verb", page,
                          "the wrong reading is still on the page")
+
+
+    PM = ("package:com.android.chrome\npackage:org.thoughtcrime.securesms\n"
+          "package:com.whatsapp\npackage:com.whatsapp.w4b\n")
+
+    def test_the_installed_list_parses_and_is_third_party_by_default(self):
+        S = self.surface()
+        self.assertEqual(S.parse_packages(self.PM)[0], "com.android.chrome")
+        self.assertEqual(len(S.parse_packages(self.PM)), 4)
+        self.assertEqual(S.list_apps()[-1], "-3")
+        self.assertNotIn("-3", S.list_apps(system=True))
+
+    def test_a_name_resolves_only_when_it_is_unambiguous(self):
+        S, pk = self.surface(), self.surface().parse_packages(self.PM)
+        self.assertEqual(S.resolve_app("com.whatsapp", pk), {"package": "com.whatsapp", "matched": "exact"})
+        self.assertEqual(S.resolve_app("chrome", pk)["package"], "com.android.chrome")
+        two = S.resolve_app("whatsapp", pk)
+        self.assertEqual(two["candidates"], ["com.whatsapp", "com.whatsapp.w4b"])
+        self.assertNotIn("package", two, "two hits must be a question, never a pick")
+
+    def test_a_brand_that_is_not_in_the_package_id_refuses_with_what_is_installed(self):
+        S, pk = self.surface(), self.surface().parse_packages(self.PM)
+        miss = S.resolve_app("signal", pk)
+        self.assertTrue(miss["refused"])
+        self.assertIn("org.thoughtcrime.securesms", miss["installed"])
+
+    def test_open_app_resolves_against_the_list_and_still_takes_a_bare_id(self):
+        S, pk = self.surface(), self.surface().parse_packages(self.PM)
+        self.assertEqual(S.open_app("chrome", packages=pk)[4], "com.android.chrome")
+        self.assertEqual(S.open_app("com.example.app")[4], "com.example.app")
+        self.assertIn("candidates", S.open_app("whatsapp", packages=pk))
+
+    def test_the_foreground_app_is_read_from_dumpsys_or_says_why_not(self):
+        S = self.surface()
+        text = "  mResumedActivity: ActivityRecord{abc u0 com.android.chrome/org.chromium.Main t12}"
+        self.assertEqual(S.foreground_package(text), "com.android.chrome")
+        with self.assertRaises(LookupError):
+            S.foreground_package("nothing resumed here")
+
+    def test_a_gesture_never_assumes_a_screen_size(self):
+        S = self.surface()
+        for verb in (S.scroll, S.swipe):
+            need = verb("down")
+            self.assertEqual(need["needs"], ["screen_size"])
+            self.assertEqual(need["argv"], ["adb", "shell", "wm", "size"])
+        self.assertEqual(S.screen_size("Physical size: 1080x2400"), (1080, 2400))
+        self.assertEqual(S.screen_size("Physical size: 1080x2400\nOverride size: 720x1600"), (720, 1600))
+        with self.assertRaises(ValueError):
+            S.screen_size("")
+
+    def test_scroll_moves_the_content_the_way_it_is_read_and_the_finger_the_other_way(self):
+        S = self.surface()
+        down = S.scroll("down", size=(1080, 2400))
+        y1, y2 = int(down[5]), int(down[7])  # argv: adb shell input swipe x1 y1 x2 y2 ms -> y1=[5] y2=[7]
+        self.assertGreater(y1, y2, "scroll down shows what is below, so the finger travels up")
+        up = S.scroll("up", size=(1080, 2400))
+        self.assertLess(int(up[5]), int(up[7]))
+        left = S.swipe("left", size=(1080, 2400))
+        self.assertGreater(int(left[4]), int(left[6]), "a swipe is the finger's own direction (x1 > x2 is leftward)")
+
+    def test_a_scroll_that_would_fling_is_a_swipe_and_says_so(self):
+        S = self.surface()
+        fast = S.scroll("down", size=(1080, 2400), ms=100)
+        self.assertTrue(fast["refused"])
+        self.assertEqual(fast["use"], "swipe")
+        self.assertGreaterEqual(int(S.scroll("down", size=(1080, 2400))[-1]), 300)
+
+    def test_a_gesture_is_bounded_to_the_screen_and_a_real_direction(self):
+        S = self.surface()
+        argv = S.scroll("down", size=(1080, 2400), amount=1.0)
+        coords = [int(x) for x in argv[4:8]]
+        self.assertTrue(all(0 <= c <= 2400 for c in coords), coords)
+        with self.assertRaises(ValueError):
+            S.scroll("sideways", size=(1080, 2400))
+        # an off-centre anchor used to run the gesture off the bottom of the screen (y=3260 on 2400)
+        off = [int(x) for x in S.swipe("down", size=(1080, 2400), amount=.8, at=(900, 2300))[4:8]]
+        self.assertTrue(0 <= off[1] < 2400 and 0 <= off[3] < 2400, off)
+        self.assertTrue(0 <= off[0] < 1080 and 0 <= off[2] < 1080, off)
+        full = [int(x) for x in S.scroll("down", size=(1080, 2400), amount=1.0)[4:8]]
+        self.assertTrue(0 <= min(full[1], full[3]) <= 1 and 2398 <= max(full[1], full[3]) <= 2399,
+                        f"a full-screen scroll uses the whole height and not a pixel past it: {full}")
+        with self.assertRaises(ValueError):
+            S.swipe("down", size=(1080, 2400), at=(1080, 100))
+        for bad in (0, 1.5, -0.2):
+            with self.assertRaises(ValueError):
+                S.swipe("up", size=(1080, 2400), amount=bad)
+
+    def test_the_end_of_a_list_is_the_screen_not_changing(self):
+        S = self.surface()
+        a = '<hierarchy><node text="one" bounds="[0,0][9,9]"/> <node text="two" bounds="[0,9][9,18]"/></hierarchy>'
+        same = '<hierarchy><node text="one" bounds="[0,0][9,9]"/><node text="two" bounds="[0,9][9,18]"/></hierarchy>'
+        moved = '<hierarchy><node text="two" bounds="[0,0][9,9]"/><node text="three" bounds="[0,9][9,18]"/></hierarchy>'
+        self.assertTrue(S.at_end(a, same), "whitespace between tags is not movement")
+        self.assertFalse(S.at_end(a, moved))
+
+    def test_the_new_verbs_are_android_only_and_a_mirrored_phone_is_refused(self):
+        S = self.surface()
+        for verb in ("scroll", "swipe", "list_apps", "current_app"):
+            refused = S.plan(verb, backend="ios-mirroring", **({"direction": "down"} if verb in ("scroll", "swipe") else {}))
+            self.assertTrue(refused["refused"], verb)
+        self.assertEqual(S.VERBS, ("open_app", "tap_text", "type_text", "screen"),
+                         "the four-verb contract does not move")
+        self.assertEqual(S.EXTRAS, ("list_apps", "current_app", "scroll", "swipe"))
+        self.assertEqual(S.agent_card()["extras"]["on"], ["android-adb"])
+
+    def test_the_cli_offers_no_backend_that_the_module_does_not_have(self):
+        import re as _re
+        cli = pathlib.Path("src/spawnables/cli.py").read_text()
+        choices = _re.search(r'sf.add_argument\("--backend".*?choices=\[(.*?)\]', cli, _re.S).group(1)
+        offered = set(_re.findall(r'"([a-z-]+)"', choices))
+        self.assertEqual(offered, set(self.surface().BACKENDS), "the cli choices drifted from BACKENDS")
 
     def test_no_cloud_endpoint_hides_in_this_module(self):
         import pathlib

@@ -34,14 +34,35 @@ def _slug(preset_name):
     return re.sub(r"[^a-z0-9]+", "-", preset_name.strip().lower()).strip("-")
 
 
-def save_preset(presets_dir, preset_name, manifest, description=""):
-    """keep a manifest as a named, re-orderable preset."""
+MAX_SLUG = 64  # well under a filesystem's 255 bytes, and a name longer than this is a sentence
+
+
+class PresetError(ValueError):
+    """a preset that cannot be kept as asked, with the reason in words."""
+
+
+def save_preset(presets_dir, preset_name, manifest, description="", overwrite=False):
+    """keep a manifest as a named, re-orderable preset.
+
+    refuses a name with nothing left after slugging (it used to write a file called .json, which no
+    name could reach), refuses one too long for a filename, and refuses to replace an existing preset
+    unless asked, because a preset is something the owner curated and "design box" and "Design Box"
+    are the same slug.
+    """
     slug = _slug(preset_name)
+    if not slug:
+        raise PresetError(f"{preset_name!r} has no letters or digits to name a preset by")
+    if len(slug) > MAX_SLUG:
+        raise PresetError(f"a preset name is at most {MAX_SLUG} characters once slugged; "
+                          f"this one is {len(slug)}")
     d = Path(presets_dir)
+    target = d / f"{slug}.json"
+    if target.exists() and not overwrite:
+        raise PresetError(f"a preset called {slug!r} already exists; replace it with --overwrite (api: \"overwrite\": true)")
     d.mkdir(parents=True, exist_ok=True)
     payload = {"id": slug, "description": description,
                "manifest": copy.deepcopy(dict(manifest))}
-    (d / f"{slug}.json").write_text(json.dumps(payload, indent=2) + "\n")
+    target.write_text(json.dumps(payload, indent=2) + "\n")
     return payload
 
 

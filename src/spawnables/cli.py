@@ -10,7 +10,7 @@ import sys
 from . import duty
 from .catalog import Catalog
 from .models import MachineOrder
-from .presets import load_presets, save_preset
+from .presets import load_presets, save_preset, PresetError
 from .validate import validate_order
 from .provisioner import Provisioner, ProvisionError
 from .lifecycle import Machine, LifecycleError, VerbNotSupported
@@ -154,8 +154,12 @@ def cmd_presets(args):
                                                  "cannot order is a trap", "errors": errors,
                           "warnings": warnings}, indent=2))
         return 1
-    path = save_preset(args.dir, args.name, json.loads(pathlib.Path(args.order).read_text()),
-                       description=args.description)
+    try:
+        path = save_preset(args.dir, args.name, json.loads(pathlib.Path(args.order).read_text()),
+                           description=args.description, overwrite=getattr(args, "overwrite", False))
+    except PresetError as exc:
+        print(json.dumps({"saved": False, "why": str(exc)}, indent=2))
+        return 1
     print(json.dumps({"saved": (path or {}).get("id"),
                       "name": args.name, "dir": str(args.dir), "description": args.description,
                       "env": sorted((order.env or {}).keys()),
@@ -169,14 +173,24 @@ def cmd_surface(args):
     from . import surface
     if args.verb:
         kw = {}
-        if args.verb == "open_app":
-            kw["pkg"] = args.arg or ""
+        # --arg is the verb's one free argument; which parameter that is differs per verb
+        free = {"open_app": "pkg", "tap_text": "label", "type_text": "text"}
+        if args.verb in free:
+            if args.arg is None:
+                print(json.dumps({"refused": True, "verb": args.verb,
+                                  "why": f"{args.verb} needs --arg ({free[args.verb]})"}, indent=2))
+                return 1
+            kw[free[args.verb]] = args.arg
         elif args.verb in ("scroll", "swipe"):
             kw["direction"] = args.direction
             if args.size:
                 w, _, h = args.size.lower().partition("x")
                 kw["size"] = (int(w), int(h))
-        plan = surface.plan(args.verb, backend=args.backend, **kw)
+        try:
+            plan = surface.plan(args.verb, backend=args.backend, **kw)
+        except ValueError as exc:       # an unknown verb or an out-of-range gesture is a message, not a trace
+            print(json.dumps({"refused": True, "verb": args.verb, "why": str(exc)}, indent=2))
+            return 1
         print(json.dumps(plan, indent=2, default=str))
     else:
         print(json.dumps(surface.agent_card(), indent=2))
@@ -199,6 +213,8 @@ def main(argv=None):
     pr.add_argument("--name", default="")
     pr.add_argument("--description", default="")
     pr.add_argument("--dir", default="catalog/presets")
+    pr.add_argument("--overwrite", action="store_true",
+                    help="replace a preset that already has this name (refused by default)")
     pr.set_defaults(fn=cmd_presets)
 
     v = sub.add_parser("vaults", help="the owner's vaults as sources: check, card, resolve, code")
@@ -217,7 +233,7 @@ def main(argv=None):
     sf.add_argument("verb", nargs="?")
     sf.add_argument("--backend", default="android-adb",
                     choices=["android-adb", "ios-mirroring", "ios-guest", "ios-sim"])
-    sf.add_argument("--arg", default=None, help="package or app name for open_app")
+    sf.add_argument("--arg", default=None, help="the verb's argument: package for open_app, label for tap_text, text for type_text")
     sf.add_argument("--direction", default="down", choices=["up", "down", "left", "right"],
                     help="for scroll and swipe")
     sf.add_argument("--size", default=None, help="WxH for scroll and swipe, from `adb shell wm size`")

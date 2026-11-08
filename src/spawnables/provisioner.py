@@ -8,6 +8,7 @@ only declare a url (keeps the registry crowdsourceable).
 
 
 
+import base64
 from .events import Emitter
 from .coherence import coherence_report, exit_story
 from .machinefp import guest_steps as machinefp_steps
@@ -42,6 +43,36 @@ LOCALE_CMD = {
     "android": "settings put global auto_time_zone on",
     "ios": None,   # desktop-only guest: no exec bridge
 }
+
+
+
+def _env_value_fault(value):
+    """why a resolved value cannot live in /etc/environment, or None. never contains the value."""
+    if "\n" in value or "\r" in value:
+        return "contains a newline, and the file holds one NAME=\"value\" per line"
+    if '"' in value:
+        return "contains a double quote, which would end the value early"
+    if "\x00" in value:
+        return "contains a NUL byte"
+    return None
+
+
+def _env_write_script(pairs):
+    """the guest command that merges pairs into /etc/environment.
+
+    the payload travels as base64, so a value is never parsed by a shell: no quote in a secret can end
+    the string and no `;` in it can start a command. existing lines for other names are kept (debian
+    ships a PATH there and replacing the file wholesale deleted it); a name we set replaces its old line.
+    """
+    body = "".join(f'{name}="{value}"\n' for name, value in pairs)
+    payload = base64.b64encode(body.encode()).decode()
+    names = "|".join(name for name, _ in pairs)
+    return (
+        "set -e; f=/etc/environment; t=$(mktemp); touch \"$f\"; "
+        f"grep -Ev '^({names})=' \"$f\" > \"$t\" || true; "
+        f"printf %s '{payload}' | base64 -d >> \"$t\"; "
+        "cat \"$t\" > \"$f\"; rm -f \"$t\""
+    )
 
 
 class Provisioner:
@@ -197,11 +228,16 @@ class Provisioner:
                 return
             else:
                 resolved = raw
-            lines.append(f'{name}="{resolved}"')
+            # the validator checked the ref; a secret is only known now, and /etc/environment is one
+            # NAME="value" per line read by pam, so a quote or a newline in the value corrupts the file
+            # for every login. the value is not echoed, only the name and the rule.
+            bad = _env_value_fault(resolved)
+            if bad:
+                em.emit("provision.env", "fail", f"{name}: the resolved value {bad}")
+                return
+            lines.append((name, resolved))
         if lines:
-            script = "set -e; printf '%s\\n' " + " ".join(
-                f"'{line}'" for line in lines) + " > /etc/environment"
-            ok = self._exec_checked("env", script, ", ".join(sorted(values)))
+            ok = self._exec_checked("env", _env_write_script(lines), ", ".join(sorted(values)))
             if not ok:
                 raise ProvisionError("env: /etc/environment could not be written")
         em.emit("provision.env", "ok", f"{len(lines)} variable(s) exported")

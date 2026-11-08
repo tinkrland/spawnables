@@ -1517,6 +1517,106 @@ def _log(provisioner):
     return " | ".join(f"{e.stage}.{e.status} {e.detail}" for e in provisioner.emitter.history)
 
 
+class TestPresetNamesAreKeptHonestly(unittest.TestCase):
+    """a preset is something the owner curated, so a name that saves nothing, a name that saves over
+    another, and a name the filesystem rejects are all failures to say out loud."""
+
+    def save(self, name, d, **kw):
+        from spawnables.presets import save_preset
+        return save_preset(d, name, {"name": "x"}, **kw)
+
+    def test_a_name_with_nothing_left_after_slugging_is_refused_not_written_as_dot_json(self):
+        import tempfile
+        from spawnables.presets import PresetError
+        d = tempfile.mkdtemp()
+        for empty in ("", "   ", "!!!", "...", "--"):
+            with self.assertRaises(PresetError, msg=repr(empty)):
+                self.save(empty, d)
+        self.assertEqual(os.listdir(d), [], "nothing, not even a file called .json, may be written")
+
+    def test_a_name_too_long_for_a_filename_is_a_message_not_an_oserror(self):
+        import tempfile
+        from spawnables.presets import PresetError
+        with self.assertRaises(PresetError) as ctx:
+            self.save("a" * 300, tempfile.mkdtemp())
+        self.assertIn("64", str(ctx.exception))
+
+    def test_the_same_slug_is_refused_unless_overwrite_is_asked_for(self):
+        import json, tempfile
+        from spawnables.presets import PresetError, load_presets
+        d = tempfile.mkdtemp()
+        first = {"name": "first"}
+        from spawnables.presets import save_preset
+        save_preset(d, "Design Box", first)
+        with self.assertRaises(PresetError) as ctx:
+            save_preset(d, "design box", {"name": "second"})
+        self.assertIn("already exists", str(ctx.exception))
+        self.assertEqual(load_presets(d)["design-box"]["manifest"], first, "the original must survive")
+        save_preset(d, "design box", {"name": "second"}, overwrite=True)
+        self.assertEqual(load_presets(d)["design-box"]["manifest"], {"name": "second"})
+
+    def test_a_traversal_name_still_cannot_leave_the_directory(self):
+        import tempfile
+        d = tempfile.mkdtemp()
+        self.save("../../etc/passwd", d)
+        self.assertEqual(os.listdir(d), ["etc-passwd.json"])
+
+    def test_the_cli_says_why_and_exits_nonzero(self):
+        import subprocess, sys, tempfile, json
+        d = tempfile.mkdtemp()
+        order = os.path.join(d, "o.json")
+        pathlib.Path(order).write_text(json.dumps(
+            {"id": "mo-x", "name": "x", "base_image": "mint-22-cinnamon", "timezone": "asia/kolkata"}))
+        env = dict(os.environ, PYTHONPATH="src")
+        run = lambda *a: subprocess.run([sys.executable, "-m", "spawnables.cli", "presets", "save", order,
+                                         "--dir", os.path.join(d, "p"), *a], capture_output=True, text=True, env=env)
+        self.assertEqual(run("--name", "Box").returncode, 0)
+        again = run("--name", "box")
+        self.assertEqual(again.returncode, 1)
+        self.assertIn("--overwrite", json.loads(again.stdout)["why"])
+        self.assertEqual(run("--name", "box", "--overwrite").returncode, 0)
+        self.assertEqual(run("--name", "!!!").returncode, 1)
+
+    def test_the_status_codes_survive_the_http_layer(self):
+        """the plane raises ApiError, but a catch-all in the handler could turn it into a 500."""
+        import json, tempfile, threading, urllib.request, urllib.error
+        from http.server import HTTPServer
+        from spawnables.server import ControlPlane, make_handler
+        srv = HTTPServer(("127.0.0.1", 0), make_handler(
+            ControlPlane(Catalog("catalog"), presets_dir=tempfile.mkdtemp())))
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        url = f"http://127.0.0.1:{srv.server_port}/api/presets"
+
+        def post(body):
+            req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
+                                         headers={"Content-Type": "application/json"})
+            try:
+                with urllib.request.urlopen(req, timeout=10) as f:
+                    return f.status
+            except urllib.error.HTTPError as exc:
+                return exc.code
+        self.assertEqual(post({"name": "Box", "manifest": {"name": "x"}}), 200)
+        self.assertEqual(post({"name": "box", "manifest": {"name": "y"}}), 409)
+        self.assertEqual(post({"name": "!!!", "manifest": {"name": "y"}}), 400)
+        self.assertEqual(post({"name": "box", "manifest": {"name": "y"}, "overwrite": True}), 200)
+
+    def test_the_api_maps_a_collision_to_409_and_a_bad_name_to_400(self):
+        import tempfile
+        from spawnables.server import ApiError, ControlPlane
+        d = tempfile.mkdtemp()
+        plane = ControlPlane(Catalog("catalog"), presets_dir=d)
+        plane.save_preset({"name": "Box", "manifest": {"name": "x"}})
+        with self.assertRaises(ApiError) as clash:
+            plane.save_preset({"name": "box", "manifest": {"name": "y"}})
+        self.assertEqual(clash.exception.status, 409)
+        with self.assertRaises(ApiError) as bad:
+            plane.save_preset({"name": "!!!", "manifest": {"name": "y"}})
+        self.assertEqual(bad.exception.status, 400)
+        plane.save_preset({"name": "box", "manifest": {"name": "y"}, "overwrite": True})
+
+
+
 class TestGuestEnvAndTemplates(unittest.TestCase):
     """the ask: a saved template carrying the variables and the PATH, without becoming a secret store."""
 
@@ -1525,6 +1625,71 @@ class TestGuestEnvAndTemplates(unittest.TestCase):
         return MachineOrder.from_dict({"id": "mo-env", "name": "heyphony host", "base_image": image,
                                        "timezone": "asia/kolkata", "path_tools": tools or ["python"],
                                        "env": env or {}})
+
+    def apply_env(self, command, existing=""):
+        """run the generated guest command against a scratch file and return what it wrote."""
+        import subprocess, tempfile
+        scratch = tempfile.mktemp()
+        pathlib.Path(scratch).write_text(existing)
+        done = subprocess.run(["sh", "-c", command.replace("/etc/environment", scratch)],
+                              capture_output=True, text=True)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        text = pathlib.Path(scratch).read_text()
+        pathlib.Path(scratch).unlink()
+        return text
+
+    def provision_env(self, env, secret=None):
+        from spawnables.catalog import Catalog
+        from spawnables.provisioner import Provisioner
+        from spawnables.vault import Vault, DictBackend
+        backend = DictBackend()
+        if secret is not None:
+            backend.put("pw", secret)
+        adapter = FakeAdapter()
+        p = Provisioner(self.order(env), Catalog("catalog"), adapter, vault=Vault(backend))
+        p._env("linux")
+        return p, [c for c in adapter.execs if "/etc/environment" in c]
+
+    def test_a_secret_with_a_quote_in_it_cannot_run_a_command(self):
+        """the value used to be interpolated into a single-quoted shell string, so a vault entry of
+        x'; touch /tmp/..; echo ' executed on the guest."""
+        import os, tempfile
+        marker = os.path.join(tempfile.mkdtemp(), "pwned")
+        hostile = f"x'; touch {marker}; echo '"
+        p, writes = self.provision_env({"DB_PASSWORD": "@@vault:pw@@"}, hostile)
+        self.assertEqual(len(writes), 1)
+        written = self.apply_env(writes[0])
+        self.assertFalse(os.path.exists(marker), "the secret ran as a command")
+        self.assertIn(hostile, written, "it is stored as the literal text it was")
+
+    def test_an_apostrophe_in_a_secret_is_just_a_character(self):
+        p, writes = self.provision_env({"DB_PASSWORD": "@@vault:pw@@"}, "it's-a-pw")
+        self.assertIn('DB_PASSWORD="it\'s-a-pw"', self.apply_env(writes[0]))
+
+    def test_a_resolved_value_that_would_corrupt_the_file_is_refused_without_being_echoed(self):
+        """the validator checks the ref and a secret is only known now. a quote or newline in it breaks
+        /etc/environment for every login on the guest."""
+        for bad, why in (('a"b', "double quote"), ("l1\nl2", "newline"), ("a\x00b", "NUL")):
+            p, writes = self.provision_env({"DB_PASSWORD": "@@vault:pw@@"}, bad)
+            self.assertEqual(writes, [], f"{why}: nothing may be written")
+            text = _log(p)
+            self.assertIn(why, text)
+            self.assertNotIn("a\"b", text)
+            self.assertNotIn("l1", text, "the value must not be echoed back")
+
+    def test_an_existing_environment_file_is_merged_not_destroyed(self):
+        """debian ships a PATH in /etc/environment and the old write used > on the whole file."""
+        p, writes = self.provision_env({"HEYPHONY_HOME": "/opt/heyphony"})
+        written = self.apply_env(writes[0], 'PATH="/usr/local/bin:/usr/bin"\nLANG="en_US.UTF-8"\n')
+        self.assertIn('PATH="/usr/local/bin:/usr/bin"', written)
+        self.assertIn('LANG="en_US.UTF-8"', written)
+        self.assertIn('HEYPHONY_HOME="/opt/heyphony"', written)
+
+    def test_provisioning_twice_does_not_duplicate_a_variable(self):
+        p, writes = self.provision_env({"HEYPHONY_HOME": "/opt/heyphony"})
+        scratch_text = self.apply_env(writes[0])
+        again = self.apply_env(writes[0], scratch_text)
+        self.assertEqual(again.count("HEYPHONY_HOME="), 1)
 
     def test_env_is_written_to_etc_environment_and_the_log_carries_the_name_only(self):
         from spawnables.catalog import Catalog
@@ -1540,8 +1705,13 @@ class TestGuestEnvAndTemplates(unittest.TestCase):
         p._env("linux")
         writes = [c for c in adapter.execs if "/etc/environment" in c]
         self.assertEqual(len(writes), 1)
-        self.assertIn('PATH="/opt/heyphony/bin:/usr/bin"', writes[0])
-        self.assertIn('SMTP_KEY="hunter2"', writes[0], "the ref has to be resolved, not exported")
+        # the values travel as base64 so no shell ever parses them, which means the proof is what the
+        # command DOES to a file, not what text it contains
+        written = self.apply_env(writes[0], 'PATH="/usr/bin"\nKEEP="1"\n')
+        self.assertIn('PATH="/opt/heyphony/bin:/usr/bin"', written)
+        self.assertIn('SMTP_KEY="hunter2"', written, "the ref has to be resolved, not exported")
+        self.assertIn('KEEP="1"', written, "a line for a name we do not set must survive")
+        self.assertEqual(written.count("PATH="), 1, "setting PATH replaces the old one")
         self.assertNotIn("hunter2", _log(p),
                          "the resolved secret must never reach an event")
 
@@ -2151,6 +2321,55 @@ class TestDeveloperOptionsKeptOn(unittest.TestCase):
         a.log, a.store = log, store
         return a
 
+    def test_every_drifted_setting_is_logged_not_only_the_first(self):
+        """adb_enabled was off as well as the menu, and the log named only the menu."""
+        a = self.adapter({"development_settings_enabled": "0", "adb_enabled": "0",
+                          "stay_on_while_plugged_in": "3"})
+        m = Machine(self.android({"level": "full"}), a)
+        m._keep_devopts("thaw")
+        logged = {e["setting"]: e for e in m.keeper_log}
+        self.assertEqual(set(logged), {"development_settings_enabled", "adb_enabled"})
+        self.assertTrue(all(e["repaired"] for e in logged.values()))
+        self.assertEqual(a.store["adb_enabled"], "1")
+        self.assertEqual(a.store["development_settings_enabled"], "1")
+
+    def test_a_refused_write_is_logged_as_unrepaired_with_what_it_still_says(self):
+        """the phone said no, adb stayed off, and the log used to claim it was fixed."""
+        store = {"adb_enabled": "0", "development_settings_enabled": "1", "stay_on_while_plugged_in": "3"}
+
+        def runner(argv):
+            cmd = argv[-1] if argv else ""
+            if cmd.startswith("settings put global "):
+                return ExecResult(1, "", "denied")
+            if cmd.startswith("settings get global "):
+                return ExecResult(0, store.get(cmd.split()[-1], "null") + "\n")
+            return ExecResult(0, "")
+        m = Machine(self.android({"level": "full"}), AndroidAdapter(runner=runner))
+        m._keep_devopts("thaw")
+        self.assertEqual(len(m.keeper_log), 1)
+        entry = m.keeper_log[0]
+        self.assertEqual(entry["setting"], "adb_enabled")
+        self.assertIs(entry["repaired"], False, "the store still says 0, so nothing was repaired")
+        self.assertEqual(entry["still"], "0")
+        self.assertEqual(store["adb_enabled"], "0")
+
+    def test_a_write_that_exits_zero_but_does_not_stick_is_not_a_repair(self):
+        """exit code alone is not proof: the second read has to agree."""
+        store = {"adb_enabled": "0", "development_settings_enabled": "1", "stay_on_while_plugged_in": "3"}
+
+        def runner(argv):
+            cmd = argv[-1] if argv else ""
+            if cmd.startswith("settings put global "):
+                return ExecResult(0, "")           # says yes, changes nothing
+            if cmd.startswith("settings get global "):
+                return ExecResult(0, store.get(cmd.split()[-1], "null") + "\n")
+            return ExecResult(0, "")
+        m = Machine(self.android({"level": "adb"}), AndroidAdapter(runner=runner))
+        m._keep_devopts("resume")
+        self.assertIs(m.keeper_log[0]["repaired"], False)
+        self.assertEqual(m.keeper_log[0]["still"], "0")
+
+
     def test_default_is_adb_on_because_every_verb_needs_it(self):
         from spawnables import devopts
         self.assertEqual(devopts.normalize({})["level"], "adb")
@@ -2330,6 +2549,149 @@ class TestDeviceSurface(unittest.TestCase):
         self.assertIn("local session only", credit)
 
 
+    # -- the phone's own shell parses what adb joins together --------------------------------------
+
+    def device_line(self, argv):
+        """adb does not pass argv through: it joins everything after `shell` with spaces and the phone's
+        sh -c parses that again. this is what the device actually sees."""
+        self.assertEqual(argv[:2], ["adb", "shell"])
+        return " ".join(argv[2:])
+
+    def run_on_device(self, argv, program, workdir):
+        """run the joined line under a real sh with the program swapped for printf, so the test sees the
+        one argument it would have received and whether anything else executed."""
+        import subprocess
+        line = self.device_line(argv).replace(program, "printf '[%s]'", 1)
+        return subprocess.run(["sh", "-c", line], cwd=workdir, capture_output=True, text=True).stdout
+
+    def test_typed_text_cannot_run_a_command_on_the_phone(self):
+        """type_text("x;reboot") used to execute reboot: the argv list was a false comfort."""
+        import subprocess, tempfile
+        S = self.surface()
+        d = tempfile.mkdtemp()
+        subprocess.run(["sh", "-c", f"touch {d}/control"])
+        self.assertTrue(os.path.exists(f"{d}/control"), "the harness must be able to see a command run")
+        for payload in ("x;touch${IFS}%s/a;#" % d, "$(touch %s/b)" % d, "`touch %s/c`" % d,
+                        "a && touch %s/e" % d, "a|touch %s/f" % d):
+            self.run_on_device(S.type_text(payload), "input text", d)
+        self.assertEqual([f for f in os.listdir(d) if f != "control"], [], "a payload ran on the device")
+
+    def test_typed_text_arrives_as_one_literal_argument(self):
+        import tempfile
+        S = self.surface()
+        d = tempfile.mkdtemp()
+        for text, want in (("hello world", "[hello%sworld]"), ("x;reboot", "[x;reboot]"),
+                           ("$(id)", "[$(id)]"), ("it's", "[it's]"), ("50%", "[50\\%]"),
+                           ("a|b>c<d", "[a|b>c<d]")):
+            self.assertEqual(self.run_on_device(S.type_text(text), "input text", d), want, text)
+
+    def test_a_package_id_is_held_to_androids_own_grammar(self):
+        S = self.surface()
+        for good in ("com.example.app", "org.thoughtcrime.securesms", "com.whatsapp.w4b", "a.b"):
+            self.assertIsInstance(S.open_app(good), list, good)
+        for bad in ("com.ok;reboot", "$(id)", "`id`", "a b", "", "nodots", "com.ok&&x", "../x", "com..x",
+                    "com.ok\n", "1com.ok"):
+            refused = S.open_app(bad)
+            self.assertTrue(isinstance(refused, dict) and refused["refused"], repr(bad))
+            self.assertIn("shell", refused["why"])
+
+    def test_open_app_cannot_run_a_command_even_if_the_grammar_check_were_bypassed(self):
+        """belt and braces: the id is also quoted, so the two layers fail independently."""
+        import subprocess, tempfile
+        S = self.surface()
+        d = tempfile.mkdtemp()
+        argv = ["adb", "shell", "monkey", "-p", __import__("shlex").quote("com.ok;touch${IFS}%s/o;#" % d),
+                "-c", "android.intent.category.LAUNCHER", "1"]
+        subprocess.run(["sh", "-c", " ".join(argv[2:]).replace("monkey", "echo", 1)], cwd=d)
+        self.assertFalse(os.path.exists(f"{d}/o"))
+
+    @staticmethod
+    def _without_quoted(line):
+        """the line with every shlex.quote(...) call removed, however deeply its argument nests."""
+        line = __import__("re").sub(r'"[^"]*"', '""', line)   # literals like "text" are not the variable
+        marker = "shlex.quote("
+        while marker in line:
+            i = line.index(marker)
+            depth, j = 0, i + len(marker) - 1
+            while j < len(line):
+                depth += {"(": 1, ")": -1}.get(line[j], 0)
+                if depth == 0:
+                    break
+                j += 1
+            line = line[:i] + line[j + 1:]
+        return line
+
+    def test_every_verb_that_takes_a_free_string_quotes_it(self):
+        """a verb added later that interpolates a caller string raw would reopen this. a free string may
+        reach the phone's shell only inside shlex.quote(...); integers the module builds itself may not."""
+        import inspect, re as _re
+        src = inspect.getsource(self.surface())
+        free = r"\b(pkg|text|label|name|query|package)\b"
+        offenders = [l.strip() for l in src.splitlines()
+                     if '"adb", "shell"' in l and _re.search(free, self._without_quoted(l))]
+        self.assertEqual(offenders, [], "a free string reaches the phone's shell unquoted")
+        self.assertIn("shlex.quote(pkg)", src)
+        self.assertIn("shlex.quote(escape_text(text))", src)
+
+    def test_the_scan_would_catch_a_regression(self):
+        """a guard that cannot fail is decoration: prove the scan flags an unquoted interpolation, and
+        passes both a plain and a nested quoted one."""
+        import re as _re
+        free = r"\b(pkg|text|label|name|query|package)\b"
+        scan = lambda l: bool(_re.search(free, self._without_quoted(l)))
+        self.assertTrue(scan('["adb", "shell", "monkey", "-p", pkg, "-c", "x"]'))
+        self.assertTrue(scan('["adb", "shell", "input", "text", escape_text(text)]'))
+        self.assertFalse(scan('["adb", "shell", "monkey", "-p", shlex.quote(pkg), "-c", "x"]'))
+        self.assertFalse(scan('["adb", "shell", "input", "text", shlex.quote(escape_text(text))]'))
+
+    def cli(self, *args):
+        import subprocess, sys
+        env = dict(os.environ, PYTHONPATH="src")
+        r = subprocess.run([sys.executable, "-m", "spawnables.cli", "surface", *args],
+                           capture_output=True, text=True, env=env)
+        return r.returncode, r.stdout, r.stderr
+
+    def test_the_cli_drives_every_verb_that_takes_an_argument(self):
+        """--arg reached only open_app, so type_text and tap_text crashed with a TypeError traceback."""
+        import json
+        code, out, err = self.cli("type_text", "--arg", "hello world")
+        self.assertEqual((code, json.loads(out)[-1]), (0, "hello%sworld"), err)
+        code, out, err = self.cli("tap_text", "--arg", "send")
+        self.assertEqual(code, 0, err)
+        self.assertIn("dump_tree", json.loads(out)["needs"])
+        code, out, err = self.cli("open_app", "--arg", "com.example.app")
+        self.assertEqual((code, "com.example.app" in json.loads(out)), (0, True), err)
+
+    def test_the_cli_quotes_hostile_text_and_refuses_hostile_ids(self):
+        import json
+        code, out, _ = self.cli("type_text", "--arg", "x;reboot")
+        self.assertEqual(json.loads(out)[-1], "'x;reboot'")
+        code, out, _ = self.cli("open_app", "--arg", "com.ok;reboot")
+        self.assertEqual(json.loads(out)["refused"], True)
+
+    def test_the_cli_says_what_is_missing_instead_of_a_traceback(self):
+        import json
+        for verb in ("type_text", "tap_text", "open_app"):
+            code, out, err = self.cli(verb)
+            self.assertEqual(code, 1, verb)
+            self.assertNotIn("Traceback", err, verb)
+            self.assertIn("--arg", json.loads(out)["why"])
+        code, out, err = self.cli("bogus")
+        self.assertEqual(code, 1)
+        self.assertNotIn("Traceback", err)
+        self.assertIn("unknown verb", json.loads(out)["why"])
+
+
+    def test_the_spec_counts_the_refusals_the_code_has(self):
+        """the heading said five while the table had six, and nothing noticed. derive it, do not type it."""
+        import re as _re
+        words = {5: "five", 6: "six", 7: "seven", 8: "eight"}
+        page = pathlib.Path("spec/device-surface.md").read_text()
+        n = len(self.surface().REFUSED)
+        self.assertIn(f"## {words[n]} refusals", page)
+        body = page.split(f"## {words[n]} refusals")[1].split("\n## ")[0]
+        self.assertEqual(len(_re.findall(r"^- \*\*", body, _re.M)), n, "a refusal in the table has no bullet")
+
     def test_the_spec_says_the_same_thing_as_the_table(self):
         import re as _re
         page = _re.sub(r"\s+", " ", pathlib.Path("spec/device-surface.md").read_text().lower())
@@ -2338,7 +2700,7 @@ class TestDeviceSurface(unittest.TestCase):
             self.assertIn(needle, page, f"the spec lost {needle!r}")
         for needle in ("reach: what the four verbs cannot get at", "never against a table of guesses",
                        "gestures never assume a screen size", "the end of a list is the screen",
-                       "five refusals", "iphone mirroring drops vertical drags"):
+                       "six refusals", "iphone mirroring drops vertical drags", "false comfort"):
             self.assertIn(needle, page, f"the spec lost {needle!r}")
         self.assertNotIn("a simulator has no tree to read, so no verb", page,
                          "the wrong reading is still on the page")
@@ -2391,6 +2753,48 @@ class TestDeviceSurface(unittest.TestCase):
         self.assertEqual(S.screen_size("Physical size: 1080x2400\nOverride size: 720x1600"), (720, 1600))
         with self.assertRaises(ValueError):
             S.screen_size("")
+
+    REAL = ["com.google.android.apps.maps", "com.google.android.gm", "com.google.android.youtube",
+            "com.android.chrome", "com.android.settings", "com.whatsapp", "com.whatsapp.w4b",
+            "org.thoughtcrime.securesms", "me.mapsme"]
+
+    def test_a_vendor_word_is_not_an_app_name(self):
+        """'apps' used to launch maps and 'android' matched five unrelated apps, because the whole
+        package string was searched. a name a person says is the app's own segment."""
+        S = self.surface()
+        for word in ("apps", "android", "google", "com", "org"):
+            got = S.resolve_app(word, self.REAL)
+            self.assertNotIn("package", got, f"{word!r} must not launch anything: {got}")
+            self.assertNotIn("candidates", got, f"{word!r} is a vendor word, not a question: {got}")
+            self.assertTrue(got.get("refused"), got)
+
+    def test_a_name_too_short_to_mean_anything_is_refused_with_the_reason(self):
+        S = self.surface()
+        for tiny in ("a", "gm", "wa"):
+            got = S.resolve_app(tiny, self.REAL)
+            self.assertTrue(got.get("refused"), got)
+            self.assertIn("too short", got["why"])
+            self.assertIn("installed", got)
+        # but the full id is never too short, because it is exact
+        self.assertEqual(S.resolve_app("com.google.android.gm", self.REAL)["matched"], "exact")
+
+    def test_a_whole_segment_beats_a_partial_one(self):
+        S = self.surface()
+        self.assertEqual(S.resolve_app("maps", self.REAL)["package"], "com.google.android.apps.maps",
+                         "me.mapsme contains 'maps' but is not the app called maps")
+
+    def test_package_ids_are_case_sensitive_so_a_shouted_id_is_not_exact(self):
+        S = self.surface()
+        got = S.resolve_app("COM.WHATSAPP", self.REAL)
+        self.assertNotEqual(got.get("matched"), "exact", got)
+        self.assertTrue(got.get("refused"), "an id with the wrong case names nothing installed")
+
+    def test_a_package_that_is_all_vendor_words_still_has_a_name(self):
+        S = self.surface()
+        self.assertEqual(S.resolve_app("settings", self.REAL)["package"], "com.android.settings")
+        # nothing but vendor words left: fall back to the last segment rather than an empty name
+        self.assertEqual(S._own_segments("com.android.google"), ["google"])
+
 
     def test_scroll_moves_the_content_the_way_it_is_read_and_the_finger_the_other_way(self):
         S = self.surface()

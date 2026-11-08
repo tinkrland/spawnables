@@ -30,22 +30,33 @@ class Machine:
 
     def _keep_devopts(self, moment):
         """a resumed or restored phone can come back with adb off, which silently kills every verb in
-        surface.py. read it back and repair it; say so in the machine's log rather than in the result."""
+        surface.py. read each setting back, repair what drifted, read it again, and say what is true.
+
+        one entry per setting that was wrong, because "adb is off" and "the menu is hidden" are different
+        findings, and `repaired` is only true when the second read agrees. a phone that refuses the write
+        is logged as unrepaired, since a log that claims a fix that did not happen is worse than no log.
+        """
         from . import devopts
         if getattr(self.adapter, "guest", "") != "android":
             return
         keep = devopts.keeper(getattr(self.order, "devopts", {}) or {})
         self.keeper_log = getattr(self, "keeper_log", [])
-        for line, (key, want) in zip(keep["asserts"], (keep.get("expect") or {}).items()):
-            got = (self.adapter.exec(line).stdout or "").strip()
-            if got != want:
-                for fix in keep["repair"]:
-                    self.adapter.exec(fix)
-                self.keeper_log.append({"at": moment, "setting": key, "found": got or "unset", "repaired": True})
-                break
-        else:
-            if keep["asserts"]:
-                self.keeper_log.append({"at": moment, "repaired": False})
+        expect = keep.get("expect") or {}
+        if not expect:
+            return
+        drifted = False
+        for (key, want), read, fix in zip(expect.items(), keep["asserts"], keep["repair"]):
+            got = (self.adapter.exec(read).stdout or "").strip()
+            if got == want:
+                continue
+            drifted = True
+            put = self.adapter.exec(fix)
+            after = (self.adapter.exec(read).stdout or "").strip()
+            held = bool(getattr(put, "ok", True)) and after == want
+            self.keeper_log.append({"at": moment, "setting": key, "found": got or "unset",
+                                    "repaired": held, **({} if held else {"still": after or "unset"})})
+        if not drifted:
+            self.keeper_log.append({"at": moment, "repaired": False})
 
     def _once(self, verb, key):
         if key is None:

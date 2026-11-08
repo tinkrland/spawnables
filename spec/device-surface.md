@@ -63,7 +63,7 @@ not change did not move.
 a mirrored iphone keeps `screen()` and nothing here: iphone mirroring drops vertical drags, so a
 scroll would be a promise the backend cannot keep. the simulator path (`ios-sim`) is the tool's.
 
-## five refusals
+## six refusals
 
 - **ocr pretending to press.** vision reads. a tap needs a coordinate somebody can vouch for, so
   `tap_text` on ios is refused rather than approximated.
@@ -72,6 +72,12 @@ scroll would be a promise the backend cannot keep. the simulator path (`ios-sim`
 - **guessing an app.** a name that matches two packages is a question, not a launch.
 - **a fling called a scroll.** a lift while the finger is still moving moves further than asked,
   so a scroll under 300 ms is refused and pointed at `swipe`.
+- **a string the phone's shell would read as a command.** adb does not pass argv through: it joins
+  everything after `shell` with spaces, and the phone's own `sh -c` parses that line again. so a list
+  of arguments is a false comfort, and `type_text("x;reboot")` ran `reboot` on the device before this
+  was found. two layers now, failing independently: a package id is held to android's own grammar
+  (`fullmatch`, because `$` also accepts a trailing newline) and refused otherwise, and every free
+  string that does reach the device is `shlex.quote`d after `input text`'s own `%s` escaping.
 - **a borrowed identity.** a device somebody else owns may be driven and may not become the
   identity. same rule as the mobile pool and the same rule as a vault session.
 

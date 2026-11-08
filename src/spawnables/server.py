@@ -34,7 +34,7 @@ from .models import MachineOrder
 from .provisioner import Provisioner, ProvisionError
 from .events import Emitter
 from .validate import validate_order
-from .presets import clone_manifest, save_preset, load_presets
+from .presets import clone_manifest, save_preset, load_presets, PresetError
 from .adapters import VerbNotSupported
 from .vault import Vault
 from .ipadlane import get_anyway_plan, validate_get_anyway
@@ -297,10 +297,13 @@ class ControlPlane:
     def save_preset(self, body):
         if not body.get("name") or not body.get("manifest"):
             raise ApiError(400, "a preset needs a name and a manifest")
-        payload = save_preset(self.presets_dir, body["name"],
-                              body["manifest"],
-                              description=body.get("description", ""))
-        return payload
+        try:
+            return save_preset(self.presets_dir, body["name"], body["manifest"],
+                               description=body.get("description", ""),
+                               overwrite=bool(body.get("overwrite", False)))
+        except PresetError as exc:
+            # an existing name is a conflict the caller can resolve; anything else is a bad request
+            raise ApiError(409 if "already exists" in str(exc) else 400, str(exc))
 
 
 def make_handler(plane):

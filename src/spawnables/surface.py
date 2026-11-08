@@ -23,6 +23,7 @@ nothing else, because the mirror is pixels; the accessibility tree stays inside 
 remedy is a device we hold, not a service that holds one for us.
 """
 import re
+import shlex
 import xml.etree.ElementTree as ET
 
 VERBS = ("open_app", "tap_text", "type_text", "screen")
@@ -65,9 +66,14 @@ BACKENDS = {
 }
 
 # things this module will not do, in the same voice as the rest of the plane
+# android's own rule for a package id: dotted segments of letters, digits and underscores
+PACKAGE_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+$")
+
 REFUSED = {
     "ocr-pretending-to-press": "vision reads; a tap needs a coordinate somebody can vouch for",
     "borrowed-identity": "a device somebody else owns may be driven and may not become the identity",
+    "shell-metacharacters": ("adb joins argv into one line and the phone's own shell parses it again, so "
+                             "a package id is held to android's own grammar and refused otherwise"),
     "silent-tap": "a tap without a dump is a guess with a screenshot attached",
     "guessing-an-app": "a name that matches two packages is a question, not a launch",
     "fling": "a scroll that lifts the finger while it is still moving is a swipe, and moves further than asked",
@@ -93,7 +99,11 @@ def open_app(pkg, backend="android-adb", packages=None):
         if "candidates" in found or "refused" in found:
             return found
         pkg = found["package"]
-    return ["adb", "shell", "monkey", "-p", pkg, "-c", "android.intent.category.LAUNCHER", "1"]
+    # fullmatch, not match: `$` also accepts one trailing newline, and a newline ends a shell command
+    if not PACKAGE_ID.fullmatch(pkg or ""):
+        return {"refused": True, "verb": "open_app", "why": REFUSED["shell-metacharacters"],
+                "got": pkg, "wants": "a package id such as com.example.app, or a name from resolve_app"}
+    return ["adb", "shell", "monkey", "-p", shlex.quote(pkg), "-c", "android.intent.category.LAUNCHER", "1"]
 
 
 def list_apps(backend="android-adb", system=False):
@@ -113,25 +123,46 @@ def parse_packages(text):
     return sorted(set(p for p in out if p))
 
 
+# the leading segments of a package id are who made it, not what it is. "apps" resolved to maps and
+# "android" to five unrelated apps because the whole string was searched; a name a person says is the
+# app's own segment, so only that is matched.
+_VENDOR_SEGMENTS = frozenset({"com", "org", "net", "io", "app", "apps", "android", "google", "samsung",
+                              "sec", "mobile", "free", "pro", "lite", "www"})
+MIN_NAME = 3  # "a" and "gm" are not names; two letters matches by accident, and accident is a launch
+
+
+def _own_segments(package):
+    """the segments of an id that name the app, vendor and platform words dropped."""
+    parts = [p for p in package.lower().split(".") if p]
+    return [p for p in parts if p not in _VENDOR_SEGMENTS] or parts[-1:]
+
+
 def resolve_app(name, packages):
     """a name a person would say -> one installed package, or the candidates, or a refusal.
 
-    exact id first, then a fragment of an id. two fragment hits is a question for the caller:
-    picking the shortest, as a launcher might, is how the wrong app gets opened on a phone that
-    is logged into things.
+    an exact id first (ids are case-sensitive, so "COM.WHATSAPP" is not "com.whatsapp"), then the
+    app's own segment. two hits is a question for the caller: picking the shortest, as a launcher
+    might, is how the wrong app gets opened on a phone that is logged into things.
     """
     want = (name or "").strip()
+    installed = list(packages)[:20]
     if not want:
-        return {"refused": True, "why": "no app name given", "installed": list(packages)[:20]}
+        return {"refused": True, "why": "no app name given", "installed": installed}
     if want in packages:
         return {"package": want, "matched": "exact"}
     key = "".join(ch for ch in want.lower() if ch.isalnum())
-    hits = sorted(p for p in packages if key and key in "".join(ch for ch in p.lower() if ch.isalnum()))
+    if len(key) < MIN_NAME:
+        return {"refused": True, "installed": installed,
+                "why": f"{want!r} is too short to be a name; give three letters or the full package id"}
+    hits = sorted(p for p in packages if any(key == seg or key in seg for seg in _own_segments(p)))
+    # an app's whole segment beats a partial one: "maps" is maps, not also "mapsme"
+    whole = [p for p in hits if key in _own_segments(p)]
+    hits = whole or hits
     if len(hits) == 1:
         return {"package": hits[0], "matched": "fragment"}
     if hits:
         return {"candidates": hits, "why": REFUSED["guessing-an-app"]}
-    return {"refused": True, "why": f"nothing installed matches {want!r}", "installed": list(packages)[:20]}
+    return {"refused": True, "why": f"nothing installed matches {want!r}", "installed": installed}
 
 
 def current_app(backend="android-adb"):
@@ -272,7 +303,11 @@ def at_end(dump_before, dump_after):
 
 
 def escape_text(text):
-    """adb's shell eats spaces unless they are %s, and it is not a shell we can quote around."""
+    """what `input text` itself needs: a space is %s and a literal percent is escaped.
+
+    this is the first of two layers. adb then joins argv with spaces and hands the line to the phone's
+    own sh -c, so the result is quoted for that shell separately (shlex.quote, at the call site). before
+    that second layer existed, type_text("x;reboot") ran reboot on the device."""
     return (text or "").replace("%", "\\%").replace(" ", "%s")
 
 
@@ -281,7 +316,7 @@ def type_text(text, backend="android-adb"):
         return _delegated("type_text", text=text)
     if backend != "android-adb":
         return _refused("type_text", backend)
-    return ["adb", "shell", "input", "text", escape_text(text)]
+    return ["adb", "shell", "input", "text", shlex.quote(escape_text(text))]
 
 
 def screen(backend="android-adb"):

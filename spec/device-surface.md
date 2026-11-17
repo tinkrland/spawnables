@@ -81,6 +81,24 @@ scroll would be a promise the backend cannot keep. the simulator path (`ios-sim`
 - **a borrowed identity.** a device somebody else owns may be driven and may not become the
   identity. same rule as the mobile pool and the same rule as a vault session.
 
+## phones are sidecars by default
+
+a phone order is an accompanying device, and the name for that here is a **sidecar**: it is handed to
+an agent for the one job that needs a phone (a 2fa approval, a scanner-only qr, a delivery app), and
+it is not the subject of the order. so `role` resolves to `sidecar` for every phone image
+(`android-*`, `redroid-*`, `ios-*`, `ipad-*`) without anybody having to say it, and to `primary` for
+everything else. `role: primary` promotes a phone on purpose; it is never the default, because a phone
+that is the whole point of an order is a decision somebody makes.
+
+three things follow, and they are the reason the role is in the model rather than in prose:
+
+- **a sidecar names who it accompanies.** `sidecar_of` is the machine. without it the card cannot
+  show what the phone is attached to, and burning the machine cannot take the phone with it.
+- **a sidecar is still never the identity.** the borrowed-identity rule does not soften because the
+  device is small and attached: it may hold an enrolled session, it may not become the principal.
+- **a sidecar is not a second subject.** it has no independent card of its own; it shows on the card
+  of the machine it accompanies, which is also why `role` lives on the order and not in the roster.
+
 ## where it sits
 
 `src/spawnables/surface.py`, pure argv builders plus one parser, so the interesting half

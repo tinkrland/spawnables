@@ -3239,6 +3239,73 @@ class TestSightExpires(unittest.TestCase):
         self.assertEqual(len(got["steps"]), 3)
 
 
+class TestPhonesAreSidecars(unittest.TestCase):
+    """the owner's default: an accompanying phone is a sidecar, and that is a resolved fact."""
+
+    def _order(self, image, **kw):
+        d = {"id": "o1", "name": "o1", "base_image": image, "timezone": "utc"}
+        d.update(kw)
+        return MachineOrder.from_dict(d)
+
+    def _check(self, image, **kw):
+        from spawnables.catalog import Catalog
+        from spawnables.validate import validate_order
+        order = self._order(image, **kw)
+        errors, warnings = validate_order(order, Catalog("catalog"))
+        return order, errors, warnings
+
+    def test_every_phone_image_resolves_to_sidecar_without_being_asked(self):
+        from spawnables.models import role_of
+        for image in ("android-15-x86", "redroid-15", "redroid-15-tablet", "ios-vresearch"):
+            with self.subTest(image=image):
+                self.assertEqual(role_of(self._order(image)), "sidecar")
+
+    def test_a_machine_is_the_subject_and_the_default_says_so(self):
+        from spawnables.models import role_of
+        for image in ("mint-22-cinnamon", "ubuntu-24-04-headless", "win11-24h2"):
+            with self.subTest(image=image):
+                self.assertEqual(role_of(self._order(image)), "primary")
+
+    def test_a_phone_can_be_promoted_on_purpose(self):
+        from spawnables.models import role_of
+        self.assertEqual(role_of(self._order("android-15-x86", role="primary")), "primary")
+
+    def test_an_unknown_role_is_refused_rather_than_guessed(self):
+        from spawnables.models import role_of
+        with self.assertRaises(ValueError) as ctx:
+            role_of(self._order("android-15-x86", role="companion"))
+        self.assertIn("sidecar", str(ctx.exception))
+
+    def test_a_sidecar_with_nobody_to_accompany_is_told_so(self):
+        order, errors, warnings = self._check("android-15-x86")
+        self.assertEqual(errors, [])
+        self.assertTrue(any("sidecar_of" in w for w in warnings), warnings)
+
+    def test_naming_the_machine_quietens_it(self):
+        order, errors, warnings = self._check("android-15-x86", sidecar_of="box-1")
+        self.assertEqual((errors, warnings), ([], []))
+
+    def test_a_machine_asking_to_be_a_sidecar_is_told_what_a_sidecar_is(self):
+        order, errors, warnings = self._check("ubuntu-24-04-headless", role="sidecar",
+                                              sidecar_of="box-1")
+        self.assertTrue(any("not a phone image" in w for w in warnings), warnings)
+
+    def test_sidecar_of_on_a_primary_is_a_contradiction_not_a_detail(self):
+        order, errors, warnings = self._check("ubuntu-24-04-headless", sidecar_of="box-1")
+        self.assertTrue(any("primary" in w and "sidecar_of" in w for w in warnings), warnings)
+
+    def test_the_spec_says_sidecar_where_a_phone_reader_will_look(self):
+        import pathlib as _p
+        import re
+        text = re.sub(r"\s+", " ",
+                      (_p.Path(__file__).resolve().parents[1] / "spec/device-surface.md")
+                      .read_text().lower())
+        for needle in ("phones are sidecars by default", "sidecar_of", "never the identity",
+                       "not a second subject"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, text)
+
+
 class TestDutyCycle(unittest.TestCase):
     """a machine with hours instead of a machine that is always home."""
 

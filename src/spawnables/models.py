@@ -49,6 +49,32 @@ class Size:
     disk_gb: int = 40
 
 
+# a phone is an accompanying device: it is handed to an agent for the one job that needs a phone
+# (a 2fa approval, a scanner-only qr, a delivery app). it is not the subject of the order and it is
+# never the identity, so it is a sidecar by default and only becomes primary when somebody says so.
+ROLES = ("sidecar", "primary")
+PHONE_HINTS = ("android", "redroid", "ios", "ipad", "iphone", "vphone")
+
+
+def is_phone(base_image):
+    """a phone guest, by the only thing every order has: the image it boots."""
+    return any(hint in (base_image or "").lower() for hint in PHONE_HINTS)
+
+
+def role_of(order):
+    """the resolved role: phones accompany by default, everything else is the subject.
+
+    "auto" is not a third role, it is the absence of a decision, so it resolves here instead of
+    leaking into every caller that needs to know whether it is holding a machine or a companion.
+    """
+    declared = (getattr(order, "role", "auto") or "auto").lower()
+    if declared == "auto":
+        return "sidecar" if is_phone(order.base_image) else "primary"
+    if declared not in ROLES:
+        raise ValueError(f"unknown role {declared!r}; the roles are {', '.join(ROLES)}")
+    return declared
+
+
 @dataclass
 class MachineOrder:
     id: str
@@ -71,6 +97,8 @@ class MachineOrder:
     devopts: dict = field(default_factory=dict)  # phone guests: developer options kept on, {level: off|adb|full}
     rebuild_on_thaw: bool = False
     image: str | None = None  # bring-your-own image path (ios requires it)
+    role: str = "auto"  # sidecar (accompanies a machine) | primary (is the machine) | auto
+    sidecar_of: str | None = None  # the machine a sidecar accompanies, by order id or name
 
     @classmethod
     def from_dict(cls, d):
@@ -95,6 +123,8 @@ class MachineOrder:
             devopts=dict(d.get("devopts", {})),
             rebuild_on_thaw=d.get("rebuild_on_thaw", False),
             image=d.get("image"),
+            role=d.get("role", "auto"),
+            sidecar_of=d.get("sidecar_of"),
         )
 
     @classmethod

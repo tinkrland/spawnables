@@ -8,6 +8,7 @@ everything so the api cannot be talked into a bad provision.
 import re
 
 from . import devopts as _devopts
+from .models import is_phone, role_of
 from .netpriv import normalize as _net_normalize, validate_network as _net_validate
 
 USERNAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
@@ -41,6 +42,27 @@ def validate_order(order, catalog):
             )
 
     seen_users = set()
+    # -- whose order is this: a machine, or a phone accompanying one ---------------------------------
+    try:
+        role = role_of(order)
+    except ValueError as exc:
+        errors.append(str(exc))
+        role = "primary"
+    if role == "sidecar":
+        if not order.sidecar_of:
+            warnings.append(
+                "a sidecar with nobody to accompany is just a phone; name sidecar_of so the card "
+                "can show what it is attached to, and so burning the machine can take it too")
+        if not is_phone(order.base_image):
+            warnings.append(
+                f"{order.base_image} is not a phone image but the order asks for a sidecar; "
+                "sidecars are the accompanying devices, and a machine is the subject")
+    elif order.sidecar_of:
+        warnings.append(
+            f"sidecar_of is set on a primary order; a sidecar accompanies another machine, so "
+            f"either drop it or set role: sidecar")
+
+
     for u in getattr(order, "users", []) or []:
         if not USERNAME_RE.match(u.username):
             errors.append(

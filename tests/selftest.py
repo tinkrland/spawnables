@@ -19,6 +19,7 @@ from spawnables.models import MachineOrder
 from spawnables.validate import validate_order
 from spawnables.provisioner import Provisioner, ProvisionError
 from spawnables.lifecycle import Machine, LifecycleError, VerbNotSupported
+from spawnables.adapters import BaseAdapter, Capabilities, ExecResult
 from spawnables.adapters import AdapterError, ExecResult, VerbNotSupported as VNS
 from spawnables.adapters.celesto import CelestoAdapter
 from spawnables.adapters.android import AndroidAdapter
@@ -3059,6 +3060,183 @@ class TestComputerUseDriver(unittest.TestCase):
         self.assertIn("cua", card["adopted_from"])
         self.assertIn("imagemagick", card["capture_needs"]["import"])
         self.assertIn("xdotool", " ".join(card["tools"]["xdotool"]))
+
+
+class _Desk(BaseAdapter):
+    """a desktop that answers captures, geometry and keystrokes. its screen moves when clicked,
+    which is what makes "changed" mean anything."""
+
+    guest = "linux"
+    caps = Capabilities(exec=True, desktop=True)
+    notes = "fake desktop"
+
+    def __init__(self):
+        self.lines, self.n = [], 0
+
+    def exec(self, cmd, timeout=300):
+        self.lines.append(cmd)
+        if cmd.startswith("import ") or cmd.startswith("scrot "):
+            return ExecResult(0, _png(self.n), "")
+        if cmd.startswith("xdotool getdisplaygeometry"):
+            return ExecResult(0, "1280 800", "")
+        if cmd.startswith("xdotool"):
+            self.n += 1                      # a click changes what is on screen
+        return ExecResult(0, "", "")
+
+
+class _Phone(BaseAdapter):
+    """an android guest: a dump before the tap and a different one after."""
+
+    guest = "android"
+    caps = Capabilities(exec=True, desktop=True)
+    notes = "fake phone"
+
+    def __init__(self):
+        self.trees = 0
+
+    def exec(self, cmd, timeout=300):
+        if "uiautomator dump" in cmd:
+            self.trees += 1
+            return ExecResult(0, "", "")
+        if cmd.startswith("cat "):
+            node = "send" if self.trees < 2 else "sent"
+            return ExecResult(0, f'<hierarchy><node text="{node}" bounds="[300,700][400,760]"/></hierarchy>', "")
+        if cmd.startswith("base64"):
+            return ExecResult(0, _png(0), "")
+        return ExecResult(0, "", "")
+
+
+class _NoDesk(BaseAdapter):
+    guest = "freebsd"
+    caps = Capabilities(exec=True)
+    notes = "a guest with no screen"
+
+
+def _png(n):
+    import base64
+    return base64.b64encode(b"\x89PNG\r\n\x1a\n" + str(n).encode()).decode()
+
+
+def _plane_with(machines):
+    import tempfile
+    from spawnables.catalog import Catalog
+    from spawnables.lifecycle import Machine
+    from spawnables.models import MachineOrder
+    from spawnables.server import ControlPlane
+    plane = ControlPlane(Catalog("catalog"), presets_dir=tempfile.mkdtemp())
+    for mid, adapter, image in machines:
+        order = MachineOrder.from_dict({"id": mid, "name": mid, "base_image": image,
+                                        "timezone": "asia/kolkata"})
+        m = Machine(order, adapter)
+        m.state = "live"
+        plane.machines[mid] = {"machine": m, "events": [], "manifest": {"name": mid}, "ok": True}
+    return plane
+
+
+class TestDrivingAMachineOverHttp(unittest.TestCase):
+    """the spec said the agent drives the machine; this is the route that actually does it."""
+
+    def serve(self, machines):
+        import json, threading, urllib.error, urllib.request
+        from http.server import HTTPServer
+        from spawnables.server import make_handler
+        plane = _plane_with(machines)
+        srv = HTTPServer(("127.0.0.1", 0), make_handler(plane))
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        base = f"http://127.0.0.1:{srv.server_port}/api/machines"
+
+        def call(path, body=None):
+            req = urllib.request.Request(f"{base}/{path}",
+                                         data=json.dumps(body).encode() if body is not None else None,
+                                         method="POST" if body is not None else "GET",
+                                         headers={"Content-Type": "application/json"})
+            try:
+                with urllib.request.urlopen(req, timeout=15) as f:
+                    return f.status, dict(f.headers), f.read()
+            except urllib.error.HTTPError as exc:
+                return exc.code, dict(exc.headers), exc.read()
+        return plane, call
+
+    def test_a_click_without_a_look_is_refused_over_the_wire(self):
+        _, call = self.serve([("desk", _Desk(), "mint-22-cinnamon")])
+        code, _, raw = call("desk/computer", {"action": "click", "point": [10, 10]})
+        self.assertEqual(code, 200)
+        self.assertTrue(json.loads(raw)["data"]["refused"])
+        self.assertEqual(json.loads(raw)["data"]["needs"], ["observe"])
+
+    def test_sight_survives_the_request_so_the_second_call_can_act(self):
+        """a driver per request would make every click blind; this is the bug that shape caused."""
+        plane, call = self.serve([("desk", _Desk(), "mint-22-cinnamon")])
+        call("desk/computer", {"action": "observe"})
+        code, _, raw = call("desk/computer", {"action": "click", "point": [640, 400]})
+        data = json.loads(raw)["data"]
+        self.assertEqual(code, 200)
+        self.assertNotIn("refused", data)
+        self.assertIn("mousemove --sync 640 400 click 1", data["line"])
+        self.assertTrue(data["changed"], "the fake screen moves when clicked, so changed is True")
+        self.assertEqual(len(plane.drivers), 1, "one driver per machine, not one per request")
+
+    def test_the_frame_route_is_bytes_labelled_a_still(self):
+        _, call = self.serve([("desk", _Desk(), "mint-22-cinnamon")])
+        code, headers, raw = call("desk/frame")
+        self.assertEqual(code, 200)
+        self.assertEqual(headers.get("content-type"), "image/png")
+        self.assertTrue(raw.startswith(b"\x89PNG"), "the base64 ends here: this is the file")
+        self.assertEqual(headers.get("x-stream"), "still", "a still is never dressed as a stream")
+        self.assertTrue(headers.get("x-frame-id"))
+
+    def test_the_phone_comes_back_with_the_tree_after_the_tap(self):
+        _, call = self.serve([("phone", _Phone(), "android-15-x86")])
+        code, _, raw = call("phone/drive", {"verb": "tap_text", "label": "send"})
+        data = json.loads(raw)["data"]
+        self.assertEqual(code, 200)
+        self.assertEqual(data["point"], [350, 730])
+        self.assertTrue(data["changed"], "the second dump says 'sent'; that is the evidence")
+        self.assertNotEqual(data["before"], data["after"])
+
+    def test_a_guest_with_no_screen_and_a_verb_that_is_not_one(self):
+        _, call = self.serve([("freebsd", _NoDesk(), "mint-22-cinnamon")])
+        self.assertEqual(call("freebsd/frame")[0], 409)
+        self.assertEqual(call("freebsd/computer", {"action": "observe"})[0], 400)
+
+    def test_a_paused_machine_has_no_hands(self):
+        plane, call = self.serve([("desk", _Desk(), "mint-22-cinnamon")])
+        plane.machines["desk"]["machine"].state = "paused"
+        code, _, raw = call("desk/computer", {"action": "observe"})
+        self.assertEqual(code, 409)
+        self.assertIn("resume it", json.loads(raw)["error"])
+
+
+class TestSightExpires(unittest.TestCase):
+    """a frame from two minutes ago is a memory. acting on it is the same guess, later."""
+
+    def test_a_stale_frame_is_refused_with_its_age(self):
+        from spawnables import computer
+        now = [1000.0]
+        c = computer.Computer(_Desk(), clock=lambda: now[0])
+        c.act("observe")
+        now[0] += computer.SIGHT_SECONDS + 1
+        got = c.act("click", point=[10, 10])
+        self.assertTrue(got["refused"])
+        self.assertEqual(got["why"], computer.REFUSED["stale-sight"])
+        self.assertGreater(got["seen_seconds_ago"], computer.SIGHT_SECONDS)
+
+    def test_a_fresh_frame_still_licenses_the_hand(self):
+        from spawnables import computer
+        now = [5.0]
+        c = computer.Computer(_Desk(), clock=lambda: now[0])
+        c.act("observe")
+        now[0] += 5
+        self.assertNotIn("refused", c.act("click", point=[10, 10]))
+
+    def test_a_sequence_says_which_step_it_stopped_on(self):
+        from spawnables import computer
+        c = computer.Computer(_Desk())
+        got = c.sequence([("observe", {}), ("click", {"point": (1, 1)}), ("click", {"point": (9999, 1)})])
+        self.assertFalse(got["completed"])
+        self.assertEqual(got["stopped_at"], 2)
+        self.assertEqual(len(got["steps"]), 3)
 
 
 class TestDutyCycle(unittest.TestCase):

@@ -18,7 +18,12 @@ POST   /api/machines/:id/thaw     restore snapshot, session resumes exactly
 POST   /api/machines/:id/export   async job -> signed url. flavors below
 POST   /api/machines/:id/burn     typed-name confirm; shred disk + snapshots
 GET    /api/machines/:id/screen   live desktop stream (novnc/webrtc) for the card
-```
+POST   /api/machines/:id/computer eyes and hands: observe, click, type, key, drag, scroll, sequence
+POST   /api/machines/:id/drive    the device verbs, run on the guest: open_app, tap_text, type_text, ...
+GET    /api/machines/:id/frame    one still as image/png, with x-frame-id and x-stream: still
+
+`/frame` is a still and says so in its own header; the live stream stays the runner's job. a paused
+machine answers 409 for all three: a stopped guest has no screen to photograph and no hand to move.
 
 every verb takes an idempotency key: a flaky browser can send it twice, the machine acts once.
 

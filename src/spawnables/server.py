@@ -66,6 +66,7 @@ class ControlPlane:
         # the cloud lane: credentials live in the vault under cloud:<provider>,
         # and nothing here needs qemu, disk images or docker on this host
         self.cloud_vault = Vault()
+        self.drivers = {}  # mid -> Computer, because sight has to survive the request
 
     # -- cloud connect -----------------------------------------------------
 
@@ -248,6 +249,80 @@ class ControlPlane:
             raise ApiError(409, str(exc))
 
     _header_key = None  # set per-request by the handler
+
+    # -- driving a machine: the agent's hands -----------------------------------------------------
+
+    def _live(self, mid):
+        """the machine, if it is in a state where hands make sense. a paused machine has no screen."""
+        rec = self._find(mid)
+        m = rec["machine"]
+        if m is None:
+            raise ApiError(409, "machine never provisioned; nothing to drive")
+        if m.state not in ("ready", "live"):
+            raise ApiError(409, f"machine is {m.state}; resume it before driving it")
+        return rec, m
+
+    def computer(self, mid, body):
+        """the desktop/phone driver, over http. every action comes back with the frame after it."""
+        from .computer import Computer, card as computer_card
+        rec, m = self._live(mid)
+        if body.get("card"):
+            return computer_card(body.get("tool") or "xdotool")
+        if not (m.adapter.caps.desktop or getattr(m.adapter, "guest", "") == "android"):
+            raise ApiError(400, f"{m.adapter.guest} has no desktop to look at")
+        key = (mid, body.get("tool") or "xdotool", body.get("capture") or "import")
+        drive = self.drivers.get(key)
+        if drive is None or drive.adapter is not m.adapter:
+            drive = Computer(m.adapter, tool=key[1], capture=key[2])
+            self.drivers[key] = drive
+        try:
+            if body.get("sequence"):
+                return drive.sequence([(s.get("action"), {k: v for k, v in s.items() if k != "action"})
+                                       for s in body["sequence"]])
+            action = body.get("action") or "observe"
+            kw = {k: v for k, v in body.items()
+                  if k not in ("action", "tool", "capture", "card", "sequence", "look_after")}
+            if action == "observe":
+                return drive.act("observe")
+            return drive.step(action, **kw) if body.get("look_after", True) else drive.act(action, **kw)
+        except ValueError as exc:
+            raise ApiError(400, str(exc))
+        except Exception as exc:                     # a guest that cannot run the tool is a 409, not a 500
+            raise ApiError(409, f"the guest could not do that: {exc}")
+
+    def drive(self, mid, body):
+        """the four verbs and the reach extras, run on the guest. the plan is what it ran."""
+        from . import surface
+        from .drive import Device, card as drive_card
+        rec, m = self._live(mid)
+        if body.get("card"):
+            return drive_card()
+        verb = body.get("verb")
+        if verb not in tuple(surface.VERBS) + tuple(surface.EXTRAS):
+            raise ApiError(400, f"the verbs are {', '.join(tuple(surface.VERBS) + tuple(surface.EXTRAS))}")
+        dev = Device(m.adapter)
+        try:
+            return getattr(dev, verb)(**{k: v for k, v in body.items() if k != "verb"})
+        except (LookupError, RuntimeError) as exc:
+            raise ApiError(409, str(exc))
+
+    def frame(self, mid, body=None):
+        """one still of whatever the machine is showing, as png bytes plus its digest.
+
+        a still, not a stream: the spec's /screen is a live stream the runner serves, and pretending
+        a poll is a stream would be the kind of claim this project keeps refusing to make.
+        """
+        from .computer import Computer
+        from .drive import Device
+        rec, m = self._live(mid)
+        if getattr(m.adapter, "guest", "") == "android":
+            shot = Device(m.adapter).screen()
+            return {"png_b64": shot["png_b64"], "frame": shot["frame"], "kind": "phone"}
+        if m.adapter.caps.desktop:
+            shot = Computer(m.adapter, tool=(body or {}).get("tool") or "xdotool",
+                            capture=(body or {}).get("capture") or "import").observe()
+            return {"png_b64": shot["png_b64"], "frame": shot["frame"], "kind": "desktop"}
+        raise ApiError(409, f"{m.adapter.guest} has nothing to photograph")
 
     def duplicate(self, mid, body):
         rec = self._find(mid)
@@ -448,12 +523,42 @@ def make_handler(plane):
                     self._json(200, {"ok": True,
                                      "data": plane.get_anyway(mid, self._read_body())})
                     return
+                if method == "POST" and action == "computer":
+                    self._json(200, {"ok": True,
+                                     "data": plane.computer(mid, self._read_body())})
+                    return
+                if method == "POST" and action == "drive":
+                    self._json(200, {"ok": True,
+                                     "data": plane.drive(mid, self._read_body())})
+                    return
+                if method == "GET" and action == "frame":
+                    shot = plane.frame(mid)
+                    self._png(shot["png_b64"], shot["frame"])
+                    return
                 if method == "POST" and action in VERBS:
                     body = self._read_body()
                     out = plane.verb(mid, action, body)
                     self._json(200, {"ok": True, "data": out})
                     return
             raise ApiError(404, f"no route {method} {p}")
+
+        def _png(self, b64, frame=None):
+            """one still, as bytes. base64 is how it crossed the guest seam; it ends here."""
+            import base64
+            try:
+                raw = base64.b64decode(b64 or "")
+            except Exception:
+                raise ApiError(500, "the guest sent something that is not base64")
+            if not raw:
+                raise ApiError(502, "the guest produced an empty frame")
+            self.send_response(200)
+            self.send_header("content-type", "image/png")
+            self.send_header("content-length", str(len(raw)))
+            self.send_header("cache-control", "no-store")
+            self.send_header("x-frame-id", frame or "")
+            self.send_header("x-stream", "still")   # a still, never dressed as a stream
+            self.end_headers()
+            self.wfile.write(raw)
 
         def _sse(self, mid, since):
             self.send_response(200)

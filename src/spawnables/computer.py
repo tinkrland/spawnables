@@ -33,7 +33,10 @@ REFUSED = {
     "blind-click": "a click with no frame behind it is a guess with a screenshot attached, so observe first",
     "offframe": "the frame is the only map we have; a point past its edge is a guess",
     "model-in-the-driver": "the driver performs what it is told; deciding what to do is the caller's job",
+    "stale-sight": "a frame from minutes ago is a memory, not a screen; look again before acting on it",
 }
+
+SIGHT_SECONDS = 120  # how long a look licenses a hand
 
 # how each tool spells a coordinate
 TOOLS = {
@@ -118,7 +121,7 @@ def command(action, tool="xdotool", **kw):
 class Computer:
     """one desktop, driven through its adapter's exec seam, with sight enforced."""
 
-    def __init__(self, adapter, tool="xdotool", capture="import", timeout=60):
+    def __init__(self, adapter, tool="xdotool", capture="import", timeout=60, clock=None):
         if tool not in TOOLS:
             raise ValueError(f"unknown tool {tool!r}")
         if capture not in CAPTURES:
@@ -127,6 +130,8 @@ class Computer:
         self.frame = None          # the last digest the agent has actually seen
         self.size = None           # that frame's pixel size, when the guest can tell us
         self.steps = 0
+        self.seen_at = None        # when that look happened, so an old frame cannot license a hand
+        self.clock = clock or (lambda: __import__("time").monotonic())
 
     # -- the seam ----------------------------------------------------------------------------------
 
@@ -147,6 +152,7 @@ class Computer:
                     "needs": ["the capture tool on the guest's PATH", TOOLS[self.tool]["needs"][0]]}
         self.size = self._size() or self.size
         self.frame = _digest(b64)
+        self.seen_at = self.clock()   # the look is dated, so a hand can be refused for leaning on it later
         return {"ok": True, "png_b64": b64, "frame": self.frame, "size": self.size,
                 "capture": self.capture, "bytes_b64": len(b64)}
 
@@ -170,6 +176,10 @@ class Computer:
         if self.frame is None and action != "move":
             return {"refused": True, "action": action, "why": REFUSED["blind-click"],
                     "needs": ["observe"]}
+        age = None if self.seen_at is None else round(self.clock() - self.seen_at, 1)
+        if action != "move" and age is not None and age > SIGHT_SECONDS:
+            return {"refused": True, "action": action, "why": REFUSED["stale-sight"],
+                    "seen_seconds_ago": age, "needs": ["observe"]}
         try:
             return self._aimed(action, **kw)
         except OffFrame as exc:
@@ -210,14 +220,14 @@ class Computer:
         stopped, not just that it ended.
         """
         done = []
-        for step in steps:
+        for index, step in enumerate(steps):
             action = step[0] if isinstance(step, (tuple, list)) else step
             kw = dict(step[1]) if isinstance(step, (tuple, list)) and len(step) > 1 else {}
             got = self.step(action, **kw)
             done.append(got)
             if got.get("refused") or not got.get("ok"):
-                return {"steps": done, "stopped": action, "why": got.get("why") or got.get("err"),
-                        "completed": False}
+                return {"steps": done, "stopped": action, "stopped_at": index,
+                        "why": got.get("why") or got.get("err"), "completed": False}
         return {"steps": done, "completed": True, "changed_any": any(s.get("changed") for s in done)}
 
     # -- what an agent reads first -----------------------------------------------------------------

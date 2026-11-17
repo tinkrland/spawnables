@@ -49,13 +49,34 @@ c.step("click", point=(640, 400))
 # -> {"ok": True, "frame_before": "929e08d5", "frame_after": "4a8d8134", "changed": True}
 ```
 
-three refusals, in the same voice as `surface.REFUSED`:
+four refusals, in the same voice as `surface.REFUSED`:
 
 - **a blind click.** no frame in this session, no coordinate. "observe first" is an answer.
 - **a click off the frame.** a screenshot is the only map we have; a point past its edge is a guess.
   the point is checked against the frame's size, not against hope.
+- **sight gone stale.** a frame is dated when it is taken. past `SIGHT_SECONDS` (120) the driver
+  refuses with the age it saw: a look from two minutes ago is a memory, and clicking a memory is the
+  same guess as clicking blind, arriving later.
 - **a model in the driver.** the driver performs what it is told. deciding what to do is the
   caller's job, and a library that quietly becomes a second agent is the thing this repo refuses.
+
+## built, not just spelled
+
+the driver is served, not imported by nobody. two routes on the control plane run it against a
+machine that is `ready` or `live`:
+
+```
+POST /api/machines/:id/computer   {"action": "click", "point": [640, 400]}   -> evidence, or a refusal
+POST /api/machines/:id/computer   {"sequence": [{"action": "observe"}, ...]} -> stops where it stopped
+POST /api/machines/:id/drive      {"verb": "tap_text", "label": "send"}      -> point, dumps, changed
+GET  /api/machines/:id/frame                                                -> image/png, x-stream: still
+```
+
+**one driver per machine, not one per request.** a driver built per request forgets the frame it
+looked at, so every click after the first is blind - which is what happened the first time these
+routes were exercised. the plane keeps the session in `drivers`, keyed by machine and tool, and drops
+it when the adapter changes. that is also why the staleness rule matters: a session that outlives the
+request can outlive the screen.
 
 ## phone and desktop, one difference
 

@@ -86,3 +86,31 @@ scroll would be a promise the backend cannot keep. the simulator path (`ios-sim`
 `src/spawnables/surface.py`, pure argv builders plus one parser, so the interesting half
 (`find_node` on an accessibility dump) is testable with no phone anywhere near it. `spawnables
 surface` prints the card or one verb's plan.
+
+## the half that runs it: drive
+
+a plan is not a tap. [`drive.py`](../src/spawnables/drive.py) executes these plans on the guest,
+through the one seam every adapter has, `exec`, and brings evidence back:
+
+- `tap_text(label)` is the sequence nothing else could express: dump, find the label, tap its centre,
+  dump again, and report **whether the screen actually changed** (two digests, compared). "i tapped
+  it" is not evidence; a different tree is.
+- `screen()` is guest-side (`screencap -p` to a file, `base64` back) because `exec-out` is a host
+  flag with no guest equivalent, and the seam only speaks text. the frame's digest is what lets an
+  agent say "the screen changed" without a vision model.
+- `open_app` resolves the name against `pm list packages` first, so `chrome` works and `apps` does
+  not become google maps.
+- `at_end()` is [the rule](#reach-what-the-four-verbs-cannot-get-at) executed: scroll, then two
+  dumps that are the same screen.
+
+the transliteration is the lesson from the injection bug applied rather than re-argued:
+
+    adb shell <words...>   ->   the guest's own shell runs `<words...>`
+
+so a plan becomes a guest line by dropping the two words adb needs. **no re-quoting happens in
+`drive`** on purpose: `surface` already quoted every free string for the guest's second parse, and
+quoting twice would deliver the quotes to `input text` as characters.
+
+`spawnables drive --arg send` prints the guest line each plan becomes. nothing here is claimed
+against a live device yet: `verified` is false on the card, and the tests run against a recording
+adapter.

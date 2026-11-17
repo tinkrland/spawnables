@@ -2865,6 +2865,202 @@ class TestDeviceSurface(unittest.TestCase):
         self.assertNotIn("requests", text)
 
 
+class _Recorder:
+    """an adapter that answers with canned output and keeps every line it was asked to run."""
+
+    def __init__(self, replies=()):
+        self.replies, self.lines = list(replies), []
+
+    def exec(self, cmd, timeout=300):
+        self.lines.append(cmd)
+        for prefix, result in self.replies:
+            if cmd.startswith(prefix):
+                return result if not callable(result) else result(cmd)
+        return ExecResult(0, "", "")
+
+
+class TestDriveRunsTheSurfacePlans(unittest.TestCase):
+    """the half that puts the verbs on a real guest, tested through a recording adapter."""
+
+    DUMP_A = ('<hierarchy><node text="compose" bounds="[0,0][100,50]"/>'
+              '<node text="send" bounds="[300,700][400,760]"/></hierarchy>')
+    DUMP_B = '<hierarchy><node text="sent" bounds="[0,0][100,50]"/></hierarchy>'
+
+    def phone(self, dumps=None):
+        from spawnables import drive
+        dumps = list(dumps or [self.DUMP_A, self.DUMP_B])
+        rec = _Recorder([
+            ("uiautomator dump", ExecResult(0, "UI hierchary dumped to: /sdcard/window_dump.xml", "")),
+            ("cat /sdcard/window_dump.xml", lambda cmd: ExecResult(0, dumps.pop(0) if dumps else self.DUMP_B, "")),
+            ("wm size", ExecResult(0, "Physical size: 1080x2400\n")),
+            ("screencap", ExecResult(0, "", "")),
+            ("base64 -w0", ExecResult(0, "iVBORw0KGgo=", "")),
+            ("pm list packages", ExecResult(0, "package:com.android.chrome\npackage:com.whatsapp\n")),
+        ])
+        return drive.Device(rec), rec
+
+    def test_a_plan_becomes_the_guest_shell_line_adb_would_have_made(self):
+        """adb joins the words and the guest parses them again: nothing more, nothing less."""
+        from spawnables import drive
+        self.assertEqual(drive.guest_line(["adb", "shell", "wm", "size"]), "wm size")
+        self.assertEqual(drive.guest_line(["adb", "shell", "input", "tap", "350", "730"]),
+                         "input tap 350 730")
+        for bad in (["adb", "exec-out", "screencap", "-p"], ["scrcpy"], [], {"needs": ["dump_tree"]}):
+            with self.assertRaises(ValueError):
+                drive.guest_line(bad)
+
+    def test_it_does_not_quote_a_second_time(self):
+        """surface quoted the free string for the guest already; quoting again delivers the quotes."""
+        from spawnables import drive, surface
+        line = drive.guest_line(surface.type_text("x;reboot"))
+        self.assertEqual(line, "input text 'x;reboot'")
+        self.assertEqual(line.count("'x;reboot'"), 1)
+
+    def test_tap_text_walks_the_whole_sequence_and_brings_back_evidence(self):
+        d, rec = self.phone()
+        got = d.tap_text("send")
+        self.assertEqual(got["point"], (350, 730))
+        self.assertEqual(got["label"], "send")
+        self.assertTrue(got["changed"], "a different tree after the tap is the evidence")
+        self.assertEqual([l for l in rec.lines if l.startswith("input tap")], ["input tap 350 730"])
+        self.assertEqual(rec.lines[:2], ["uiautomator dump /sdcard/window_dump.xml",
+                                         "cat /sdcard/window_dump.xml"],
+                         "the dump comes before the tap, always")
+
+    def test_a_tap_that_changed_nothing_says_so(self):
+        d, _ = self.phone(dumps=[self.DUMP_A, self.DUMP_A])
+        self.assertFalse(d.tap_text("send")["changed"])
+
+    def test_a_label_the_tree_does_not_have_lists_what_it_does(self):
+        d, rec = self.phone()
+        with self.assertRaises(LookupError) as ctx:
+            d.tap_text("publish")
+        self.assertIn("compose", str(ctx.exception))
+        self.assertFalse([l for l in rec.lines if l.startswith("input tap")], "no tap without a node")
+
+    def test_screen_comes_back_as_base64_with_a_digest(self):
+        d, rec = self.phone()
+        shot = d.screen()
+        self.assertEqual(shot["png_b64"], "iVBORw0KGgo=")
+        self.assertEqual(len(shot["frame"]), 16)
+        self.assertIn("screencap -p /data/local/tmp/spawnables-screen.png", rec.lines)
+        self.assertNotIn("exec-out", " ".join(rec.lines),
+                         "exec-out is a host flag; the guest cannot run it")
+
+    def test_an_installed_name_resolves_before_a_launch(self):
+        d, rec = self.phone()
+        got = d.open_app("chrome")
+        self.assertEqual(got["package"], "com.android.chrome")
+        self.assertIn("monkey -p com.android.chrome", " ".join(rec.lines))
+        self.assertEqual(d.open_app("apps")["refused"], True, "a vendor word is not an app")
+
+    def test_the_card_says_unverified_rather_than_implying_it_ran(self):
+        from spawnables import drive
+        card = drive.card()
+        self.assertFalse(card["verified"])
+        self.assertIn("exec", card["runs_on"])
+        self.assertIn("ios-mirroring", card["not_here"])
+
+
+class TestComputerUseDriver(unittest.TestCase):
+    """eyes and hands inside a desktop: spelled for two tools, licensed by a frame."""
+
+    def desk(self, frames=("AAAA", "BBBB")):
+        from spawnables import computer
+        frames = list(frames)
+        rec = _Recorder([
+            ("import -window root", lambda cmd: ExecResult(0, frames.pop(0) if frames else "ZZZZ", "")),
+            ("xdotool getdisplaygeometry", ExecResult(0, "1280 800\n")),
+            ("ydotool mousemove", ExecResult(0, "", "")),
+        ])
+        return computer.Computer(rec), rec
+
+    def test_a_click_without_a_frame_is_refused_not_guessed(self):
+        c, rec = self.desk()
+        got = c.act("click", point=(10, 10))
+        self.assertTrue(got["refused"])
+        self.assertEqual(got["needs"], ["observe"])
+        self.assertEqual(rec.lines, [], "a refused click runs nothing at all")
+
+    def test_observe_is_the_licence_and_carries_the_size(self):
+        c, rec = self.desk()
+        seen = c.observe()
+        self.assertTrue(seen["ok"])
+        self.assertEqual(seen["size"], (1280, 800))
+        self.assertEqual(len(seen["frame"]), 16)
+        self.assertEqual(rec.lines[-1], "xdotool getdisplaygeometry")
+
+    def test_step_reports_the_second_frame_not_our_intentions(self):
+        c, _ = self.desk()
+        c.observe()
+        got = c.step("click", point=(640, 400))
+        self.assertTrue(got["ok"])
+        self.assertNotEqual(got["frame_before"], got["frame_after"])
+        self.assertTrue(got["changed"])
+
+    def test_an_unchanged_frame_is_reported_as_unchanged(self):
+        c, _ = self.desk(frames=("SAME", "SAME"))
+        c.observe()
+        self.assertFalse(c.step("click", point=(1, 1))["changed"])
+
+    def test_a_point_past_the_frame_is_refused(self):
+        c, rec = self.desk()
+        c.observe()
+        got = c.act("click", point=(5000, 10))
+        self.assertTrue(got["refused"])
+        self.assertIn("outside the frame", got["detail"])
+        self.assertFalse([l for l in rec.lines if l.startswith("xdotool mousemove")],
+                         "an off-frame click never reaches the desktop")
+
+    def test_the_two_tools_spell_the_same_action_their_own_way(self):
+        from spawnables import computer
+        self.assertEqual(computer.command("click", x=100, y=200),
+                         "xdotool mousemove --sync 100 200 click 1")
+        self.assertEqual(computer.command("click", tool="ydotool", x=100, y=200),
+                         "ydotool mousemove -a 100 200 && ydotool click 0xC0")
+        self.assertIn("click 3", computer.command("right_click", x=1, y=2))
+        self.assertIn("--repeat 3 1", computer.command("scroll", x=1, y=2, clicks=3))
+
+    def test_text_and_keys_are_quoted_for_the_guest_shell(self):
+        from spawnables import computer
+        line = computer.command("type_text", text="it's a test; echo pwned > /tmp/x")
+        self.assertTrue(line.startswith("xdotool type --delay 40 --clearmodifiers -- "))
+        # round-trip is the real check: the guest's sh -c must hand xdotool the text we meant
+        import shlex
+        words = shlex.split(line)[6:]   # after: xdotool type --delay 40 --clearmodifiers --
+        self.assertEqual(words, ["it's a test; echo pwned > /tmp/x"])
+        self.assertEqual(computer.command("key", combo="ctrl+l"), "xdotool key --clearmodifiers ctrl+l")
+        with self.assertRaises(ValueError):
+            computer.command("key", combo="  ")
+        with self.assertRaises(ValueError):
+            computer.command("click", x=1, y=2, tool="notatool")
+
+    def test_a_sequence_stops_at_the_first_refusal_and_says_where(self):
+        c, rec = self.desk(frames=("A", "B", "C", "D"))
+        got = c.sequence([("observe", {}), ("click", {"point": (10, 10)}), ("click", {"point": (9999, 1)})])
+        self.assertFalse(got["completed"])
+        self.assertEqual(got["stopped"], "click")
+        self.assertEqual(len(got["steps"]), 3)
+        self.assertEqual(got["steps"][-1]["refused"], True)
+        self.assertTrue(got["steps"][1]["changed"])
+
+    def test_a_clean_sequence_reports_every_change(self):
+        c, _ = self.desk(frames=("A", "B", "C", "D"))
+        got = c.sequence([("observe", {}), ("click", {"point": (10, 10)}), ("key", {"combo": "Return"})])
+        self.assertTrue(got["completed"])
+        self.assertTrue(got["changed_any"])
+
+    def test_the_card_names_the_refusals_and_the_credit(self):
+        from spawnables import computer
+        card = computer.card()
+        self.assertFalse(card["verified"])
+        self.assertIn("blind-click", card["refused"])
+        self.assertIn("model-in-the-driver", card["refused"])
+        self.assertIn("cua", card["adopted_from"])
+        self.assertIn("imagemagick", card["capture_needs"]["import"])
+        self.assertIn("xdotool", " ".join(card["tools"]["xdotool"]))
+
+
 class TestDutyCycle(unittest.TestCase):
     """a machine with hours instead of a machine that is always home."""
 

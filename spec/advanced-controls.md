@@ -141,7 +141,8 @@ library, not a second hypervisor.
 ubuntu/arch-based custom builds, so it does not add distro breadth;
 and its control plane (spaces, fleet drivers) overlaps what spawnables
 already owns. mixing it in would mean two control planes over one
-machine. where cua could earn its place later is as an *in-guest
+machine. where cua could earn its place is as an *in-guest
 computer-use driver* (the agent's eyes and hands inside the desktop),
-which is an adapter at the far end of the pipeline - parked until the
-gui layer asks for it.
+which is an adapter at the far end of the pipeline - and that one part
+is now built, because nothing about it overlaps: see
+[computer-use.md](computer-use.md). the control plane stays out.

@@ -168,6 +168,81 @@ def cmd_presets(args):
     return 0
 
 
+def cmd_computer(args):
+    """what the driver would run, spelled for a human. no machine is attached here on purpose: the
+    cli owns no session, and pretending to drive a desktop it is not on is the guessing this repo
+    refuses everywhere else."""
+    from . import computer
+    if not args.action:
+        print(json.dumps(computer.card(tool=args.tool), indent=2))
+        return 0
+    action = {"text": "type_text", "type": "type_text", "click_at": "click"}.get(args.action, args.action)
+    if action not in computer.ACTIONS:
+        print(json.dumps({"refused": True, "action": args.action,
+                          "why": f"the actions are {', '.join(computer.ACTIONS)}"}, indent=2))
+        return 1
+    kw = {}
+    if args.point:
+        try:
+            kw["point"] = tuple(int(v) for v in args.point.replace(" ", "").split(","))
+        except ValueError:
+            print(json.dumps({"refused": True, "why": "--point is x,y in pixels"}, indent=2))
+            return 1
+    if args.to:
+        if "point" not in kw:
+            print(json.dumps({"refused": True, "why": "a drag starts somewhere: pass --point too"},
+                             indent=2))
+            return 1
+        try:
+            kw["x1"], kw["y1"] = kw.pop("point")
+            kw["x2"], kw["y2"] = (int(v) for v in args.to.replace(" ", "").split(","))
+        except ValueError:
+            print(json.dumps({"refused": True, "why": "--to is x,y in pixels"}, indent=2))
+            return 1
+    for name, value in (("text", args.text), ("combo", args.combo),
+                        ("button", args.button), ("clicks", args.clicks)):
+        if value is not None:
+            kw[name] = value
+    if action == "type_text" and "text" not in kw:
+        print(json.dumps({"refused": True, "why": "a type action needs --text"}, indent=2))
+        return 1
+    try:
+        line = computer.command(action, tool=args.tool, **kw)
+    except (ValueError, KeyError) as exc:
+        print(json.dumps({"refused": True, "action": action, "why": str(exc)}, indent=2))
+        return 1
+    print(json.dumps({"action": action, "tool": args.tool, "line": line,
+                      "observe_first": action != "observe",
+                      "capture": computer.CAPTURES[args.capture],
+                      "needs": computer.TOOLS[args.tool]["needs"],
+                      "verified": False}, indent=2))
+    return 0
+
+
+def cmd_drive(args):
+    """the guest line a surface plan becomes, and what it would take to run it."""
+    from . import drive, surface
+    plans = {"tap_text": surface.tap_text(args.arg or "") if args.arg else
+             {"needs": ["dump_tree", "read_tree"], "then": "tap_text(label, xml_text=...)"},
+             "open_app": surface.open_app(args.arg or ""),
+             "type_text": surface.type_text(args.arg or ""),
+             "screen": {"host_plan": surface.screen(),
+                        "guest_two_step": {"capture": f"screencap -p {drive.SHOT}",
+                                           "read": f"base64 -w0 {drive.SHOT}"}}}
+    out = {}
+    for verb, plan in plans.items():
+        if isinstance(plan, dict):
+            out[verb] = plan            # needs / refused speak for themselves
+        else:
+            out[verb] = {"guest_line": drive.guest_line(plan)}
+    out["screen_note"] = {"file_on_guest": drive.SHOT,
+                          "why": "exec-out is a host flag with no guest equivalent; the guest writes "
+                                 "a file and base64 carries it back"}
+    out["card"] = {k: v for k, v in drive.card().items() if k in ("runs_on", "verified")}
+    print(json.dumps(out, indent=2, default=str))
+    return 0
+
+
 def cmd_surface(args):
     """the four verbs an agent gets on a device with no dom, and who offers which."""
     from . import surface
@@ -238,6 +313,22 @@ def main(argv=None):
                     help="for scroll and swipe")
     sf.add_argument("--size", default=None, help="WxH for scroll and swipe, from `adb shell wm size`")
     sf.set_defaults(fn=cmd_surface)
+
+    cp = sub.add_parser("computer", help="eyes and hands inside a desktop guest: observe, click, type, key")
+    cp.add_argument("action", nargs="?", help=" | ".join(__import__("spawnables.computer", fromlist=["x"]).ACTIONS))
+    cp.add_argument("--tool", default="xdotool", choices=["xdotool", "ydotool"])
+    cp.add_argument("--capture", default="import", choices=["import", "scrot", "gnome"])
+    cp.add_argument("--point", default=None, help="x,y in pixels, from a frame you have seen")
+    cp.add_argument("--to", default=None, help="x2,y2 for drag")
+    cp.add_argument("--text", default=None)
+    cp.add_argument("--key", dest="combo", default=None, help="ctrl+l, Return, alt+Tab")
+    cp.add_argument("--button", type=int, default=None, help="1 left, 3 right")
+    cp.add_argument("--clicks", type=int, default=None)
+    cp.set_defaults(fn=cmd_computer)
+
+    dv = sub.add_parser("drive", help="the device surface, actually run on the guest")
+    dv.add_argument("--arg", default=None)
+    dv.set_defaults(fn=cmd_drive)
     args = ap.parse_args(argv)
     return args.fn(args)
 

@@ -17,8 +17,7 @@ from isolation import substrates
 class TestRoster(unittest.TestCase):
     def test_two_kinds_live_here_and_no_more(self):
         self.assertEqual(substrates.substrates(),
-                         ["docker", "kubernetes", "daytona-container",
-                          "gvisor-systrap", "gvisor-kvm"])
+                         ["docker", "kubernetes", "daytona-container", "gvisor"])
 
     def test_no_substrate_claims_a_kernel_of_its_own(self):
         for name in substrates.substrates():
@@ -56,6 +55,66 @@ class TestRoster(unittest.TestCase):
         self.assertIn("gvisor.dev", card["sources"]["gvisor checkpoint/restore"])
         self.assertIn("daytona.io", card["sources"]["daytona isolation"])
 
+
+
+class TestKvmIsAPlatformNotARung(unittest.TestCase):
+    """the owner's correction: gvisor has kvm, microvms don't, and that decides where things run."""
+
+    def test_gvisor_is_one_substrate_with_two_platforms(self):
+        s = substrates.SUBSTRATES["gvisor"]
+        self.assertEqual(s["needs_kvm"], "platform")
+        self.assertEqual(sorted(s["platforms"]), ["kvm", "systrap"])
+        self.assertNotIn("gvisor-kvm", substrates.SUBSTRATES)
+        self.assertNotIn("gvisor-systrap", substrates.SUBSTRATES)
+
+    def test_the_old_spellings_still_resolve(self):
+        self.assertEqual(substrates.resolve("gvisor-kvm"), ("gvisor", "kvm"))
+        self.assertEqual(substrates.resolve("gvisor-systrap"), ("gvisor", "systrap"))
+        self.assertEqual(substrates.resolve("docker"), ("docker", None))
+
+    def test_only_the_kvm_platform_needs_kvm(self):
+        g = substrates.SUBSTRATES["gvisor"]["platforms"]
+        self.assertTrue(g["kvm"]["needs_kvm"])
+        self.assertFalse(g["systrap"]["needs_kvm"])
+
+    def test_containers_need_no_kvm_and_microvms_are_named_with_no_fallback(self):
+        for name in ("docker", "kubernetes", "daytona-container"):
+            self.assertIs(substrates.SUBSTRATES[name]["needs_kvm"], False, name)
+        self.assertIn("no fallback", substrates.NOT_HERE["firecracker"])
+
+    def test_the_platform_is_chosen_from_the_host_not_from_habit(self):
+        self.assertEqual(substrates.choose_platform(True), "kvm")
+        self.assertEqual(substrates.choose_platform(False), "systrap")
+        self.assertEqual(substrates.choose_platform(True, nested=True), "systrap",
+                         "nested virtualisation costs more than systrap saves")
+
+    def test_a_host_with_no_kvm_still_gets_a_plan(self):
+        got = substrates.plan("gvisor", {"host_has_kvm": False})
+        self.assertEqual(got["platform"]["chosen"], "systrap")
+        self.assertFalse(got["platform"]["needs_kvm"])
+        self.assertIn("--platform=systrap", got["argv"])
+
+    def test_an_explicit_platform_is_stated_and_not_checked(self):
+        got = substrates.plan("gvisor-kvm", {})
+        self.assertEqual(got["platform"]["chosen"], "kvm")
+        self.assertTrue(got["platform"]["needs_kvm"])
+        self.assertIn("nobody described the host", got["platform"]["why"])
+
+    def test_the_card_carries_the_axis_or_the_point_is_lost(self):
+        card = substrates.card()
+        self.assertIn("kvm is a platform choice", card["kvm_axis"]["the_point"])
+        self.assertEqual(card["kvm_axis"]["who_can_fall_back"]["gvisor"][:8], "systrap,")
+        self.assertEqual(card["substrates"]["gvisor"]["needs_kvm"], "platform")
+        self.assertFalse(card["substrates"]["docker"]["needs_kvm"])
+
+    def test_the_readme_says_it_in_the_owners_terms(self):
+        import pathlib as _p
+        import re
+        text = re.sub(r"\s+", " ",
+                      (_p.Path(__file__).resolve().parents[1] / "isolation-readme.md").read_text().lower())
+        self.assertIn("kvm is a platform, not a rung", text)
+        self.assertIn("gvisor has kvm while microvms don't", text)
+        self.assertIn("systrap", text)
 
 class TestRefusals(unittest.TestCase):
     def test_a_container_cannot_be_an_identity(self):

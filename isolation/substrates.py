@@ -75,6 +75,7 @@ SUBSTRATES = {
             "desktop": "a compositor you start inside it (xvfb), not a desktop image",
         },
         "why": {"freeze": "commit is filesystem only", "thaw": "boot the image, do not thaw it"},
+        "needs_kvm": False,
         "runs": "any host with a container runtime; no kvm, no firmware, no disk image",
         "verified": "docs read, not run here",
         "source_note": "the docs above, plus daytona's class table for what a container does not get",
@@ -95,6 +96,7 @@ SUBSTRATES = {
         },
         "why": {"pause": "delete or scale, and recreate", "resume": "a new pod is a new pod",
                 "freeze": "no ram to save", "thaw": "a new pod starts cold"},
+        "needs_kvm": False,
         "runs": "a cluster you already pay for; the isolation is identical to docker, the ownership is not",
         "verified": "docs read, not run here",
     },
@@ -117,50 +119,43 @@ SUBSTRATES = {
                 "freeze": "hot snapshots are listed as vm-only",
                 "thaw": "vm class again",
                 "desktop": "their desktop sandboxes are the vm/desktop class, not the container class"},
+        "needs_kvm": False,
         "runs": "their api, their runner; the value is the api and the egress secrets, not the boundary",
         "verified": "docs read, not run here",
         "source_note": "their isolation docs read 2026-11-17; the api was not called",
     },
-    "gvisor-systrap": {
-        "label": "gvisor (systrap): a userspace kernel over the host's",
-        "mechanism": "the sentry intercepts syscalls (seccomp SECCOMP_RET_TRAP, sigsys), so the app "
-                     "never calls the host kernel directly",
+    "gvisor": {
+        "label": "gvisor: a userspace kernel over the host's",
+        "mechanism": "the sentry implements linux's syscalls and intercepts them, so the app never "
+                     "calls the host kernel directly",
         "kernel": "the app's kernel is the sentry; the host's is only reached through it",
         "own_kernel": False,
+        # the whole point of this field: kvm is a PLATFORM inside gvisor, not a rung on a ladder.
+        # a microvm cannot choose this - without virtualisation extensions it does not run at all.
+        "needs_kvm": "platform",
+        "falls_back_to": "systrap",
+        "platforms": {
+            "kvm": {"needs_kvm": True,
+                    "why": "address-space switches ride kvm, which is faster on bare metal; the "
+                           "sandbox still keeps a process model and a sentry, so it is not a vm"},
+            "systrap": {"needs_kvm": False,
+                        "why": "seccomp SECCOMP_RET_TRAP turns syscalls into traps, so it runs with no "
+                               "virtualisation at all - inside a vm it is usually the faster choice too"},
+        },
         "snapshot": "runsc checkpoint: memory, fds and filesystem together, into a directory",
         "verbs": {
             "exec": "runsc exec: a process inside the sentry's namespaces",
             "pause": None,
             "resume": None,
-            "freeze": "runsc checkpoint --image-path: a real checkpoint of the sandbox",
+            "freeze": "runsc checkpoint --image-path: memory, fds and filesystem into a directory",
             "thaw": "runsc create, then runsc restore --image-path",
-            "export": "the checkpoint directory is files you can move: the only ram-bearing export here",
+            "export": "the checkpoint directory is the export: files, with the ram in them",
             "burn": "runsc delete: the sandbox disappears, checkpoint directories stay until you remove them",
             "desktop": "a compositor you start inside it, over the sentry",
         },
         "why": {"pause": "runsc has no pause: a checkpoint stops it and a restore starts it again",
                 "resume": "runsc restore is the nearest thing, and it is a restore, not a resume"},
-        "runs": "any linux host with runsc; systrap needs no kvm, which is the point of naming it",
-        "verified": "docs read, not run here",
-    },
-    "gvisor-kvm": {
-        "label": "gvisor (kvm platform): the same sentry, using virtualisation extensions",
-        "mechanism": "as systrap, but address-space switches ride kvm; still a process model, not a vm",
-        "kernel": "the app's kernel is the sentry; the host's is reached only through it",
-        "own_kernel": False,
-        "snapshot": "runsc checkpoint, as above",
-        "verbs": {
-            "exec": "runsc exec: a process inside the sentry's namespaces",
-            "pause": None, "resume": None,
-            "freeze": "runsc checkpoint --image-path: memory, fds and filesystem into a directory",
-            "thaw": "runsc create, then runsc restore",
-            "export": "the checkpoint directory is the export: files, with the ram in them",
-            "burn": "runsc delete: the sandbox disappears, checkpoint directories stay until you remove them",
-            "desktop": "a compositor you start inside it",
-        },
-        "why": {"pause": "runsc has no pause: a checkpoint stops it and a restore starts it again",
-                "resume": "runsc restore is the nearest thing, and it is a restore, not a resume"},
-        "runs": "bare metal with /dev/kvm; inside a vm, systrap is usually the faster choice",
+        "runs": "any linux host with runsc: kvm where there is /dev/kvm, systrap everywhere else",
         "verified": "docs read, not run here",
     },
 }
@@ -178,10 +173,23 @@ GVIser_CHECKPOINT_CAVEATS = (
 # guessing why they are absent
 NOT_HERE = {
     "kata": "vm-per-pod: the guest gets its own kernel, so it is a machine. main's adapters, or hypeman",
-    "firecracker": "a microvm with its own kernel: same answer, and already evaluated on main",
+    "firecracker": ("a microvm with its own kernel: same answer, and already evaluated on main. it also "
+                    "needs /dev/kvm with no fallback, where gvisor has systrap"),
     "wasmtime": "not a linux guest at all: a different subject, not a different substrate",
     "browser sandboxes": "already named on main as their own lane (kernel-images and friends)",
 }
+
+
+# a platform flag is not a substrate. these two spellings used to be separate entries, which modelled
+# kvm as a rung when it is a choice inside one runtime.
+ALIASES = {"gvisor-systrap": ("gvisor", "systrap"), "gvisor-kvm": ("gvisor", "kvm")}
+
+
+def resolve(name):
+    """any spelling -> (substrate id, platform or None)."""
+    if name in ALIASES:
+        return ALIASES[name]
+    return name, None
 
 
 def substrates():
@@ -190,11 +198,25 @@ def substrates():
 
 
 def verbs(name):
+    name, _ = resolve(name)
     return dict(SUBSTRATES[name]["verbs"]) if name in SUBSTRATES else {}
 
 
 def why_not(name, verb):
+    name, _ = resolve(name)
     return (SUBSTRATES.get(name, {}).get("why") or {}).get(verb)
+
+
+def choose_platform(has_kvm, nested=False):
+    """kvm on bare metal, systrap without it - and systrap inside a vm even when kvm is there.
+
+    gvisor's own platform guide makes the second half of that claim: nested virtualisation is slow
+    enough that systrap usually wins. a microvm has no such choice, which is the difference this
+    function exists to state in one place.
+    """
+    if has_kvm and not nested:
+        return "kvm"
+    return "systrap"
 
 
 # -- the check -----------------------------------------------------------------------------------
@@ -215,6 +237,7 @@ def check(name, order=None):
     will not be what the caller imagines. nothing here needs docker, k8s or runsc to answer, which is
     the same reason surface.find_node is pure: the interesting half is testable with no host near it.
     """
+    name, _ = resolve(name)
     if name not in SUBSTRATES:
         known = ", ".join(substrates())
         return {"errors": [f"unknown substrate {name!r}; the roster is {known}"], "warnings": []}
@@ -241,7 +264,7 @@ def check(name, order=None):
         errors.append(f"{name} was asked for its own kernel: {REFUSED['no-kernel-of-its-own']}")
 
     # freeze is the interesting one: real on gvisor, a repackaging everywhere else (refused above)
-    if ("freeze" in needs or "thaw" in needs) and name.startswith("gvisor"):
+    if ("freeze" in needs or "thaw" in needs) and name == "gvisor":
         if (o.get("network") or "").lower() == "host":
             errors[:] = [e for e in errors if "host networking" not in e]
             errors.append("checkpoint under host networking restores with econnreset sockets, so "
@@ -270,6 +293,7 @@ def check(name, order=None):
 
 def plan(name, order=None, runsc="runsc"):
     """what would be started, spelled out. never run here, and it says so."""
+    name, requested_platform = resolve(name)
     if name not in SUBSTRATES:
         return {"refused": True, "why": f"unknown substrate {name!r}", "roster": substrates()}
     o = dict(order or {})
@@ -313,8 +337,28 @@ def plan(name, order=None, runsc="runsc"):
         out["call"] = {"sandbox_class": "container", "image": image,
                        "resources": {"vcpus": cpus, "memory_gb": ram_gb, "disk_gb": disk_gb}}
         out["then"] = ["their exec api, streaming output"]
-    else:   # the two gvisor lines
-        platform = "systrap" if name == "gvisor-systrap" else "kvm"
+    elif name == "gvisor":
+        # the caller may name a platform; otherwise the host decides, and we say which and why
+        host = o.get("host_has_kvm")
+        nested = bool(o.get("nested"))
+        if host is None:
+            platform = requested_platform or "systrap"
+            platform_why = (f"you asked for {platform}; nobody described the host, so the requirement "
+                            f"is stated and not checked" if requested_platform else
+                            "no host was described, so the platform that needs nothing is the default")
+        else:
+            platform = requested_platform or choose_platform(bool(host), nested)
+            platform_why = ("kvm on bare metal" if platform == "kvm"
+                            else "systrap: no kvm, or nested virtualisation makes it faster")
+        out["argv"] = [runsc, "--platform=" + platform, "run", "--network=none",
+                       f"--memory={int(ram_gb * 1024)}MB", "-d", image, "sleep", "infinity"]
+        out["then"] = [f"{runsc} exec <id> sh", f"{runsc} checkpoint --image-path=<dir> <id>"]
+        out["checkpoint"] = list(GVIser_CHECKPOINT_CAVEATS)
+        out["platform"] = {"chosen": platform, "why": platform_why,
+                           "needs_kvm": SUBSTRATES["gvisor"]["platforms"][platform]["needs_kvm"],
+                           "available": sorted(SUBSTRATES["gvisor"]["platforms"])}
+    else:   # unreachable unless a substrate is added without a plan
+        return {"refused": True, "why": f"no plan spelled for {name!r}", "roster": substrates()}
         out["argv"] = [runsc, "--platform=" + platform, "run", "--network=none",
                        f"--memory={int(ram_gb * 1024)}MB", "-d", image, "sleep", "infinity"]
         out["then"] = [f"{runsc} exec <id> sh", f"{runsc} checkpoint --image-path=<dir> <id>"]
@@ -332,8 +376,20 @@ def card():
                   "not a rival to main's adapters"),
         "boundaries": list(BOUNDARIES),
         "substrates": {k: {"label": v["label"], "kernel": v["kernel"], "own_kernel": v["own_kernel"],
-                           "snapshot": v["snapshot"], "runs": v["runs"], "verified": v["verified"]}
+                           "needs_kvm": v["needs_kvm"], "snapshot": v["snapshot"], "runs": v["runs"],
+                           "verified": v["verified"],
+                           **({"platforms": v["platforms"], "falls_back_to": v["falls_back_to"]}
+                              if "platforms" in v else {})}
                        for k, v in SUBSTRATES.items()},
+        "kvm_axis": {
+            "the_point": ("kvm is a platform choice inside a runtime, not a rung on a ladder: gvisor "
+                          "can use it and still not be a vm, and gvisor also runs without it"),
+            "who_needs_it": ["kata", "firecracker", "any guest with its own kernel"],
+            "who_can_fall_back": {"gvisor": "systrap, which needs no virtualisation at all"},
+            "why_it_matters": ("on a nested or kvm-less host the container and gvisor lines still run; "
+                               "the microvm line does not, so a substrate roster that puts them on one "
+                               "ladder is wrong about the only thing that decides where they run"),
+        },
         "verbs": {k: {verb: (v["verbs"].get(verb) is not None) for verb in CANON}
                   for k, v in SUBSTRATES.items()},
         "refused": REFUSED,

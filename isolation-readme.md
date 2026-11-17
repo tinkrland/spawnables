@@ -46,6 +46,30 @@ it, and main stays clean until then: orphan branch, no pointers, no cross-import
 
 `./bin/isolation card` prints the same table with sources; `verbs`, `plan` and `check` do the rest.
 
+## kvm is a platform, not a rung
+
+the owner's correction, 2026-11-18, and it reshapes the roster rather than decorating it: **gvisor has
+kvm while microvms don't.**
+
+gvisor ships more than one platform. the kvm platform uses virtualisation extensions for address-space
+switches in the sentry; the systrap platform turns syscalls into seccomp traps and needs no
+virtualisation at all. so gvisor can use kvm and still not be a virtual machine, and when there is no
+kvm it still runs. a microvm has no such choice: no extensions, no guest. that is not a difference in
+strength on one axis, it is a difference in *whether the thing runs at all* on the host in front of you.
+
+consequences this line now encodes:
+
+- `gvisor` is one substrate with a `platform` field. it used to be two entries, which quietly taught
+  that kvm was a separate rung - exactly the sort of taxonomy mistake the emulators branch paid for.
+  the old spellings still resolve, so nothing breaks; they just stop pretending.
+- `needs_kvm` is on every entry, and it is a fact, not a preference: `false` for the container
+  substrates, `"platform"` for gvisor, and the microvms are named in **not here** with "no fallback".
+- `choose_platform(has_kvm, nested)` returns `systrap` inside a vm even when kvm is present, because
+  gvisor's own platform guide says nested virtualisation costs more than systrap saves.
+- a nested host is therefore the container and gvisor line's home ground. this is the tenki case we
+  measured: no `/dev/kvm`, no `vmx`/`svm`, so syscall-level isolation still runs there and a microvm
+  would not. the same fact is why our own hypeman path needs a kvm box we control.
+
 ## what is deliberately not here
 
 - **kata.** vm-per-pod: the guest gets its own kernel, so it is a machine. main's adapters, or hypeman.

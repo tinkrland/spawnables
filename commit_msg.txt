@@ -1,0 +1,18 @@
+kvm is a platform, not a rung
+
+the owner's correction: gvisor has kvm while microvms don't. that is not a difference
+in strength on one axis, it is a difference in whether the thing runs at all on the
+host in front of you - and the roster was modelling it as a second entry, which taught
+the opposite.
+
+- one `gvisor` substrate with a `platform` field (kvm / systrap); the old spellings
+  resolve as aliases so nothing breaks, and they stop pretending to be substrates
+- `needs_kvm` on every entry, as a fact: false for containers, "platform" for gvisor,
+  and the microvms named with no fallback
+- choose_platform(has_kvm, nested): systrap inside a vm even when kvm is present,
+  because gvisor's own guide says nested virtualisation costs more than systrap saves
+- plan() states the platform it chose and why, and refuses to check a host nobody
+  described
+- the card carries the axis, so an agent reading the roster cannot miss the point
+
+44/44, docs only, nothing run.

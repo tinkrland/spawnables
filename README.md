@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/logo.png" alt="spawnables" width="160"></p>
+
 # spawnables
 
 agents keep getting handed a browser tab and a terminal, and every once in a while you notice how weird that is. spawnables is my attempt at the thing in between.

@@ -83,6 +83,9 @@ scroll would be a promise the backend cannot keep. the simulator path (`ios-sim`
 
 ## phones are sidecars by default
 
+a pooled phone is a sidecar with a shelf behind it: see [the warm shelf](warm-shelf.md) for the lease rules, and `warmpool.py` for the identity that is minted once and kept.
+
+
 a phone order is an accompanying device, and the name for that here is a **sidecar**: it is handed to
 an agent for the one job that needs a phone (a 2fa approval, a scanner-only qr, a delivery app), and
 it is not the subject of the order. so `role` resolves to `sidecar` for every phone image

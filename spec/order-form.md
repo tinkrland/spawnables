@@ -47,7 +47,7 @@ a submit is rejected if any ordered item fails its matrix. the form should make 
     { "recipe_id": "netflix", "order_type": "pwa" }
   ],
   "rice": { "rice_id": "catppuccin-mocha-cinnamon", "version": "1.2.0" },
-  "agent_bridge": { "expose": ["mcp", "ssh", "vnc"], "egress": "on" },
+  "agent_bridge": { "expose": ["mcp", "ssh"], "egress": "on" },
   "rebuild_on_thaw": false
 }
 ```

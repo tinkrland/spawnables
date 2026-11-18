@@ -38,6 +38,9 @@ from .presets import clone_manifest, save_preset, load_presets, PresetError
 from .adapters import VerbNotSupported
 from .vault import Vault
 from .exports import Registry as ExportRegistry, verify as verify_export
+from .warmpool import (WarmPhonePool, PoolError, PoolBusy, PurposeRefused, PURPOSES,
+                       check_purpose)
+from .agentid import AgentRegistry, prove as prove_principal, stable_id_for
 from .ipadlane import get_anyway_plan, validate_get_anyway
 
 VERBS = ("pause", "resume", "freeze", "thaw", "export", "burn")
@@ -68,6 +71,10 @@ class ControlPlane:
         # and nothing here needs qemu, disk images or docker on this host
         self.cloud_vault = Vault()
         self.exports = ExportRegistry()
+        # the shelf keeps paused phones for the one job a phone exists for, and the
+        # registry is what makes a lease bind to a principal rather than a label
+        self.pool = WarmPhonePool(Path.home() / ".spawnables" / "pool.json")
+        self.principals = AgentRegistry(Path.home() / ".spawnables" / "agents.json")
         self.drivers = {}  # mid -> Computer, because sight has to survive the request
 
     # -- cloud connect -----------------------------------------------------
@@ -348,8 +355,9 @@ class ControlPlane:
     def frame(self, mid, body=None):
         """one still of whatever the machine is showing, as png bytes plus its digest.
 
-        a still, not a stream: the spec's /screen is a live stream the runner serves, and pretending
-        a poll is a stream would be the kind of claim this project keeps refusing to make.
+        a still, not a stream. /screen answers this same still and says so in a header, because a
+        control plane with no streaming backend would otherwise be serving a promise; a live stream
+        remains the runner's job, and it would arrive as a different content type, not a lie.
         """
         from .computer import Computer
         from .drive import Device
@@ -362,6 +370,151 @@ class ControlPlane:
                             capture=(body or {}).get("capture") or "import").observe()
             return {"png_b64": shot["png_b64"], "frame": shot["frame"], "kind": "desktop"}
         raise ApiError(409, f"{m.adapter.guest} has nothing to photograph")
+
+    # -- the warm phone shelf and the principals that may lease from it --------------------------
+
+    def pool_card(self):
+        """who holds what. the seeds stay where they are; a card shows personas, not secrets."""
+        return {
+            "phones": self.pool.snapshot(),
+            "purposes": list(PURPOSES),
+            "backend": self.adapter_factory is not None,
+            "why_no_backend": (None if self.adapter_factory is not None else
+                               "this control plane has no provision backend, so a lease could be "
+                               "recorded but never resumed: the shelf refuses instead"),
+        }
+
+    def pool_add(self, body):
+        agent = body.get("agent") or None
+        if agent:
+            agent = self._principal(agent)
+        try:
+            phone = self.pool.add_phone(name=body.get("name"),
+                                        persona=body.get("persona", "android"),
+                                        agent=agent,
+                                        timezone=body.get("timezone", "asia/kolkata"),
+                                        locale=body.get("locale", "en-us"))
+        except PoolError as exc:
+            raise ApiError(400, str(exc))
+        return {"phone": self._pool_view(phone), "note":
+                "provision the manifest cold once, pause it, and it is a shelf phone from then on"}
+
+    def pool_lease(self, body):
+        """one phone, one agent, one purpose. the lease is what binds the identity to a principal."""
+        agent = self._principal(body.get("agent"))
+        purpose = body.get("purpose", "twofa")
+        try:
+            check_purpose(purpose)
+        except PurposeRefused as exc:
+            raise ApiError(400, str(exc))
+        if self.adapter_factory is None:
+            raise BackendUnavailable(
+                "a lease ends with a resume, and this control plane cannot resume: "
+                "run the shelf on a provision host")
+        try:
+            lease = self.pool.acquire(agent, purpose=purpose,
+                                      ttl_seconds=int(body.get("ttl_seconds", 1800)),
+                                      net=body.get("network"))
+        except (PurposeRefused, PoolBusy, PoolError) as exc:
+            raise ApiError(409 if not isinstance(exc, PurposeRefused) else 400, str(exc))
+        # the lease said "resume", so it resumes: the shelf is only warm if the phone is really back
+        try:
+            lease["machine"] = self._wake_pooled(lease)
+            lease["verb"] = "resume: done"
+        except ApiError as exc:
+            self.pool.release(lease["phone_id"], agent_sid=agent)   # no phantom lease
+            raise exc
+        return lease
+
+    def _pooled(self, phone_id):
+        """the shelf record for a phone, so a resume does not depend on the caller remembering it."""
+        for p in self.pool.phones:
+            if p["id"] == phone_id:
+                return p
+        raise ApiError(404, f"no pooled phone {phone_id}")
+
+    def _wake_pooled(self, lease):
+        """cold once, warm every time after: provision the manifest, pause it, then resume.
+
+        the shelf's whole promise is that a lease is a resume rather than a boot, so the first
+        lease pays the boot and every later one does not. the machine id is kept on the shelf
+        record, which is why a restart does not turn the second lease back into a boot.
+        """
+        phone = self._pooled(lease["phone_id"])
+        mid = phone.get("machine_id")
+        if mid and mid in self.machines:
+            rec = self.machines[mid]["machine"]
+            if rec is None:
+                raise ApiError(409, f"{mid} failed to provision; the shelf cannot serve it")
+            if rec.state == "paused":
+                self.verb(mid, "resume", {})
+                return {"id": mid, "state": "live", "woke": "resume"}
+            return {"id": mid, "state": rec.state, "woke": "already-up"}
+        created = self.provision(phone["manifest"])
+        mid = created["id"] if isinstance(created, dict) else phone["manifest"]["id"]
+        self.verb(mid, "pause", {})
+        phone["machine_id"] = mid
+        self.pool._save()
+        self.verb(mid, "resume", {})
+        return {"id": mid, "state": "live", "woke": "cold-then-resume"}
+
+    def pool_release(self, phone_id, body):
+        try:
+            out = self.pool.release(phone_id, agent_sid=body.get("agent") or None)
+        except PoolError as exc:
+            raise ApiError(409, str(exc))
+        phone = self._pooled(phone_id)
+        mid = phone.get("machine_id")
+        if mid and mid in self.machines and self.machines[mid]["machine"] is not None:
+            try:
+                self.verb(mid, "pause", {})
+                out["machine"] = {"id": mid, "state": "paused"}
+            except ApiError as exc:
+                out["machine"] = {"id": mid, "state": "pause-failed", "why": str(exc)}
+        return out
+
+    def agents_list(self):
+        return [{"stable_id": a["stable_id"], "username": a["username"],
+                 "created": a.get("created")} for a in self.principals.agents]
+
+    def agent_register(self, body):
+        username = (body.get("username") or "").strip().lower()
+        if not username:
+            raise ApiError(400, "a principal needs a username to be a label for")
+        rec, seed = self.principals.register(username)
+        return {"agent": rec, "seed": seed, "note":
+                "this seed is shown once: seal it in the vault. it proves the id and nothing else, "
+                "and the id never changes when the name does"}
+
+    def agent_prove(self, body):
+        sid = body.get("stable_id") or ""
+        seed = body.get("seed") or ""
+        if not sid or not seed:
+            raise ApiError(400, "prove needs stable_id and seed")
+        rec = self.principals.find(sid)
+        return {"proven": prove_principal(sid, seed),
+                "username": self.principals.username_of(sid),
+                "known": rec is not None}
+
+    def _principal(self, who):
+        """a lease binds to a principal. a label is resolved through the registry; anything the
+        registry does not know is refused, because a lease to a name is a lease to nobody."""
+        if not who:
+            raise ApiError(400, "a lease needs the agent's stable id, not a label")
+        who = str(who).strip()
+        if len(who) == 64 and all(c in "0123456789abcdef" for c in who):
+            if self.principals.find(who) is None:
+                raise ApiError(409, f"no principal {who[:12]}...: register it before leasing")
+            return who
+        for rec in self.principals.agents:
+            if rec["username"] == who.lower():
+                return rec["stable_id"]
+        raise ApiError(409, f"'{who}' is a label, not a principal: register the agent first")
+
+    def _pool_view(self, phone):
+        return {"id": phone["id"], "name": phone["name"], "state": phone["state"],
+                "persona": phone["identity"]["persona"], "minted": phone["identity"]["minted"],
+                "lease": phone.get("lease")}
 
     def duplicate(self, mid, body):
         rec = self._find(mid)
@@ -521,6 +674,28 @@ def make_handler(plane):
             if method == "GET" and parts == ["machines"]:
                 self._json(200, {"ok": True, "data": plane.grid()})
                 return
+            if method == "GET" and parts == ["pool"]:
+                self._json(200, {"ok": True, "data": plane.pool_card()})
+                return
+            if method == "POST" and parts == ["pool", "phones"]:
+                self._json(200, {"ok": True, "data": plane.pool_add(self._read_body())})
+                return
+            if method == "POST" and parts == ["pool", "lease"]:
+                self._json(200, {"ok": True, "data": plane.pool_lease(self._read_body())})
+                return
+            if (method == "POST" and len(parts) == 3 and parts[:2] == ["pool", "phones"]):
+                self._json(200, {"ok": True,
+                                 "data": plane.pool_release(parts[2], self._read_body())})
+                return
+            if method == "GET" and parts == ["agents"]:
+                self._json(200, {"ok": True, "data": plane.agents_list()})
+                return
+            if method == "POST" and parts == ["agents"]:
+                self._json(200, {"ok": True, "data": plane.agent_register(self._read_body())})
+                return
+            if method == "POST" and parts == ["agents", "prove"]:
+                self._json(200, {"ok": True, "data": plane.agent_prove(self._read_body())})
+                return
             if method == "GET" and parts == ["presets"]:
                 self._json(200, {"ok": True, "data": plane.presets()})
                 return
@@ -547,9 +722,11 @@ def make_handler(plane):
                     self._json(200, {"ok": True, "data": plane.exports.for_machine(mid)})
                     return
                 if method == "GET" and action == "screen":
-                    self._json(503, {"ok": False, "error":
-                                     "no stream backend on this control "
-                                     "plane; the runner serves the desktop"})
+                    # the card asks for "the screen" and gets the honest thing a control plane can
+                    # give it without a streaming backend: one still, labelled a still. a live
+                    # stream is the runner's job and /frame stays the primitive either way.
+                    got = plane.frame(mid)
+                    self._png(got["png_b64"], got["frame"], kind=got["kind"])
                     return
                 if method == "GET" and action == "events":
                     qs = self.path.split("?", 1)[1] if "?" in self.path else ""
@@ -606,7 +783,7 @@ def make_handler(plane):
                     return
             raise ApiError(404, f"no route {method} {p}")
 
-        def _png(self, b64, frame=None):
+        def _png(self, b64, frame=None, kind=None):
             """one still, as bytes. base64 is how it crossed the guest seam; it ends here."""
             import base64
             try:
@@ -621,6 +798,8 @@ def make_handler(plane):
             self.send_header("cache-control", "no-store")
             self.send_header("x-frame-id", frame or "")
             self.send_header("x-stream", "still")   # a still, never dressed as a stream
+            if kind:
+                self.send_header("x-frame-kind", kind)  # desktop | phone
             self.end_headers()
             self.wfile.write(raw)
 

@@ -18,6 +18,6 @@ agent-side skills - byoa is a stance, not a feature:
   |---|---|
   | mcp | served: [`src/spawnables/mcp.py`](../../src/spawnables/mcp.py) speaks stdio (`spawnables mcp`) and json-rpc over `post /api/mcp`. tools: `machines_list`, `machine_detail`, `machine_verb`, `export_job`, `computer`, `drive`, `frame`. refusals travel unchanged, so a blind click arrives with `needs: [observe]` |
   | ssh | the transport, not an endpoint: the celesto adapter rides `comm_channel: ssh` when vsock is unavailable, so `exec` is ssh underneath. nothing listens for an outside agent on 22 |
-  | vnc | not built. the capability is declared in the celesto adapter and the spec names novnc/webrtc; no server exists, so the honest reading stays "still, then stream" (`get /api/machines/:id/frame` answers a png today) |
+  | vnc | not built, and no longer declared: the celesto adapter used to advertise `vnc` in its bridge tuple while nothing served it. `get /api/machines/:id/screen` now answers one png with `x-stream: still`, which is what a control plane without a streaming backend can honestly give |
 - agents hold [grants](../../access/agents/readme.md) on each other's
   devices; no os account is ever created for them.

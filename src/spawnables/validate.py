@@ -12,6 +12,7 @@ from .models import is_phone, role_of
 from .netpriv import normalize as _net_normalize, validate_network as _net_validate
 
 USERNAME_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
+_SID_RE = re.compile(r"^[0-9a-f]{64}$")   # agentid.stable_id_for() shape
 ENV_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 SECRETISH = ("SECRET", "TOKEN", "PASSWORD", "PASSWD", "PRIVATE", "KEY", "CREDENTIAL")
 REF_HINTS = ("@@vault:", "op://", "bw://", "pass://")
@@ -83,6 +84,16 @@ def validate_order(order, catalog):
         for path in g.paths:
             if not path.startswith("/"):
                 errors.append(f"grant for '{g.agent}': paths must be absolute, got '{path}'")
+        # the schema still lets an order ask; the control plane says which bridges it actually serves
+        sid = getattr(g, "stable_id", "") or ""
+        if sid and not _SID_RE.match(sid):
+            errors.append(
+                f"grant for '{g.agent}': stable_id must be the 64-hex commitment agentid.py "
+                f"mints, got '{sid[:12]}...'")
+        if not sid:
+            warnings.append(
+                f"grant for '{g.agent}': no stable_id, so this is a label and a label grants "
+                f"nothing; register the principal with agentid.py and pin its id")
         key = (getattr(g, "stable_id", "") or g.agent, g.mode, tuple(g.paths))
         if key in seen_grants:
             errors.append(f"grant for '{g.agent}': same {g.mode} grant listed twice")

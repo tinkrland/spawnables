@@ -75,6 +75,14 @@ def phone_order(name, timezone="asia/kolkata", locale="en-us", agent=None):
     }
 
 
+def check_purpose(purpose):
+    """the pool has one job. a second job is a machine of its own, not a shared phone."""
+    if purpose not in PURPOSES:
+        raise PurposeRefused(
+            f"the pool only serves {PURPOSES}; {purpose!r} belongs on a "
+            "machine of its own, never on a shared phone")
+
+
 class WarmPhonePool:
     def __init__(self, path=None):
         self.path = Path(path) if path else None
@@ -137,10 +145,7 @@ class WarmPhonePool:
         the phone from contradicting its own network. a lease that cannot stand
         up is refused here rather than discovered by a detection stack.
         """
-        if purpose not in PURPOSES:
-            raise PurposeRefused(
-                f"the pool only serves {PURPOSES}; {purpose!r} belongs on a "
-                "machine of its own, never on a shared phone")
+        check_purpose(purpose)
         if not agent_sid:
             raise PoolError("a lease needs the agent's stable id, not a label")
         now = now or time.time()

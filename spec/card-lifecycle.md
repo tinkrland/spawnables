@@ -20,11 +20,20 @@ GET    /api/machines/:id/exports  every export job this machine has run
 GET    /api/exports/:job          one job: state, bytes, sha256, and a url only when done
 GET    /api/exports/:job/download?exp=&sig=  the tarball, over a signed link
 POST   /api/machines/:id/burn     typed-name confirm; shred disk + snapshots
-GET    /api/machines/:id/screen   live desktop stream: NOT BUILT, answers 503. the still below is real
+GET    /api/machines/:id/screen   one still of the screen, image/png, `x-stream: still`. a live
+                                  stream is the runner's job and would arrive as a different
+                                  content type, not a relabelled poll
 POST   /api/machines/:id/computer eyes and hands: observe, click, type, key, drag, scroll, sequence
 POST   /api/machines/:id/drive    the device verbs, run on the guest: open_app, tap_text, type_text, ...
 GET    /api/machines/:id/frame    one still as image/png, with x-frame-id and x-stream: still
 POST   /api/mcp                  json-rpc for mcp clients: the same tools as `spawnables mcp`
+GET    /api/pool                 the warm phone shelf: who holds what (spec/warm-shelf.md)
+POST   /api/pool/phones          put a phone on the shelf (cold once, paused from then on)
+POST   /api/pool/lease           lease one phone to one principal for one purpose
+POST   /api/pool/phones/:id      release it back to the shelf (pauses the phone)
+GET    /api/agents               principals: stable ids, and the labels humans read
+POST   /api/agents               register a principal; the seed is shown once
+POST   /api/agents/prove         seed proves id, and nothing else does
 
 `/frame` is a still and says so in its own header; the live stream stays the runner's job. a paused
 machine answers 409 for all three: a stopped guest has no screen to photograph and no hand to move.

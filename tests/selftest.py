@@ -3539,6 +3539,133 @@ class TestMcpSurface(unittest.TestCase):
         self.assertTrue(answers[2]["result"]["tools"])
 
 
+class TestWarmShelf(unittest.TestCase):
+    """the shelf and the registry, which had no caller between them.
+
+    warmpool.acquire() demands a stable id rather than a label, and agentid is where stable ids
+    live: the two modules were halves of one seam. the plane now serves both.
+    """
+
+    def setUp(self):
+        import tempfile
+        self.home = tempfile.mkdtemp()
+        self._old_home = os.environ.get("HOME")
+        os.environ["HOME"] = self.home
+        from spawnables.server import ControlPlane
+        self.plane = ControlPlane(Catalog("catalog"))
+
+    def tearDown(self):
+        os.environ["HOME"] = self._old_home
+
+    def _principal(self, username="desk-agent"):
+        out = self.plane.agent_register({"username": username})
+        return out["agent"]["stable_id"], out["seed"]
+
+    def test_a_principal_is_an_id_and_a_label_is_not(self):
+        sid, seed = self._principal()
+        self.assertEqual(len(sid), 64)
+        self.assertTrue(self.plane.agent_prove({"stable_id": sid, "seed": seed})["proven"])
+        self.assertFalse(self.plane.agent_prove({"stable_id": sid, "seed": "0" * 64})["proven"])
+        # a username is cosmetic: renaming moves nothing
+        self.plane.principals.rename(sid, "renamed")
+        self.assertEqual(self.plane.principals.username_of(sid), "renamed")
+
+    def test_a_label_does_not_lease_a_phone(self):
+        from spawnables.server import ApiError
+        with self.assertRaises(ApiError) as ctx:
+            self.plane.pool_lease({"agent": "some-label", "purpose": "twofa"})
+        self.assertIn("not a principal", str(ctx.exception))
+
+    def test_an_unregistered_id_does_not_lease_either(self):
+        from spawnables.server import ApiError
+        with self.assertRaises(ApiError):
+            self.plane.pool_lease({"agent": "a" * 64, "purpose": "twofa"})
+
+    def test_the_shelf_refuses_a_lease_it_could_not_resume(self):
+        from spawnables.server import BackendUnavailable
+        sid, _ = self._principal()
+        self.plane.pool_add({"agent": sid, "name": "shelf-one"})
+        with self.assertRaises(BackendUnavailable) as ctx:
+            self.plane.pool_lease({"agent": sid, "purpose": "twofa"})
+        # the refusal says what is missing rather than handing back a lease nobody can honour
+        self.assertIn("provision host", str(ctx.exception))
+        self.assertEqual(self.plane.pool.snapshot()[0]["state"], "paused")
+
+    def test_purpose_is_narrow_and_says_so(self):
+        from spawnables.server import ApiError
+        sid, _ = self._principal()
+        self.plane.pool_add({"agent": sid, "name": "shelf-one"})
+        with self.assertRaises(ApiError) as ctx:
+            self.plane.pool_lease({"agent": sid, "purpose": "general-computing"})
+        self.assertIn("machine of its own", str(ctx.exception))
+
+    def test_the_identity_is_minted_once_and_kept(self):
+        sid, _ = self._principal()
+        first = self.plane.pool_add({"agent": sid, "name": "one"})["phone"]
+        again = self.plane.pool_card()["phones"][0]
+        self.assertEqual(first["persona"], again["persona"])
+        ids = {p["id"] for p in self.plane.pool.phones}
+        self.assertEqual(len(ids), 1)
+        # and it survives a restart of the plane, because the shelf is a file
+        from spawnables.warmpool import WarmPhonePool
+        reopened = WarmPhonePool(pathlib.Path(self.home) / ".spawnables" / "pool.json")
+        self.assertEqual([p["id"] for p in reopened.phones], list(ids))
+
+    def test_lease_and_release_move_a_real_machine(self):
+        """cold once, warm after: the lease said resume and it resumes.
+
+        the adapter is a fake linux guest, so this proves the shelf's dance - provision, pause,
+        resume, pause - and not the android adapter underneath it. that half needs a phone.
+        """
+        from spawnables.server import ControlPlane
+        from spawnables.lifecycle import Machine
+        boots = []
+
+        def factory(order, image):
+            boots.append(order.id)
+            return FakeAdapter("linux")   # the provisioner's contract, not a phone's
+
+        plane = ControlPlane(Catalog("catalog"), adapter_factory=factory)
+        sid = plane.agent_register({"username": "desk"})["agent"]["stable_id"]
+        plane.pool_add({"agent": sid, "name": "shelf-one"})
+
+        lease = plane.pool_lease({"agent": "desk", "purpose": "twofa"})
+        self.assertEqual(lease["machine"]["woke"], "cold-then-resume")
+        mid = lease["machine"]["id"]
+        self.assertEqual(plane.machines[mid]["machine"].state, "live")
+        self.assertEqual(len(boots), 1)
+
+        out = plane.pool_release(lease["phone_id"], {"agent": sid})
+        self.assertEqual(out["machine"]["state"], "paused")
+        self.assertEqual(plane.machines[mid]["machine"].state, "paused")
+
+        second = plane.pool_lease({"agent": "desk", "purpose": "twofa"})
+        self.assertEqual(second["machine"]["id"], mid)
+        self.assertEqual(second["machine"]["woke"], "resume")
+        # the second lease did not provision another phone: warm means warm
+        self.assertEqual(len(boots), 1)
+
+    def test_every_phone_is_one_lease_and_the_shelf_says_busy(self):
+        from spawnables.server import ControlPlane, ApiError
+
+        def factory(order, image):
+            return FakeAdapter("linux")
+
+        plane = ControlPlane(Catalog("catalog"), adapter_factory=factory)
+        a = plane.agent_register({"username": "a"})["agent"]["stable_id"]
+        b = plane.agent_register({"username": "b"})["agent"]["stable_id"]
+        plane.pool_add({"agent": a, "name": "only-one"})
+        plane.pool_lease({"agent": a, "purpose": "twofa"})
+        with self.assertRaises(ApiError) as ctx:
+            plane.pool_lease({"agent": b, "purpose": "twofa"})
+        # stacking two agents on one phone is a credential mix, not sharing
+        self.assertIn("credential mix", str(ctx.exception))
+
+    def test_a_lease_expires_back_onto_the_shelf(self):
+        freed = self.plane.pool.sweep(now=10_000)
+        self.assertEqual(freed, [])
+
+
 class TestDutyCycle(unittest.TestCase):
     """a machine with hours instead of a machine that is always home."""
 

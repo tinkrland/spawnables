@@ -1,0 +1,32 @@
+screen, shelf, principals: the last three audit gaps
+
+the audit ended with three things prose promised and code did not do, and two modules nobody
+imported. all three are closed, and the two modules turned out to be halves of one seam.
+
+1. /screen serves a still. it used to answer 503 "no stream backend" while the spec named
+   novnc/webrtc, and the celesto adapter advertised `vnc` in its bridge tuple while nothing
+   served it. now GET /api/machines/:id/screen answers real png bytes with x-stream: still and
+   x-frame-kind: desktop|phone. a live stream stays the runner's job and would arrive as a
+   different content type rather than a relabelled poll. vnc is out of the adapter's bridge
+   tuple and out of the order-form example; the schema still accepts it, and validation names
+   any bridge we do not serve instead of letting an order ask for nothing.
+
+2. warmpool.py + agentid.py have callers, which is what they were missing. acquire() has always
+   demanded a stable id rather than a label, and AgentRegistry is where stable ids live.
+   - POST /api/agents registers a principal and shows the seed once; prove asks the seed to
+     prove the id, and renaming moves nothing
+   - GET /api/pool, POST /api/pool/phones, POST /api/pool/lease, POST /api/pool/phones/:id
+     release: the shelf with one identity minted per phone, one agent per lease (a second is
+     "a credential mix, not sharing"), one purpose (twofa, phone-apps), and release pausing it
+   - cold once, warm after: the first lease provisions the manifest, pauses, resumes, and
+     writes the machine id onto the shelf record so a restart does not make the second lease a
+     boot. a control plane with no provision backend refuses the lease instead of recording one
+     nobody can honour, and GET /api/pool still answers because bookkeeping needs no host
+   - a grant's stable_id is now checked against agentid's shape, and a grant with no stable_id
+     gets a warning saying a label grants nothing
+
+the honesty line for both: the dance is proven against a fake guest, the phone is not. no lease
+has resumed a redroid shelf phone, and spec/warm-shelf.md says so with verified: false.
+
+spec/warm-shelf.md is new and linked from the sidecar section of device-surface.md; the route
+table carries the screen correction and the seven shelf routes. 330/330 on a clean clone.

@@ -12,7 +12,7 @@ from . import BaseAdapter, Capabilities, ExecResult, AdapterError
 CAPS = {
     "linux": Capabilities(
         pause=True, freeze=True, export_full=True, export_data=True,
-        exec=True, desktop=True, bridge=("mcp", "ssh", "vnc"),
+        exec=True, desktop=True, bridge=("mcp", "ssh"),
     ),
     # verified 2026-10-28: windows guests are ssh-controlled, no snapshots
     "windows": Capabilities(

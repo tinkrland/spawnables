@@ -413,7 +413,10 @@ class TestLifecycle(unittest.TestCase):
         out = m.export("data-only")
         self.assertEqual(out["flavor"], "data-only")
         out = m.export("full")
-        self.assertEqual(out["delivery"], "signed url, time-limited")
+        # the verb says what may leave and what it found; the job, file and url are exports.py's
+        self.assertEqual(sorted(out), ["flavor", "paths"])
+        # the words are gone: a verb that returns "signed url" is describing a delivery it never made
+        self.assertNotIn("signed url", json.dumps(out))
         wm = Machine(order(base_image="win11-24h2"), FakeAdapter("windows"))
         with self.assertRaises(VerbNotSupported):
             wm.export("full")
@@ -3304,6 +3307,120 @@ class TestPhonesAreSidecars(unittest.TestCase):
                        "not a second subject"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text)
+
+
+class TestExportJobs(unittest.TestCase):
+    """the prose promised a job, a file and a signed url. these check all three, and the refusals."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = tempfile.mkdtemp()
+        os.environ["SPAWN_EXPORT_DIR"] = self.tmp
+        from spawnables import exports
+        self.exports = exports
+
+    def tearDown(self):
+        os.environ.pop("SPAWN_EXPORT_DIR", None)
+
+    def _guest(self, files=None, size="4096"):
+        import base64, io, tarfile
+        from spawnables.adapters import BaseAdapter, Capabilities, ExecResult
+
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+            for name, body in (files or {"home/a.txt": "hi"}).items():
+                data = body.encode()
+                info = tarfile.TarInfo(name)
+                info.size = len(data)
+                tf.addfile(info, io.BytesIO(data))
+        blob = base64.b64encode(buf.getvalue()).decode()
+
+        class Guest(BaseAdapter):
+            caps = Capabilities(exec=True, export_data=True)
+
+            def exec(self, cmd, timeout=300):
+                if cmd.startswith("du -sb"):
+                    return ExecResult(0, size, "")
+                if cmd.startswith("tar -czf -"):
+                    return ExecResult(0, blob, "")
+                return ExecResult(0, "", "")
+
+        return Guest()
+
+    def test_a_job_ends_with_a_file_a_digest_and_a_real_url(self):
+        reg = self.exports.Registry()
+        job = reg.start("m1", self._guest(), "data-only", ["~"], sync=True)
+        card = job.card()
+        self.assertEqual(card["state"], "done")
+        self.assertGreater(card["bytes"], 0)
+        self.assertEqual(len(card["sha256"]), 64)
+        self.assertTrue(card["url"].startswith(f"/api/exports/{job.id}/download?exp="))
+        # the path never leaves the server: a card with a filesystem path is a directory traversal
+        self.assertNotIn("artifact", card)
+        self.assertNotIn(self.tmp, json.dumps(card))
+
+    def test_the_signed_url_verifies_and_tampering_does_not(self):
+        reg = self.exports.Registry()
+        job = reg.start("m1", self._guest(), "data-only", ["~"], sync=True)
+        exp = int(job.finished) + 900
+        sig = self.exports.sign(job.id, exp)
+        self.assertTrue(self.exports.verify(job.id, exp, sig))
+        self.assertFalse(self.exports.verify(job.id, exp, "0" * 64))
+        self.assertFalse(self.exports.verify(job.id, exp, sig, now=exp + 1))
+        self.assertFalse(self.exports.verify("other", exp, sig))
+        self.assertFalse(self.exports.verify(job.id, "notanumber", sig))
+
+    def test_the_ceiling_refuses_before_the_work_starts(self):
+        reg = self.exports.Registry()
+        job = reg.start("m1", self._guest(size=str(900 * 1024 * 1024)), "data-only", ["~"], sync=True)
+        self.assertEqual(job.state, "failed")
+        self.assertIn("ceiling", job.error)
+        self.assertIsNone(job.artifact)
+
+    def test_an_empty_tarball_is_not_a_success(self):
+        from spawnables.adapters import BaseAdapter, Capabilities, ExecResult
+
+        class Empty(BaseAdapter):
+            caps = Capabilities(exec=True)
+
+            def exec(self, cmd, timeout=300):
+                return ExecResult(0, "not-base64!!" if cmd.startswith("tar") else "10", "")
+
+        reg = self.exports.Registry()
+        job = reg.start("m1", Empty(), "data-only", ["~"], sync=True)
+        self.assertEqual(job.state, "failed")
+        self.assertTrue(job.error)
+
+    def test_burn_deletes_the_artifacts_it_promised_to_delete(self):
+        reg = self.exports.Registry()
+        job = reg.start("m1", self._guest(), "data-only", ["~"], sync=True)
+        self.assertTrue(Path(job.artifact).exists())
+        self.assertEqual(reg.burn_machine("m1"), 1)
+        self.assertFalse(Path(job.artifact).exists())
+        self.assertEqual(reg.for_machine("m1"), [])
+
+    def test_the_verb_no_longer_describes_a_delivery_it_did_not_make(self):
+        from spawnables.adapters import BaseAdapter, Capabilities, ExecResult
+        from spawnables.catalog import Catalog
+        from spawnables.models import MachineOrder
+        from spawnables.lifecycle import Machine
+
+        class Guest(BaseAdapter):
+            caps = Capabilities(exec=True, export_data=True, export_full=True)
+
+            def exec(self, cmd, timeout=300):
+                return ExecResult(0, "", "")
+
+            def data_paths(self):
+                return ["~"]
+
+        cat = Catalog("catalog")
+        order = MachineOrder.from_dict({"id": "m9", "name": "box", "base_image": "mint-22-cinnamon",
+                                        "timezone": "utc"})
+        got = Machine(order, Guest()).export("data-only")
+        self.assertEqual(sorted(got), ["flavor", "paths"])
+        self.assertNotIn("delivery", got)
+        self.assertNotIn("signed url", json.dumps(got))
 
 
 class TestDutyCycle(unittest.TestCase):

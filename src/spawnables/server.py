@@ -37,6 +37,7 @@ from .validate import validate_order
 from .presets import clone_manifest, save_preset, load_presets, PresetError
 from .adapters import VerbNotSupported
 from .vault import Vault
+from .exports import Registry as ExportRegistry, verify as verify_export
 from .ipadlane import get_anyway_plan, validate_get_anyway
 
 VERBS = ("pause", "resume", "freeze", "thaw", "export", "burn")
@@ -66,6 +67,7 @@ class ControlPlane:
         # the cloud lane: credentials live in the vault under cloud:<provider>,
         # and nothing here needs qemu, disk images or docker on this host
         self.cloud_vault = Vault()
+        self.exports = ExportRegistry()
         self.drivers = {}  # mid -> Computer, because sight has to survive the request
 
     # -- cloud connect -----------------------------------------------------
@@ -242,13 +244,50 @@ class ControlPlane:
             if verb == "thaw":
                 return m.thaw(body.get("snapshot_id"), idempotency_key=key)
             if verb == "export":
-                return m.export(body.get("flavor", "data-only"),
-                                idempotency_key=key)
+                # both spellings answer with the same job: a verb that returned the words
+                # "signed url" is exactly the prose-over-code this replaced
+                return self.export(mid, body)
             return getattr(m, verb)(idempotency_key=key)
         except (VerbNotSupported, LifecycleError, AccessError) as exc:
             raise ApiError(409, str(exc))
 
     _header_key = None  # set per-request by the handler
+
+    # -- exports: a job you can ask about, and a url that expires ------------------------------------
+
+    def export(self, mid, body):
+        """start an export job. the verb still decides what may leave the guest."""
+        rec = self._find(mid)
+        m = rec["machine"]
+        if m is None:
+            raise ApiError(409, "machine never provisioned; nothing to export")
+        flavor = body.get("flavor", "data-only")
+        try:
+            plan = m.export(flavor, idempotency_key=body.get("idempotency_key") or self._header_key)
+        except (VerbNotSupported, LifecycleError, AccessError) as exc:
+            raise ApiError(409, str(exc))
+        if plan == "already-applied":
+            return {"already_applied": True}
+        job = self.exports.start(mid, m.adapter, flavor=plan["flavor"], paths=plan["paths"],
+                                 sync=bool(body.get("sync")))
+        return job.card() if hasattr(job, "card") else {"job_id": job.id, "state": job.state}
+
+    def export_job(self, job_id):
+        job = self.exports.get(job_id)
+        if job is None:
+            raise ApiError(404, f"no export job {job_id}")
+        return job.card()
+
+    def export_file(self, job_id, exp, sig):
+        """the signed url's other end: verify first, then hand over the bytes."""
+        job = self.exports.get(job_id)
+        if job is None:
+            raise ApiError(404, f"no export job {job_id}")
+        if not verify_export(job_id, exp, sig):
+            raise ApiError(403, "this link is expired or was not signed here")
+        if job.state != "done" or not job.artifact:
+            raise ApiError(409, f"job is {job.state}")
+        return job.artifact
 
     # -- driving a machine: the agent's hands -----------------------------------------------------
 
@@ -480,8 +519,23 @@ def make_handler(plane):
                 self._json(200, {"ok": True,
                                  "data": plane.save_preset(body)})
                 return
+            if method == "GET" and len(parts) == 2 and parts[0] == "exports":
+                self._json(200, {"ok": True, "data": plane.export_job(parts[1])})
+                return
+            if method == "GET" and len(parts) == 3 and parts[0] == "exports" and parts[2] == "download":
+                qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+                params = dict(x.split("=", 1) for x in qs.split("&") if "=" in x)
+                path = plane.export_file(parts[1], params.get("exp"), params.get("sig"))
+                self._download(path, f"{parts[1]}.tar.gz")
+                return
             if len(parts) >= 3 and parts[0] == "machines":
                 mid, action = parts[1], parts[2]
+                if method == "POST" and action == "export":
+                    self._json(200, {"ok": True, "data": plane.export(mid, self._read_body())})
+                    return
+                if method == "GET" and action == "exports":
+                    self._json(200, {"ok": True, "data": plane.exports.for_machine(mid)})
+                    return
                 if method == "GET" and action == "screen":
                     self._json(503, {"ok": False, "error":
                                      "no stream backend on this control "
@@ -557,6 +611,21 @@ def make_handler(plane):
             self.send_header("cache-control", "no-store")
             self.send_header("x-frame-id", frame or "")
             self.send_header("x-stream", "still")   # a still, never dressed as a stream
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def _download(self, path, filename):
+            """the artifact, as bytes, with the name a browser will save it under."""
+            from pathlib import Path as _P
+            f = _P(path)
+            if not f.exists():
+                raise ApiError(410, "the artifact is gone; exports live on this host's disk")
+            raw = f.read_bytes()
+            self.send_response(200)
+            self.send_header("content-type", "application/gzip")
+            self.send_header("content-length", str(len(raw)))
+            self.send_header("content-disposition", f'attachment; filename="{filename}"')
+            self.send_header("cache-control", "no-store")
             self.end_headers()
             self.wfile.write(raw)
 

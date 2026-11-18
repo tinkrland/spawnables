@@ -173,7 +173,10 @@ class Machine:
         if not self._once("export", idempotency_key):
             return "already-applied"
         paths = self.adapter.export_paths() if flavor == "full" else self.adapter.data_paths()
-        return {"flavor": flavor, "paths": paths, "delivery": "signed url, time-limited"}
+        # the verb decides what may be exported and says what it found. the job, the file and the
+        # signed url are exports.py's business: a verb that returns the words "signed url" is
+        # describing a delivery it never made.
+        return {"flavor": flavor, "paths": paths}
 
     def burn(self, confirm, idempotency_key=None):
         if confirm != self.order.name:

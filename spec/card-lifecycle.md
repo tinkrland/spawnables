@@ -15,7 +15,10 @@ POST   /api/machines/:id/pause    stop, keep disk. processes end, files stay
 POST   /api/machines/:id/resume   boot again, files intact
 POST   /api/machines/:id/freeze   full-state snapshot (ram + devices), machine off
 POST   /api/machines/:id/thaw     restore snapshot, session resumes exactly
-POST   /api/machines/:id/export   async job -> signed url. flavors below
+POST   /api/machines/:id/export   start an export job, answers with a job card
+GET    /api/machines/:id/exports  every export job this machine has run
+GET    /api/exports/:job          one job: state, bytes, sha256, and a url only when done
+GET    /api/exports/:job/download?exp=&sig=  the tarball, over a signed link
 POST   /api/machines/:id/burn     typed-name confirm; shred disk + snapshots
 GET    /api/machines/:id/screen   live desktop stream (novnc/webrtc) for the card
 POST   /api/machines/:id/computer eyes and hands: observe, click, type, key, drag, scroll, sequence
@@ -49,6 +52,19 @@ the card copy states the differences plainly:
 - **data-only**: home dir tarball. no apps, no system files, smaller and shareable.
 
 both land as time-limited signed urls.
+
+what "signed url" means here, since it was prose before it was code: the job tarballs the paths in
+the guest as base64 (the exec seam carries text), decodes it on the host, checks it is really a
+gzip tarball, records the byte count and the sha256, and prints a link of the form
+`/api/exports/<job>/download?exp=<unix>&sig=<hmac>`. the signature is hmac-sha256 over the job id
+and the expiry with a per-host secret kept in `~/.spawnables/export_secret` (0600, generated on
+first use, so links survive a restart). expiry is 900 seconds by default.
+
+three refusals keep the job honest: an estimate over 512 mb is refused before the tar starts,
+because a tarball that size through a text seam is a hang rather than an export; bytes that do not
+decode are a failure, not a smaller success; and a download whose signature was edited or whose
+expiry passed is a 403 that says which. burn deletes the artifacts, which is what its sentence
+already promised.
 
 ## burn
 

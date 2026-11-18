@@ -20,10 +20,11 @@ GET    /api/machines/:id/exports  every export job this machine has run
 GET    /api/exports/:job          one job: state, bytes, sha256, and a url only when done
 GET    /api/exports/:job/download?exp=&sig=  the tarball, over a signed link
 POST   /api/machines/:id/burn     typed-name confirm; shred disk + snapshots
-GET    /api/machines/:id/screen   live desktop stream (novnc/webrtc) for the card
+GET    /api/machines/:id/screen   live desktop stream: NOT BUILT, answers 503. the still below is real
 POST   /api/machines/:id/computer eyes and hands: observe, click, type, key, drag, scroll, sequence
 POST   /api/machines/:id/drive    the device verbs, run on the guest: open_app, tap_text, type_text, ...
 GET    /api/machines/:id/frame    one still as image/png, with x-frame-id and x-stream: still
+POST   /api/mcp                  json-rpc for mcp clients: the same tools as `spawnables mcp`
 
 `/frame` is a still and says so in its own header; the live stream stays the runner's job. a paused
 machine answers 409 for all three: a stopped guest has no screen to photograph and no hand to move.
@@ -72,7 +73,7 @@ burn is the only irreversible verb, so it takes a typed confirmation: the machin
 
 ## agent bridge
 
-a live machine can expose any of `mcp`, `ssh`, `vnc` to agents (see `agent_bridge` in the [order form](order-form.md)). the mcp surface is what makes the whole thing turnkey: claude code, cursor, any mcp client drives machines the web ui provisions.
+a live machine can expose any of `mcp`, `ssh`, `vnc` to agents (see `agent_bridge` in the [order form](order-form.md)). mcp is served today by [mcp.py](../src/spawnables/mcp.py) over stdio and `POST /api/mcp`, and it is the surface that makes the whole thing turnkey: claude code, cursor, any mcp client drives machines the web ui provisions. ssh is the exec transport rather than an endpoint, and vnc is declared and unbuilt.
 
 ## celesto verb mapping
 

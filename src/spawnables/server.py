@@ -488,6 +488,16 @@ def make_handler(plane):
             if method == "POST" and parts == ["cloud", "machines"]:
                 self._json(200, {"ok": True, "data": plane.cloud_machine(self._read_body())})
                 return
+            if method == "POST" and parts == ["mcp"]:
+                from .mcp import handle, NAMES
+                body = self._read_body()
+                if isinstance(body, list):                       # json-rpc batch
+                    self._json(200, [r for r in (handle(plane, m) for m in body) if r is not None])
+                else:
+                    out = handle(plane, body)
+                    self._json(200, out if out is not None else {"jsonrpc": "2.0", "id": None,
+                                                                 "result": {}})
+                return
             if method == "GET" and parts == ["catalogs"]:
                 self._json(200, {"ok": True, "data": {
                     "base_images": plane.catalog.base_images,

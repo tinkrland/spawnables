@@ -243,6 +243,19 @@ def cmd_drive(args):
     return 0
 
 
+def cmd_mcp(args):
+    """two ways in, one handler. --tools is for reading; the rest is for a client that speaks stdio."""
+    from . import mcp
+    if args.tools:
+        print(json.dumps({"tools": mcp.TOOLS}, indent=2))
+        return 0
+    from .catalog import Catalog
+    from .server import ControlPlane
+    plane = ControlPlane(Catalog(args.catalog), presets_dir=args.presets_dir)
+    mcp.serve(plane)
+    return 0
+
+
 def cmd_surface(args):
     """the four verbs an agent gets on a device with no dom, and who offers which."""
     from . import surface
@@ -329,6 +342,12 @@ def main(argv=None):
     dv = sub.add_parser("drive", help="the device surface, actually run on the guest")
     dv.add_argument("--arg", default=None)
     dv.set_defaults(fn=cmd_drive)
+
+    mc = sub.add_parser("mcp", help="the control plane as mcp tools: stdio, or POST /api/mcp")
+    mc.add_argument("--tools", action="store_true", help="print the tool table instead of serving")
+    mc.add_argument("--presets-dir", default="catalog/presets")
+    mc.add_argument("--catalog", default="catalog")
+    mc.set_defaults(fn=cmd_mcp)
     args = ap.parse_args(argv)
     return args.fn(args)
 

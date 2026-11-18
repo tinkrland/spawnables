@@ -3423,6 +3423,122 @@ class TestExportJobs(unittest.TestCase):
         self.assertNotIn("signed url", json.dumps(got))
 
 
+class TestMcpSurface(unittest.TestCase):
+    """connect/byoa promised any mcp client could drive what the web ui provisions. these hold it."""
+
+    def _plane(self):
+        import tempfile
+        from spawnables.adapters import BaseAdapter, Capabilities, ExecResult
+        from spawnables.catalog import Catalog
+        from spawnables.models import MachineOrder
+        from spawnables.lifecycle import Machine
+        from spawnables.server import ControlPlane
+
+        class Desk(BaseAdapter):
+            caps = Capabilities(exec=True, desktop=True, pause=True)
+
+            def __init__(self):
+                self.guest, self.shots = "linux", 0
+
+            def exec(self, cmd, timeout=300):
+                if cmd.startswith("import -window root"):
+                    self.shots += 1
+                    return ExecResult(0, "iVBORw0KGgo=" + "A" * self.shots, "")
+                if cmd.startswith("xdotool getdisplaygeometry"):
+                    return ExecResult(0, "1280 800", "")
+                return ExecResult(0, "", "")
+
+        plane = ControlPlane(Catalog("catalog"), presets_dir=tempfile.mkdtemp())
+        order = MachineOrder.from_dict({"id": "m1", "name": "box", "base_image": "mint-22-cinnamon",
+                                        "timezone": "utc"})
+        m = Machine(order, Desk())
+        m.state = "live"
+        plane.machines["m1"] = {"machine": m, "emitter": None, "events": [],
+                                "manifest": {"name": "box"}, "ok": True}
+        return plane
+
+    def _call(self, plane, name, **arguments):
+        from spawnables import mcp
+        out = mcp.handle(plane, {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                                 "params": {"name": name, "arguments": arguments}})
+        blk = out.get("result", {}).get("content", [{}])[0]
+        # frame answers with an image block, not text: a helper that assumes text would hide that
+        return out, (json.loads(blk["text"]) if blk.get("type") == "text" else blk)
+
+    def test_initialize_answers_with_a_protocol_and_a_name(self):
+        from spawnables import mcp
+        out = mcp.handle(self._plane(), {"jsonrpc": "2.0", "id": 1, "method": "initialize"})
+        self.assertEqual(out["result"]["serverInfo"]["name"], "spawnables")
+        self.assertIn("tools", out["result"]["capabilities"])
+        self.assertTrue(out["result"]["protocolVersion"])
+
+    def test_every_tool_carries_a_schema_an_agent_can_read(self):
+        from spawnables import mcp
+        tools = mcp.handle(self._plane(), {"jsonrpc": "2.0", "id": 1, "method": "tools/list"})["result"]["tools"]
+        names = [t["name"] for t in tools]
+        for want in ("machines_list", "machine_detail", "machine_verb", "computer", "drive", "frame"):
+            self.assertIn(want, names)
+        for t in tools:
+            self.assertEqual(t["inputSchema"]["type"], "object", t["name"])
+            self.assertTrue(t["description"], t["name"])
+
+    def test_a_list_reads_the_same_grid_the_route_does(self):
+        plane = self._plane()
+        out, body = self._call(plane, "machines_list")
+        self.assertEqual([m["id"] for m in body["machines"]], [m["id"] for m in plane.grid()])
+
+    def test_the_drivers_refusal_travels_with_its_needs(self):
+        plane = self._plane()
+        out, body = self._call(plane, "computer", machine="m1", action="click", point=[10, 20])
+        self.assertTrue(body["refused"])
+        self.assertEqual(body["needs"], ["observe"])
+        self.assertTrue(out["result"]["isError"], "a refusal is an error result, not a cheerful one")
+
+    def test_observe_then_click_and_a_frame_as_an_image_block(self):
+        plane = self._plane()
+        self._call(plane, "computer", machine="m1", action="observe")
+        _, body = self._call(plane, "computer", machine="m1", action="click", point=[640, 400])
+        self.assertTrue(body["ok"])
+        self.assertIn("640 400", body["line"])
+        out, _ = self._call(plane, "frame", machine="m1")
+        blk = out["result"]["content"][0]
+        self.assertEqual((blk["type"], blk["mimeType"]), ("image", "image/png"))
+        self.assertTrue(blk["data"])
+
+    def test_burn_needs_the_typed_name_over_mcp_too(self):
+        plane = self._plane()
+        _, body = self._call(plane, "machine_verb", machine="m1", verb="burn")
+        self.assertTrue(body["refused"])
+        self.assertIn("confirm", body["why"])
+        self.assertEqual(plane.machines["m1"]["machine"].state, "live")
+
+    def test_protocol_errors_are_errors_not_tracebacks(self):
+        from spawnables import mcp
+        plane = self._plane()
+        self.assertEqual(mcp.handle(plane, {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                                            "params": {"name": "sudo", "arguments": {}}})["error"]["code"], -32602)
+        self.assertEqual(mcp.handle(plane, {"jsonrpc": "2.0", "id": 2, "method": "nope"})["error"]["code"], -32601)
+        self.assertEqual(mcp.handle(plane, "not a dict")["error"]["code"], -32600)
+
+    def test_a_notification_has_no_answer(self):
+        from spawnables import mcp
+        self.assertIsNone(mcp.handle(self._plane(), {"jsonrpc": "2.0", "method": "notifications/initialized"}))
+
+    def test_the_stdio_loop_answers_each_line_and_survives_junk(self):
+        import io
+        from spawnables import mcp
+        lines = io.StringIO('{"jsonrpc":"2.0","id":1,"method":"initialize"}\n'
+                            '{"jsonrpc":"2.0","method":"notifications/initialized"}\n'
+                            'not json at all\n'
+                            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}\n')
+        out = io.StringIO()
+        mcp.serve(self._plane(), stdin=lines, stdout=out)
+        answers = [json.loads(x) for x in out.getvalue().strip().splitlines()]
+        self.assertEqual(len(answers), 3, "the notification is silent, the other three answer")
+        self.assertEqual(answers[1]["error"]["code"], -32700)
+        self.assertTrue(answers[2]["result"]["tools"])
+
+
 class TestDutyCycle(unittest.TestCase):
     """a machine with hours instead of a machine that is always home."""
 

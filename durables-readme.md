@@ -49,10 +49,10 @@ an order: the mechanism is not the subject.
 | placement | needs | isolation | verified here |
 |---|---|---|---|
 | `host` | node with worker_threads | the isolate's own heap; **no kernel boundary at all**, so a v8 escape is a host escape | yes: node 24.21.0, one worker per actor, 2026-11-20 |
-| `guest` | a live spawnable guest with node | whatever that machine has, which means the durable dies with the machine unless its state lives outside it | **not run here** |
+| `guest` | a live spawnable guest with node | whatever that machine has, which means the durable dies with the machine unless its state lives outside it | yes: 39/39 and a pooled run inside a tenki guest (linux 6.18.62, node 24.22.3), 2026-11-20 |
 | `container` | a substrate from the `isolation` branch plus node | the substrate's boundary; gvisor's systrap platform is the strongest of these and still needs no hypervisor | **not run here** |
 
-the two unverified rows say so in `contract.py`, in the same field the verified one uses, so a
+the one unverified row says so in `contract.py`, in the same field the verified ones use, so a
 reader cannot mistake one for the other.
 
 ## what a durable may never claim
@@ -100,13 +100,18 @@ measured here, 8 actors, acquire + call + release each, median of three runs:
 | one node process per actor | 597 ms | 8 |
 | one pooled process | 278 ms | 1 |
 
-so 2.1x, and eight pids become one. the number is a ceiling on what the pool buys, not a promise:
-the work an actor does inside its isolate is unchanged, and a pool that is full still refuses.
+so 2.1x, and eight pids become one. the same bench inside a tenki guest read 310 ms against 145 ms,
+also 2.1x: the ratio is the pool's, the absolute numbers are the host's mood. that is a ceiling on
+what the pool buys, not a promise: the work an actor does inside its isolate is unchanged, and a
+pool that is full still refuses.
 
 ## honest gaps
 
-- **nothing has run in a guest or a container.** the contract names what it would need; the code
-  refuses rather than spawning an isolate somewhere it cannot.
+- **nothing has run in a container.** the contract names what it would need; the code refuses
+  rather than spawning an isolate somewhere it cannot.
+- **the guest run kept its store on the guest.** isolates ran inside a tenki guest and the suite
+  passed there, but nothing has proven a durable surviving its own guest being burned. that is the
+  placement's whole argument and it is still unproven: state has to live outside the machine.
 - **no websocket hibernation.** the contract says sockets belong to the host; nothing implements
   holding one across an eviction yet.
 - **no interleave.** their runtime can let other calls run during an await. this one serializes

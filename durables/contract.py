@@ -33,7 +33,9 @@ PLACEMENTS = {
         "needs": "a live guest with node, and the control plane able to reach it",
         "isolation": "whatever the guest has, which is the point: a durable in a burned machine dies "
                      "with it, so state must live in a store outside the guest",
-        "verified": "not run here: no guest has been asked to host an isolate",
+        "verified": "yes: 39/39 and a pooled 8-actor run inside a tenki guest (linux 6.18.62, "
+                    "node 24.22.3), measured 2026-11-20. the store was on that guest's own disk, so "
+                    "this proves isolates inside a guest, not survival of the guest dying",
     },
     "container": {
         "what": "inside a container on the isolation branch's substrates (docker, kubernetes, gvisor)",

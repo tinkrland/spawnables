@@ -193,10 +193,11 @@ class TestContract(unittest.TestCase):
                 self.assertIn(field, p, f"{name} is missing {field}")
             self.assertTrue(p["verified"], name)
 
-    def test_only_the_host_placement_is_verified(self):
-        # a claim of verification for a guest or container would be the drift this repo hunts
-        for name in ("guest", "container"):
-            self.assertIn("not run here", contract.PLACEMENTS[name]["verified"], name)
+    def test_a_placement_that_has_not_run_says_so(self):
+        # host and guest have been run; a container has not, and its row may not imply otherwise
+        self.assertIn("not run here", contract.PLACEMENTS["container"]["verified"])
+        for name in ("host", "guest"):
+            self.assertNotIn("not run here", contract.PLACEMENTS[name]["verified"], name)
 
     def test_refusals_are_never_empty_and_always_reasoned(self):
         self.assertGreaterEqual(len(contract.REFUSED), 6)

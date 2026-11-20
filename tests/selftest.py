@@ -13,6 +13,7 @@ import unittest
 
 from durables import contract
 from durables.isolates import InProcess, IsolateError, V8, backend_for
+from durables.pool import Pool, PooledBackend
 from durables.runtime import DurableError, Host, LeaseLost, Refused
 from durables.store import Store, StoreError
 
@@ -269,13 +270,125 @@ class TestRealIsolate(unittest.TestCase):
             iso.close()
 
 
+COUNTER_JS = (
+    "module.exports = { handle: (state, method, args) => {\n"
+    "  const n = (state.n || 0) + (method === 'incr' ? (args.by || 1) : 0);\n"
+    "  return { out: { n, process_visible: typeof process !== 'undefined' }, state: { n } };\n"
+    "} };\n")
+
+
+@unittest.skipUnless(Pool.available(), "no node on this host")
+class TestIsolatePool(unittest.TestCase):
+    """eight actors used to mean eight node processes. one process is the whole point of a pool."""
+
+    def setUp(self):
+        self.pool = Pool(max_workers=4)
+
+    def tearDown(self):
+        self.pool.close()
+
+    def test_many_actors_share_one_process(self):
+        pids = set()
+        for i in range(8):
+            w, _ = self.pool.acquire(f"counter:a{i}", COUNTER_JS)
+            out, _state = self.pool.call(w, {}, "incr", {"by": i + 1})
+            pids.add(self.pool.stats()["pid"])
+            self.assertEqual(out["n"], i + 1)
+            self.pool.release(w)
+        self.assertEqual(len(pids), 1, "eight actors, one process")
+        st = self.pool.stats()
+        self.assertEqual((st["spawned"], st["released"], st["workers"]), (8, 8, 0))
+
+    def test_the_ceiling_is_a_refusal_not_a_queue(self):
+        held = [self.pool.acquire(f"busy:{i}", COUNTER_JS)[0] for i in range(4)]
+        try:
+            with self.assertRaises(IsolateError) as got:
+                self.pool.acquire("busy:extra", COUNTER_JS)
+            self.assertIn("ceiling", str(got.exception))
+        finally:
+            for w in held:
+                self.pool.release(w)
+
+    def test_release_terminates_the_isolate(self):
+        w1, reused = self.pool.acquire("solo:x", COUNTER_JS)
+        self.assertFalse(reused)
+        w2, reused2 = self.pool.acquire("solo:x", COUNTER_JS)
+        self.assertEqual((w1, reused2), (w2, True), "one worker per actor while it is live")
+        self.pool.release(w1)
+        w3, reused3 = self.pool.acquire("solo:x", COUNTER_JS)
+        self.assertNotEqual(w3, w1, "a released isolate is gone, not parked")
+        self.assertFalse(reused3)
+        self.pool.release(w3)
+
+    def test_a_released_worker_cannot_be_called(self):
+        w, _ = self.pool.acquire("gone:x", COUNTER_JS)
+        self.pool.release(w)
+        with self.assertRaises(IsolateError):
+            self.pool.call(w, {}, "incr", {})
+
+    def test_state_still_crosses_and_the_sandbox_still_holds(self):
+        w, _ = self.pool.acquire("counter:a", COUNTER_JS)
+        out, state = self.pool.call(w, {}, "incr", {"by": 2})
+        self.assertEqual(out["n"], 2)
+        self.assertFalse(out["process_visible"])
+        out2, _ = self.pool.call(w, state, "incr", {"by": 3})
+        self.assertEqual(out2["n"], 5)
+        self.pool.release(w)
+
+
+@unittest.skipUnless(Pool.available(), "no node on this host")
+class TestPooledDurability(Base):
+    """the pool must not weaken the three rules: commit, one writer, and the isolate as a cache."""
+
+    def test_eviction_replays_into_a_different_isolate(self):
+        pool = Pool(max_workers=4)
+        try:
+            h = Host(self.dir)
+            h.define("counter", None, idle_seconds=0, backend=PooledBackend(COUNTER_JS, pool=pool))
+            self.assertEqual(h.invoke("counter:a", "incr", {"by": 2})["n"], 2)
+            self.assertEqual(h.sweep(), ["counter:a"])          # release terminates the isolate
+            self.assertEqual(h.invoke("counter:a", "incr", {"by": 3})["n"], 5)
+            self.assertEqual(Store(self.dir).load("counter:a")[0], {"n": 5})
+            self.assertEqual(pool.stats()["spawned"], 2, "a replayed actor gets a fresh isolate")
+        finally:
+            pool.close()
+
+    def test_two_actors_never_share_an_isolate(self):
+        pool = Pool(max_workers=4)
+        try:
+            h = Host(self.dir)
+            h.define("counter", None, idle_seconds=30, backend=PooledBackend(COUNTER_JS, pool=pool))
+            h.invoke("counter:a", "incr", {"by": 1})
+            h.invoke("counter:b", "incr", {"by": 9})
+            actors = [a["actor"] for a in pool.stats()["actors"]]
+            self.assertEqual(sorted(actors), ["counter:a", "counter:b"])
+            self.assertEqual(h.read("counter:a"), {"n": 1})
+            self.assertEqual(h.read("counter:b"), {"n": 9})
+        finally:
+            pool.close()
+
+
+class TestPoolWithoutNode(unittest.TestCase):
+    def test_the_pool_refuses_rather_than_pretending(self):
+        real = Pool.available
+        Pool.available = staticmethod(lambda: False)
+        try:
+            pool = Pool()
+            pool.node = None
+            with self.assertRaises(IsolateError):
+                pool.acquire("counter:a", COUNTER_JS)
+        finally:
+            Pool.available = staticmethod(real)
+
+
 class TestReadmeKeepsItsNeedles(unittest.TestCase):
     def test_the_readme_states_the_rule_in_the_owners_terms(self):
         import re
         text = re.sub(r"\s+", " ", (pathlib.Path(__file__).resolve().parents[1] /
                                     "durables-readme.md").read_text().lower())
         for needle in ("commit before", "the log is the truth", "expected to die",
-                       "one isolate per actor", "never an identity", "v8"):
+                       "one isolate per actor", "never an identity", "v8",
+                       "one pooled process", "release terminates the isolate"):
             self.assertIn(needle, text, needle)
 
 

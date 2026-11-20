@@ -133,5 +133,6 @@ class Store:
         for entry in sorted(os.listdir(base)):
             idfile = os.path.join(base, entry, "id")
             if os.path.exists(idfile):
-                out.append(open(idfile).read().strip())
+                with open(idfile) as f:
+                    out.append(f.read().strip())
         return out

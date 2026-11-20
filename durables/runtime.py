@@ -79,7 +79,9 @@ class Host:
         actor = self.actors.get(name)
         # the handler travels with the definition: a backend without one cannot answer
         backend = actor.backend or InProcess(actor.handle)
-        iso = backend.spawn(name, state)
+        # the actor id, not the class: a pool keys workers by actor, and two counters of the
+        # same class must never share an isolate
+        iso = backend.spawn(aid, state)
         self._live[aid] = {"isolate": iso, "last": self.clock(), "lease": token,
                            "seq": lease["seq"], "name": name}
         return iso, state

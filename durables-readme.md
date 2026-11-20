@@ -82,6 +82,27 @@ PYTHONPATH=. python3 tests/selftest.py  # 31 tests, no network, no guest
 the demo's last line matters more than its first: the counter reads 4 after being evicted and
 replayed, which is the whole claim in one number.
 
+## the pool: one process, many isolates
+
+a worker_thread is an isolate. a process is a lot more than an isolate: its own address space, its
+own startup, its own pid to reap. serving eight actors used to mean eight node processes, which is
+honest and heavy.
+
+`durables/pool.py` keeps one node process and spawns the isolates inside it. the rules are the
+pool's, so none of them weaken: a worker belongs to one actor for its whole life, release terminates
+the isolate (it is a cache, there is nothing to keep), and a full pool refuses with a code rather
+than queueing a durable call forever behind eight busy actors.
+
+measured here, 8 actors, acquire + call + release each, median of three runs:
+
+| shape | time | processes |
+|---|---|---|
+| one node process per actor | 597 ms | 8 |
+| one pooled process | 278 ms | 1 |
+
+so 2.1x, and eight pids become one. the number is a ceiling on what the pool buys, not a promise:
+the work an actor does inside its isolate is unchanged, and a pool that is full still refuses.
+
 ## honest gaps
 
 - **nothing has run in a guest or a container.** the contract names what it would need; the code
@@ -92,5 +113,7 @@ replayed, which is the whole claim in one number.
   every call and says so, because a flag whose guarantee is unproven is worse than a queue.
 - **single host.** the fence stops two writers, not a host dying mid-commit. durable storage is
   what makes the log survive; this branch has not met a real disk failure.
-- **one isolate per process is not free.** a node process per actor is honest and heavy. the next
-  step, if this earns it, is several workers in one host process, which is what an isolate pool is.
+- **the pool is per host, not per cluster.** one process holds the isolates on this machine. two
+  hosts means two pools and no placement decision between them yet.
+- **the pipe serializes.** the pool answers one request at a time by design; concurrency lives in the
+  isolates, and a queue in front of the pipe would hide saturation rather than fix it.

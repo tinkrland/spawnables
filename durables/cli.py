@@ -7,6 +7,7 @@ import time
 
 from . import contract
 from .isolates import InProcess, IsolateError, V8
+from .pool import Pool, PooledBackend
 from .runtime import DurableError, Host, Refused
 
 
@@ -60,6 +61,40 @@ def cmd_v8(args):
     return 0
 
 
+def cmd_pool(args):
+    """eight actors, one process, and the ceiling said out loud."""
+    src = ("module.exports = { handle: (state, method, args) => ({\n"
+           "  out: { n: (state.n || 0) + 1, process_visible: typeof process !== 'undefined' },\n"
+           "  state: { n: (state.n || 0) + 1 } }) };\n")
+    if not Pool.available():
+        print("no node on this host: the pool refuses rather than faking an isolate")
+        return 2
+    pool = Pool(max_workers=args.max_workers)
+    try:
+        for i in range(args.actors):
+            w, _ = pool.acquire(f"counter:a{i}", src)
+            out, _state = pool.call(w, {}, "incr", {})
+            pool.release(w)
+        st = pool.stats()
+        print(json.dumps({"actors_served": args.actors, "processes": 1, "pid": st["pid"],
+                          "isolates_spawned": st["spawned"], "isolates_released": st["released"],
+                          "isolates_live": st["workers"], "ceiling": st["max"]}, indent=2))
+        if args.show_ceiling:
+            held = [pool.acquire(f"held:{i}", src)[0] for i in range(args.max_workers)]
+            try:
+                pool.acquire("held:one-too-many", src)
+                print("ceiling did not refuse")
+                return 1
+            except IsolateError as exc:
+                print("ceiling refuses:", str(exc)[:96])
+            finally:
+                for w in held:
+                    pool.release(w)
+        return 0
+    finally:
+        pool.close()
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="durables", description=contract.CARD["line"])
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -70,6 +105,11 @@ def main(argv=None):
     v = sub.add_parser("v8", help="spawn a real v8 isolate and call it")
     v.add_argument("--source", help="a js actor module exporting handle(state, method, args)")
     v.set_defaults(fn=cmd_v8)
+    pl = sub.add_parser("pool", help="serve N actors from one node process")
+    pl.add_argument("--actors", type=int, default=8)
+    pl.add_argument("--max-workers", type=int, default=8)
+    pl.add_argument("--show-ceiling", action="store_true", help="fill the pool and show the refusal")
+    pl.set_defaults(fn=cmd_pool)
     args = p.parse_args(argv)
     try:
         return args.fn(args)

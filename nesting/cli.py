@@ -34,12 +34,20 @@ def cmd_guest(args):
     return 0
 
 
+def _json_arg(raw, what):
+    """a caller's json, refused in words rather than a traceback when it is not json."""
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"refused: {what} must be json ({exc.msg} at column {exc.colno})")
+
+
 def cmd_plan(args):
     facts = host_probe()
     if args.facts:
         with open(args.facts) as f:
             facts = json.load(f)
-    order = json.loads(args.order) if args.order else {}
+    order = _json_arg(args.order, "--order") if args.order else {}
     got = make_plan(args.shape, facts, order)
     print(json.dumps(got, indent=2))
     return 0 if got["ok"] else 1

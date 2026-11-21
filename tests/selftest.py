@@ -251,6 +251,18 @@ class TestPlan(unittest.TestCase):
             plan("vm-in-container", facts())
 
 
+class TestCliRefusals(unittest.TestCase):
+    def test_a_malformed_order_is_a_refusal_not_a_traceback(self):
+        import contextlib
+        import io
+        from nesting import cli
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as got:
+            cli.main(["plan", "--shape", "container-in-guest", "--order", "{disk: 40}"])
+        self.assertIn("must be json", str(got.exception))
+        self.assertEqual(str(got.exception).count("Traceback"), 0)
+
+
 class TestReadmeKeepsItsNeedles(unittest.TestCase):
     def test_the_readme_states_the_three_shapes_in_the_owners_terms(self):
         text = re.sub(r"\s+", " ", (pathlib.Path(__file__).resolve().parents[1] /

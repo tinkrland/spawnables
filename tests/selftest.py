@@ -39,7 +39,11 @@ class TestContract(unittest.TestCase):
 
     def test_no_shape_claims_verification_it_did_not_earn(self):
         """each row may report a probe; none may report the shape working, because none has."""
-        self.assertIn("no container has been run", contract.SHAPES["container-in-guest"]["verified"])
+        verified = contract.SHAPES["container-in-guest"]["verified"]
+        self.assertIn("measured 2026-11-21", verified)
+        # the evidence, and the part that was not proven, both have to be in the sentence
+        self.assertIn("6.18.62", verified)
+        self.assertIn("untested", verified)
         self.assertIn("no vmx/svm", contract.SHAPES["vm-in-guest"]["verified"])
         # the third shape is not this branch's to verify: it points at the branch that owns it
         self.assertIn("isolation branch", contract.SHAPES["container-as-guest"]["verified"])
@@ -268,7 +272,8 @@ class TestReadmeKeepsItsNeedles(unittest.TestCase):
         text = re.sub(r"\s+", " ", (pathlib.Path(__file__).resolve().parents[1] /
                                     "nesting-readme.md").read_text().lower())
         for needle in ("containers inside a guest", "a vm inside a guest", "three shapes",
-                       "needs a hypervisor", "unknown, not yes", "orphan", "merge"):
+                       "needs a hypervisor", "unknown, not yes", "orphan", "merge",
+                       "the guest's kernel, not a second one", "rootless podman"):
             self.assertIn(needle, text, needle)
 
 

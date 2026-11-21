@@ -10,7 +10,7 @@ plans only what the machine can actually do.
 
 | shape | what it is | needs kvm | state |
 |---|---|---|---|
-| **containers inside a guest** | docker, podman or runsc running inside a spawnable VM, on that guest's kernel | **no** | probed in a tenki guest (cgroup v2, non-root, no runtime); no container run there yet |
+| **containers inside a guest** | docker, podman or runsc running inside a spawnable VM, on that guest's kernel | **no** | **yes**: podman 4.9.3 in a tenki guest ran hello-world and alpine, and reported the guest's own kernel |
 | **a vm inside a guest** | a second kernel inside a spawnable VM | **yes**: vmx/svm, `/dev/kvm`, and `nested=1` on the host | probed in a tenki guest: no vmx/svm, no `/dev/kvm`, `nested=1` anyway |
 | **a container as the guest** | a container where the VM would be | platform | the `isolation` branch's subject, named here only to keep the three apart |
 
@@ -40,6 +40,34 @@ a measured example, from a tenki guest on 2026-11-20:
 `nested=1` with no vmx/svm and no `/dev/kvm`. read as one boolean that says "nesting is on"; read
 as three facts it says "this guest cannot nest, and the host would allow it if the guest could see
 the hardware". only the second reading is useful, which is why the probe reports three.
+
+## measured: a container inside a guest
+
+run in a tenki guest on 2026-11-21 (ubuntu 24.04, linux 6.18.62, cgroup v2, passwordless sudo):
+
+```
+$ sudo apt-get install -y podman          -> podman version 4.9.3
+$ sudo podman run --rm docker.io/library/hello-world
+  Hello from Docker!                                              exit 0
+$ uname -r                                -> 6.18.62
+$ sudo podman run --rm docker.io/library/alpine uname -r
+                                          -> 6.18.62   (the guest's kernel, not a second one)
+$ sudo podman run --rm docker.io/library/alpine sh -c \
+      'test -e /dev/kvm && echo present || echo absent'
+                                          -> absent
+$ sudo podman run --rm docker.io/library/alpine sh -c 'head -1 /etc/os-release'
+                                          -> NAME="Alpine Linux"   (its own rootfs)
+```
+
+the container reporting `6.18.62` is the whole argument in one line: there is no second kernel, so
+this shape needs no virtualization, and the boundary it gets is the guest's. the same guest still
+reports no vmx/svm and no `/dev/kvm`, which is why the other shape is refused there.
+
+a detached container also survived a pause and resume of the guest (`sleeper Up 14 seconds` after
+resume), which is what the `pause` verb claims: the guest pauses and takes its containers with it.
+
+what this did **not** prove: rootless podman (this ran as root via sudo), a docker daemon (podman is
+daemonless), or runsc. the shape is proven; the runtimes are one of three.
 
 ## what each shape may claim
 
@@ -89,8 +117,8 @@ nothing else moves. no new concept, no second vocabulary, no branch importing in
 
 ## honest gaps
 
-- **no container has run inside a guest.** the planner says what it would take and the verification
-  step exists to prove it; nobody has run it.
+- **rootless and daemonless are untested.** the measured run was podman as root via sudo, so
+  rootless podman, a docker daemon and runsc are all still claims rather than capabilities.
 - **no nested boot has happened.** this host cannot, and no host we control has `nested=1` with
   `/dev/kvm` exposed.
 - **the guest probe is a shell script**, because the only way to ask a guest is to run something in

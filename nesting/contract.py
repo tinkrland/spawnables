@@ -41,9 +41,11 @@ SHAPES = {
                   "export": "the guest's disk contains the images and the container filesystems, so "
                             "an export carries them; nothing extra is needed",
                   "freeze": "refused for the same reason main refuses it on a shared kernel"},
-        "verified": "probed in a tenki guest (linux 6.18.62, cgroup v2, non-root, no runtime) on "
-                    "2026-11-20; no container has been run there yet, so the shape is planned and "
-                    "not proven",
+        "verified": "yes, measured 2026-11-21 in a tenki guest (linux 6.18.62, cgroup v2, ubuntu "
+                    "24.04): podman 4.9.3 installed, docker.io/library/hello-world and alpine ran, "
+                    "and the container reported the guest's own kernel (6.18.62), so the boundary is "
+                    "the guest's. a detached container survived a pause and resume of the guest. run "
+                    "as root via sudo: rootless podman and a docker daemon are untested",
     },
     "vm-in-guest": {
         "what": "a VM running inside a spawnable guest",

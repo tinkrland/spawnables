@@ -12,6 +12,7 @@ what stays true, because the rules are the pool's rather than the process's:
 the protocol is one request, one reply, serialized here. concurrency lives inside the isolates; a
 pipe that interleaved two actors' state into one reply would be a worse bug than a slow pipe.
 """
+import atexit
 import json
 import os
 import shutil
@@ -30,6 +31,8 @@ class Pool:
         self.node = node or shutil.which("node")
         self.proc = None
         self.lock = threading.Lock()
+        # a forgotten Pool must not outlive its interpreter: atexit is the belt, close() the braces
+        self._atexit = atexit.register(self.close)
         self._stats = {"spawned": 0, "released": 0, "refused": 0, "served": 0}
 
     @staticmethod
@@ -90,6 +93,13 @@ class Pool:
     def stats(self):
         return self._rpc({"op": "stats"})
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+        return False
+
     def close(self):
         try:
             if self.proc and self.proc.poll() is None:
@@ -108,6 +118,10 @@ class Pool:
             except Exception:
                 self.proc.kill()
         self.proc = None
+        try:
+            atexit.unregister(self._atexit)
+        except Exception:
+            pass
 
 
 class PooledIsolate(Isolate):

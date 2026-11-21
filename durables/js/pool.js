@@ -104,7 +104,16 @@ function handle(msg) {
   return { error: `no op ${msg.op}` };
 }
 
-readline.createInterface({ input: process.stdin }).on("line", (line) => {
+const rl = readline.createInterface({ input: process.stdin });
+
+// a pool whose caller is gone has nothing to serve. without this, a killed python process leaves
+// this node process holding isolates with nobody to answer, which was measured before it was fixed.
+rl.on("close", () => {
+  for (const [, rec] of workers) rec.worker.terminate();
+  process.exit(0);
+});
+
+rl.on("line", (line) => {
   if (!line.trim()) return;
   let msg;
   try {

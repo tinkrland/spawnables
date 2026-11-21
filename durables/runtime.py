@@ -50,6 +50,7 @@ class Host:
         self._live = {}          # actor_id -> {"isolate": ..., "last": ts, "lease": token}
         self._locks = {}
         self._guard = threading.Lock()
+        self._closed_backends = set()
 
     # -- definitions ---------------------------------------------------------------------------
 
@@ -96,6 +97,36 @@ class Host:
             pass
         self.store.append(aid, {"kind": "evict", "why": why, "at": self.clock()})
         return True
+
+    # -- shutdown ------------------------------------------------------------------------------
+
+    def close(self):
+        """evict every isolate and close every backend.
+
+        without this, a script that builds a Host with a pooled backend exits and leaves a node
+        process behind. that is not hypothetical: it was measured before this existed.
+        """
+        for aid in list(self._live):
+            with self._lock(aid):
+                self._evict(aid, "close")
+        for actor in self.actors.values():
+            backend = actor.backend
+            if backend is None or id(backend) in self._closed_backends:
+                continue
+            self._closed_backends.add(id(backend))
+            closer = getattr(backend, "close", None)
+            if callable(closer):
+                try:
+                    closer()
+                except Exception:
+                    pass      # a shutdown that raises is worse than one that stops halfway
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+        return False
 
     # -- the call path -------------------------------------------------------------------------
 

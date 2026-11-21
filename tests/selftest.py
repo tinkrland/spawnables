@@ -4,6 +4,7 @@ the interesting half of a durable is not "it runs". it is: the answer was commit
 isolate was allowed to die, and the second writer was refused. every test here is one of those.
 """
 import json
+import os
 import pathlib
 import shutil
 import tempfile
@@ -369,6 +370,80 @@ class TestPooledDurability(Base):
             pool.close()
 
 
+def _pool_processes():
+    """how many pool hosts are alive. the bracket keeps the pattern from matching this command."""
+    import subprocess as sp
+    out = sp.run(["pgrep", "-fc", "durables/js/pool[.]js"], capture_output=True, text=True)
+    try:
+        return int(out.stdout.strip() or 0)
+    except ValueError:
+        return 0
+
+
+@unittest.skipUnless(Pool.available(), "no node on this host")
+class TestNothingIsLeftRunning(unittest.TestCase):
+    """a pool outliving the script that made it is a leak, and it was measured before it was fixed."""
+
+    SCRIPT = (
+        "import tempfile\n"
+        "from durables.pool import PooledBackend\n"
+        "from durables.runtime import Host\n"
+        "h = Host(tempfile.mkdtemp())\n"
+        "h.define('counter', None, backend=PooledBackend({src!r}))\n"
+        "h.invoke('counter:a', 'ping', {{}})\n"
+        "{tail}\n")
+
+    def _run(self, tail=""):
+        import subprocess as sp
+        import sys
+        code = self.SCRIPT.format(
+            src="module.exports={handle:(s,m,a)=>({out:{ok:1},state:s})};\n", tail=tail)
+        return sp.run([sys.executable, "-c", code], capture_output=True, text=True,
+                      env={**os.environ, "PYTHONPATH": str(pathlib.Path(__file__).resolve().parents[1])})
+
+    def test_close_shuts_the_process_down(self):
+        pool = Pool()
+        pool.acquire("counter:a", COUNTER_JS)
+        proc = pool.proc
+        pool.close()
+        self.assertIsNotNone(proc)
+        proc.wait(timeout=5)
+        self.assertIsNotNone(proc.poll(), "the node process is gone after close()")
+
+    def test_a_forgotten_pool_does_not_outlive_the_interpreter(self):
+        before = _pool_processes()
+        self._run()                                  # no close: atexit is the only guard
+        time.sleep(1.0)
+        self.assertEqual(_pool_processes(), before, "a forgotten pool must not survive its script")
+
+    def test_a_killed_parent_leaves_no_pool(self):
+        import signal
+        before = _pool_processes()
+        self._run(f"import os, signal; os.kill(os.getpid(), signal.SIGKILL)")
+        time.sleep(1.5)                              # no python cleanup ran; stdin closed is the guard
+        self.assertEqual(_pool_processes(), before, "SIGKILL of the parent must not orphan the pool")
+
+    def test_a_host_closes_the_backend_it_owns(self):
+        closed = []
+
+        class Backend:
+            isolate = True
+
+            def spawn(self, name, state):
+                return InProcess(counter)
+
+            def close(self):
+                closed.append(True)
+
+        h = Host(tempfile.mkdtemp())
+        h.define("counter", counter, backend=Backend())
+        h.invoke("counter:a", "incr", {"by": 1})
+        h.close()
+        self.assertEqual(closed, [True])
+        h.close()                                     # idempotent: closing twice is not an error
+        self.assertEqual(closed, [True], "a backend is closed once, not once per call")
+
+
 class TestPoolWithoutNode(unittest.TestCase):
     def test_the_pool_refuses_rather_than_pretending(self):
         real = Pool.available
@@ -389,7 +464,8 @@ class TestReadmeKeepsItsNeedles(unittest.TestCase):
                                     "durables-readme.md").read_text().lower())
         for needle in ("commit before", "the log is the truth", "expected to die",
                        "one isolate per actor", "never an identity", "v8",
-                       "one pooled process", "release terminates the isolate"):
+                       "one pooled process", "release terminates the isolate",
+                       "43 tests", "zero processes behind"):
             self.assertIn(needle, text, needle)
 
 

@@ -76,7 +76,8 @@ name, and the reason comes from `contract.REFUSED` so the sentence has one sourc
 ./bin/durables card                     # placements, verbs, refusals, sources
 ./bin/durables demo                     # a counter: incr, evict, replay, alarm
 ./bin/durables v8                       # a real v8 isolate in a worker, state in and out
-PYTHONPATH=. python3 tests/selftest.py  # 31 tests, no network, no guest
+./bin/durables pool --actors 8          # eight actors, one process, and the ceiling
+PYTHONPATH=. python3 tests/selftest.py  # 43 tests, no network, no guest
 ```
 
 the demo's last line matters more than its first: the counter reads 4 after being evicted and
@@ -104,6 +105,19 @@ so 2.1x, and eight pids become one. the same bench inside a tenki guest read 310
 also 2.1x: the ratio is the pool's, the absolute numbers are the host's mood. that is a ceiling on
 what the pool buys, not a promise: the work an actor does inside its isolate is unchanged, and a
 pool that is full still refuses.
+
+## nothing is left running
+
+a pool that outlives the script that made it is a leak, and it was measured before it was fixed: a
+python process exited and `node pool.js` kept holding isolates with nobody to answer. three guards
+now, and the suite checks all three:
+
+- `Host.close()` evicts every isolate and closes every backend it owns, once
+- `Pool.close()` stops the process, and `atexit` catches a script that never called it
+- the node side exits when its stdin closes, which is what covers a parent that was `SIGKILL`ed
+  and so never ran any python cleanup at all
+
+a forgotten pool, a polite close and a killed parent all leave zero processes behind.
 
 ## honest gaps
 

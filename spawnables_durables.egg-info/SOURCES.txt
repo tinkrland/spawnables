@@ -1,0 +1,17 @@
+README.md
+pyproject.toml
+spawnables_durables/__init__.py
+spawnables_durables/cli.py
+spawnables_durables/contract.py
+spawnables_durables/isolates.py
+spawnables_durables/pool.py
+spawnables_durables/runtime.py
+spawnables_durables/store.py
+spawnables_durables.egg-info/PKG-INFO
+spawnables_durables.egg-info/SOURCES.txt
+spawnables_durables.egg-info/dependency_links.txt
+spawnables_durables.egg-info/entry_points.txt
+spawnables_durables.egg-info/top_level.txt
+spawnables_durables/js/host.js
+spawnables_durables/js/isolate.js
+spawnables_durables/js/pool.js

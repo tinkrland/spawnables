@@ -1,0 +1,2 @@
+[console_scripts]
+durables = spawnables_durables.cli:main

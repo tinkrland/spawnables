@@ -70,6 +70,17 @@ reader cannot mistake one for the other.
 each one is a `Refused` in `runtime.py`, not a comment: `exec`, `spawn` and `listen` are refused by
 name, and the reason comes from `contract.REFUSED` so the sentence has one source.
 
+## install
+
+```
+pip install spawnables-durables      # 0.1.0, published 2026-11-23
+durables card                        # the same contract this file describes
+```
+
+the distribution is `spawnables-durables` because `durables` on pypi is somebody else's durable
+functions framework. the import name is `spawnables_durables` for the same reason, and the script
+stays `durables` because that is the thing the contract is called.
+
 ## running it
 
 ```

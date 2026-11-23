@@ -1,4 +1,4 @@
 #!/bin/sh
 # the durables line is a contract first, so the shim only reaches the module beside it
 here=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-PYTHONPATH="$here${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m durables.cli "$@"
+PYTHONPATH="$here${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m spawnables_durables.cli "$@"

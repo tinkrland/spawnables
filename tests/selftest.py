@@ -12,11 +12,11 @@ import threading
 import time
 import unittest
 
-from durables import contract
-from durables.isolates import InProcess, IsolateError, V8, backend_for
-from durables.pool import Pool, PooledBackend
-from durables.runtime import DurableError, Host, LeaseLost, Refused
-from durables.store import Store, StoreError
+from spawnables_durables import contract
+from spawnables_durables.isolates import InProcess, IsolateError, V8, backend_for
+from spawnables_durables.pool import Pool, PooledBackend
+from spawnables_durables.runtime import DurableError, Host, LeaseLost, Refused
+from spawnables_durables.store import Store, StoreError
 
 
 def counter(method, args, state):
@@ -373,7 +373,7 @@ class TestPooledDurability(Base):
 def _pool_processes():
     """how many pool hosts are alive. the bracket keeps the pattern from matching this command."""
     import subprocess as sp
-    out = sp.run(["pgrep", "-fc", "durables/js/pool[.]js"], capture_output=True, text=True)
+    out = sp.run(["pgrep", "-fc", "spawnables_durables/js/pool[.]js"], capture_output=True, text=True)
     try:
         return int(out.stdout.strip() or 0)
     except ValueError:
@@ -386,8 +386,8 @@ class TestNothingIsLeftRunning(unittest.TestCase):
 
     SCRIPT = (
         "import tempfile\n"
-        "from durables.pool import PooledBackend\n"
-        "from durables.runtime import Host\n"
+        "from spawnables_durables.pool import PooledBackend\n"
+        "from spawnables_durables.runtime import Host\n"
         "h = Host(tempfile.mkdtemp())\n"
         "h.define('counter', None, backend=PooledBackend({src!r}))\n"
         "h.invoke('counter:a', 'ping', {{}})\n"

@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spawnables-durables"
+version = "0.1.0"
+description = "Durable objects for python: names with mailboxes, and v8 isolates that are expected to die"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "tinkrland" }]
+keywords = ["durable-objects", "actors", "v8", "isolates", "state", "serverless"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries",
+  "Operating System :: POSIX :: Linux",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/tinkrland/spawnables"
+Source = "https://github.com/tinkrland/spawnables/tree/durables"
+
+[project.scripts]
+durables = "spawnables_durables.cli:main"
+
+[tool.setuptools]
+packages = ["spawnables_durables"]
+
+[tool.setuptools.package-data]
+spawnables_durables = ["js/*.js"]

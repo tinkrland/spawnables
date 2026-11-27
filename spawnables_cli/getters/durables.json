@@ -1,0 +1,18 @@
+{
+  "name": "durables",
+  "what": "durable objects for python: names with mailboxes, and v8 isolates expected to die",
+  "kind": "pypi",
+  "package": "spawnables-durables",
+  "spec": ">=0.1.0",
+  "install": "pip install 'spawnables-durables>=0.1.0'",
+  "verify": "durables card",
+  "verify_expect": "the contract prints: placements, verbs, refusals",
+  "needs": ["python 3.9+", "node on PATH for the v8 backend (optional: the in-process backend still runs)"],
+  "refused": [
+    "a kernel of its own: a v8 isolate is a heap in a process, not a machine",
+    "native code and device access",
+    "an identity: it acts for a principal, never as one"
+  ],
+  "verified": true,
+  "verified_how": "0.1.0 published 2026-11-23; installed from the index and exercised (card, v8, pool)"
+}

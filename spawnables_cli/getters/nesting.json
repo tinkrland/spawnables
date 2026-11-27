@@ -1,0 +1,17 @@
+{
+  "name": "nesting",
+  "what": "three shapes kept apart: containers in a guest, a vm in a guest, a container as the guest",
+  "kind": "source",
+  "url": "https://github.com/tinkrland/spawnables",
+  "branch": "nesting",
+  "install": "git clone -b nesting https://github.com/tinkrland/spawnables.git && cd spawnables && PYTHONPATH=. ./bin/nesting probe",
+  "verify": "PYTHONPATH=. ./bin/nesting probe",
+  "verify_expect": "a facts block: cpu_virt, kvm, nested, runtimes",
+  "needs": ["python 3.9+", "a guest to probe if you want the guest half"],
+  "refused": [
+    "a vm inside a guest without vmx/svm, /dev/kvm and nested=1 together",
+    "reading nested=1 as proof: a guest can report it with no hardware behind it"
+  ],
+  "verified": false,
+  "verified_how": "not published: the branch has no package metadata yet, so this installs from source"
+}

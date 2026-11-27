@@ -1,0 +1,13 @@
+{
+  "name": "machines",
+  "what": "the control plane itself: guests, shelves, principals, the mcp server",
+  "kind": "refused",
+  "refused": [
+    "the control plane is not a pip install and never will be: it provisions machines and holds credentials, so it belongs on a host you run, not in site-packages",
+    "a published control plane is a credential surface nobody can audit at install time"
+  ],
+  "instead": "git clone https://github.com/tinkrland/spawnables && cd spawnables && ./setup",
+  "needs": ["a host with an adapter configured", "git"],
+  "verified": false,
+  "verified_how": "refused by the owner's rule: components ship, the control plane does not"
+}

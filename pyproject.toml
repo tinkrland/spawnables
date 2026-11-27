@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spawnables"
+version = "0.1.0"
+description = "One front door for spawnables: pip install spawnables, then spawnables get <part>"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "tinkrland" }]
+keywords = ["spawnables", "agents", "vms", "durables", "getters"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development :: Libraries",
+  "Operating System :: POSIX :: Linux",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/tinkrland/spawnables"
+
+[project.scripts]
+spawnables = "spawnables_cli.cli:main"
+
+[tool.setuptools]
+packages = ["spawnables_cli"]
+
+[tool.setuptools.package-data]
+spawnables_cli = ["getters/*.json"]
